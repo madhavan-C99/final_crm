@@ -1,0 +1,179 @@
+import { useState } from "react";
+
+import {
+  Box,
+  Typography,
+  InputBase,
+  Button,
+  Menu,
+  MenuItem,
+} from "@mui/material";
+
+import { Search, Add, KeyboardArrowDown } from "@mui/icons-material";
+
+const EducationPipelineHeader = ({
+  searchValue = "",
+  onSearchChange = () => {},
+  onCreateCampaign = () => {},
+  onLeadSummary = () => {},
+  onCallLogs = () => {},
+  onAction = () => {},
+}) => {
+  const [anchorEl, setAnchorEl] = useState(null);
+
+  const openActions = Boolean(anchorEl);
+
+  const actionItems = [
+    "Disposition",
+    "Upload Excel Sheet",
+    "Add Lead",
+   "Manage Pipeline"
+  ];
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 2,
+        p: 2,
+        borderBottom: "1px solid #EFEFEF",
+      }}
+    >
+      {/* TITLE */}
+      <Typography
+        sx={{
+          fontSize: { xs: "16px", sm: "18px", md: "22px" },
+          fontWeight: 700,
+          color: "#111",
+        }}
+      >
+        Education pipeline
+      </Typography>
+
+      {/* RIGHT CLUSTER */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+          flexWrap: "wrap",
+        }}
+      >
+        {/* SEARCH */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            height: "36px",
+            px: 1.5,
+            borderRadius: "8px",
+            border: "1px solid #E0E0E0",
+            minWidth: "220px",
+          }}
+        >
+          <Search sx={{ fontSize: "14px", color: "#9AA0A6" }} />
+          <InputBase
+            placeholder="Search by campaign name"
+            value={searchValue}
+            onChange={(e) => onSearchChange(e.target.value)}
+            sx={{
+              fontSize: "13px",
+              width: "100%",
+              "& input::placeholder": { color: "#A2A2A2", opacity: 1 },
+            }}
+          />
+        </Box>
+
+        {/* CREATE CAMPAIGN */}
+        <Button
+          onClick={onCreateCampaign}
+          startIcon={<Add sx={{ fontSize: "18px !important" }} />}
+          sx={{
+            height: "36px",
+            px: 2,
+            borderRadius: "8px",
+            textTransform: "none",
+            fontSize: "14px",
+            fontWeight: 600,
+            backgroundColor: "#0205C8",
+            color: "#fff",
+            "&:hover": { backgroundColor: "#0205C8" },
+          }}
+        >
+          Create Campaign
+        </Button>
+
+        {/* LEAD SUMMARY */}
+        <Typography
+          onClick={onLeadSummary}
+          sx={{
+            fontSize: "14px",
+            // fontWeight: 600,
+            color: "#3F4D27",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Lead Summary
+        </Typography>
+
+        {/* CALL LOGS */}
+        <Typography
+          onClick={onCallLogs}
+          sx={{
+            fontSize: "14px",
+            // fontWeight: 600,
+            color: "#3F4D27",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Call Logs
+        </Typography>
+
+        {/* ACTIONS DROPDOWN */}
+        <Button
+          onClick={(e) => setAnchorEl(e.currentTarget)}
+          endIcon={<KeyboardArrowDown />}
+          sx={{
+            height: "36px",
+            px: 1.5,
+            borderRadius: "8px",
+            textTransform: "none",
+            fontSize: "das4px",
+            // fontWeight: 600,
+            color: "#111",
+            border: "1px solid #E0E0E0",
+          }}
+        >
+          Actions
+        </Button>
+
+        <Menu
+          anchorEl={anchorEl}
+          open={openActions}
+          onClose={() => setAnchorEl(null)}
+        >
+          {actionItems.map((label) => (
+            <MenuItem
+              key={label}
+              onClick={() => {
+                onAction(label);
+                setAnchorEl(null);
+              }}
+              sx={{ fontSize: "13px" }}
+            >
+              {label}
+            </MenuItem>
+          ))}
+        </Menu>
+      </Box>
+    </Box>
+  );
+};
+
+export default EducationPipelineHeader;
