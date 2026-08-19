@@ -4,8 +4,8 @@ from .courses import Course,CoursePlan,CourseName,CourseTiming
 from .disconnectdetails import DisconnectStage,DisconnectedDetails
 from .leads import *
 from .paymentinfo import PaymentInfo,PaymentFollowUp,PaymentHistory
-from .perm import Perm
-from .role import Role
+# from .perm import Perm
+# from .role import Role
 from .user import User
 from .follow_up import FollowUp
 from .user_settings import UserSettings,MessageTemplate

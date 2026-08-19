@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from rest_framework import serializers
 from rest_framework.response import Response
@@ -21,6 +22,7 @@ class FetchAllPayment(APIView):
         pending_amount_id = serializers.CharField(required=False, allow_null=True,default=0)
     
     def post(self,request):
+        authorize_request('api_fetch_all_payment', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         payment=fetch_all_payment(user=request.user,**serializer.validated_data)
@@ -39,6 +41,7 @@ class FetchAllPayment(APIView):
   
 class PendingPaymentTiles(APIView):
     def get (self,request):
+        authorize_request('api_pending_payment_tiles', request.user)
         tile=pending_payment_tile(user=request.user)
         log_data = {
             'user_id': request.user.id if request.user.id else None,
@@ -74,6 +77,7 @@ class PaymentDetails(APIView):
             return super().to_internal_value(data)
         
     def post(self,request):
+        authorize_request('api_payment_details', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         payment=payment_details(request.user,**serializer.validated_data)
@@ -93,6 +97,7 @@ class PaymentHistoryApi(APIView):
     class InputSerilaizers(serializers.Serializer):
         lead_id=serializers.IntegerField(required=True)
     def post(self,request):
+        authorize_request('api_payment_history_api', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         history=payment_history(request.user,**serializer.validated_data)

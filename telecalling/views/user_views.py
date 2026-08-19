@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.validators import UniqueValidator
 from ..models import *
 from ..services.user_services import *
+from adm.services.permission_services import authorize_request
 from rest_framework.decorators import authentication_classes, permission_classes
 from ..tasks.api_log_task import api_history_log
 
@@ -13,8 +14,6 @@ from ..tasks.api_log_task import api_history_log
 @permission_classes([])
 class CreateUser(APIView):
     class InputSerializer(serializers.Serializer):
-        # name = serializers.CharField(required = True)
-        # last_name = serializers.CharField(required = False)
         username = serializers.CharField(required=True, validators=[UniqueValidator(queryset=User.objects.all())])
         email = serializers.EmailField(required=True, validators=[UniqueValidator(queryset=User.objects.all())])
         first_name = serializers.CharField(required=True)
@@ -23,8 +22,7 @@ class CreateUser(APIView):
         password = serializers.CharField(required = True)
         confirm_password = serializers.CharField(required = True)
     def post(self, request):
-        print(1)
-        # authorize_request('api_perm_add_user', request.user)
+        authorize_request('api_perm_add_user', request.user)
         print(2)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -54,6 +52,7 @@ class CreateRole(APIView):
         description = serializers.CharField(required=True)
 
     def post(self, request):
+        authorize_request('api_create_role', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         role_code =create_role( **serializer.validated_data)
@@ -80,6 +79,7 @@ class CollectionQueryApi(APIView):
         query=serializers.CharField(required=True) 
     
     def post(self,request):
+        authorize_request('api_collection_query_api', request.user)
         serializer=self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data=collection_query_service(**serializer.validated_data)
@@ -96,6 +96,7 @@ class CreateToken(APIView):
         # source = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
+        authorize_request('api_create_token', request.user)
         print(request.data)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -122,6 +123,7 @@ class RefreshTokenView(APIView):
         refresh = serializers.CharField()
 
     def post(self, request):
+        authorize_request('api_refresh_token_view', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -157,6 +159,7 @@ class GetSelectOption(APIView):
         fields=serializers.CharField(required=True)
     
     def post(self,request):
+        authorize_request('api_get_select_option', request.user)
         print(1)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -181,6 +184,7 @@ class GenerateOtpView(APIView):
         mobile=serializers.IntegerField(required=True)
         # email=serializers.EmailField(required=True)
     def post(self,request):
+        authorize_request('api_generate_otp_view', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         generateotp=generate_otp(serializer.validated_data)
@@ -193,6 +197,7 @@ class CreateDropdownCate(APIView):
         category=serializers.CharField(required=True)
     
     def post(self,request):
+        authorize_request('api_create_dropdown_cate', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         dropdown=drop_cate(user=request.user,**serializer.validated_data)
@@ -208,6 +213,7 @@ class CreateDropdownSub(APIView):
         sub_name=serializers.CharField(required=False)
     
     def post(self,request):
+        authorize_request('api_create_dropdown_sub', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         dropdown=drop_sub(user=request.user,**serializer.validated_data)
@@ -229,7 +235,7 @@ class CreateDropdownSub(APIView):
 #         serializer=self.InputSerializers(data=request.data)
 #         serializer.is_valid(raise_exception=True)
 #         data=task_schedule_db(**serializer.validated_data)
-        
+#         
 #         return Response({"data":data},status=status.HTTP_201_CREATED)
         
    

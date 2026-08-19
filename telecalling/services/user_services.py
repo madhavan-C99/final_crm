@@ -1,7 +1,7 @@
 # from ..models import *
 from ..models.leads import Lead
 from ..models.user import User
-from ..models.role import Role
+from adm.models import Role
 from ..models.collection_query import CollectionQuery
 from ..models.dropdown import DropdownCategory,Dropdown
 import datetime
@@ -149,6 +149,12 @@ def create_token(**data):
             detail='Invalid Username or Password'
         )
 
+    # Step 4 RBAC: Embed Role inside JWT Claims & Return Permissions Payload
+    user_role_obj = user.role if hasattr(user, 'role') else None
+    role_name = user_role_obj.name if user_role_obj else "telecaller"
+    role_code = user_role_obj.code if user_role_obj else "TEL"
+    user_perms = user.get_perms() if hasattr(user, 'get_perms') else []
+
     if user.ending_date is None:
 
         user.last_login = datetime.datetime.now()
@@ -156,6 +162,8 @@ def create_token(**data):
 
         refresh_tkn = RefreshToken.for_user(user)
         access_tkn = refresh_tkn.access_token
+        access_tkn['role'] = role_name
+        access_tkn['role_code'] = role_code
 
     elif user.ending_date >= datetime.datetime.now().date():
 
@@ -164,6 +172,8 @@ def create_token(**data):
 
         refresh_tkn = RefreshToken.for_user(user)
         access_tkn = refresh_tkn.access_token
+        access_tkn['role'] = role_name
+        access_tkn['role_code'] = role_code
 
     else:
         raise AuthenticationFailed(
@@ -179,10 +189,13 @@ def create_token(**data):
         "user_email": user.email,
         "user_id": user.id,
         "user_mobile": user.mobile,
-        "user_name":user.first_name
+        "user_name": user.first_name,
+        "role": role_name,
+        "role_code": role_code,
+        "permissions": user_perms
     }
 
-    return token_data,user_data 
+    return token_data, user_data 
 
 
 

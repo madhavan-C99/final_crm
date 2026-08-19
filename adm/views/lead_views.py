@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from rest_framework.decorators import authentication_classes, permission_classes
 from rest_framework import serializers, status
@@ -35,6 +36,7 @@ class FetchAllLeadsAdmin(APIView):
         page_size = serializers.IntegerField(required=False, allow_null=True, default=1000)
         
     def post(self, request):
+        authorize_request('api_fetch_all_leads_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -84,12 +86,14 @@ class AddNewLeadAdmin(APIView):
         
         
     def get(self, request):
+        authorize_request('api_add_new_lead_admin', request.user)
         """Modal open aagum podhu Dropdowns edukka"""
         result = get_add_lead_dropdowns_admin()
         return Response({"data": result}, status=status.HTTP_200_OK)
     
     
     def post(self, request):
+        authorize_request('api_add_new_lead_admin', request.user)
         """Form Submit panni puthu lead-ah save panna"""
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -121,6 +125,7 @@ class UploadLeadExcelAdmin(APIView):
     class InputSerializers(serializers.Serializer):
         file = serializers.FileField(required=True)
     def post(self, request):
+        authorize_request('api_upload_lead_excel_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         uploaded_file = serializer.validated_data['file']
@@ -163,6 +168,7 @@ class ExportAllLeadsAdmin(APIView):
         sort_by = serializers.CharField(required=False, default="-created_at")
 
     def post(self, request):
+        authorize_request('api_export_all_leads_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -192,10 +198,12 @@ class GetFilterDropdownsAdmin(APIView):
     Admin Leads Page -> Filter Modal Dropdowns API (Supports both GET & POST).
     """
     def get(self, request):
+        authorize_request('api_get_filter_dropdowns_admin', request.user)
         result = get_filter_dropdowns_admin()
         return Response({"data": result}, status=status.HTTP_200_OK)
 
     def post(self, request):
+        authorize_request('api_get_filter_dropdowns_admin', request.user)
         result = get_filter_dropdowns_admin()
         return Response({"data": result}, status=status.HTTP_200_OK)
     
@@ -222,6 +230,7 @@ class FetchPipelineLeadsAdmin(APIView):
         to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
+        authorize_request('api_fetch_pipeline_leads_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -252,6 +261,7 @@ class FetchLeadDetailsAdmin(APIView):
         lead_id = serializers.IntegerField(required=True)
 
     def post(self, request):
+        authorize_request('api_fetch_lead_details_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -284,6 +294,7 @@ class GetMarkAsWonInfoAdmin(APIView):
         lead_id = serializers.IntegerField(required=True)
 
     def post(self, request):
+        authorize_request('api_get_mark_as_won_info_admin', request.user)
         # 🔴 Validating lead_id via Serializer before proceeding
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -325,6 +336,7 @@ class MarkAsWonAdmin(APIView):
         summary = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
+        authorize_request('api_mark_as_won_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -358,6 +370,7 @@ class GetMarkAsLostInfoAdmin(APIView):
         lead_id = serializers.IntegerField(required=True)
 
     def post(self, request):
+        authorize_request('api_get_mark_as_lost_info_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -396,6 +409,7 @@ class MarkAsLostAdmin(APIView):
         remarks = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
+        authorize_request('api_mark_as_lost_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -449,6 +463,7 @@ class EditLeadAdmin(APIView):
         total_amount = serializers.FloatField(required=False, allow_null=True)
 
     def post(self, request):
+        authorize_request('api_edit_lead_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -471,6 +486,7 @@ class EditLeadAdmin(APIView):
 @permission_classes([])
 class DeleteLeadAdmin(APIView):
     def post(self, request):
+        authorize_request('api_delete_lead_admin', request.user)
         lead_id = request.data.get("lead_id") or request.data.get("id")
         result = delete_lead_admin(request.user, lead_id)
 
@@ -491,6 +507,7 @@ class DeleteLeadAdmin(APIView):
 @permission_classes([])
 class ReassignLeadAdmin(APIView):
     def post(self, request):
+        authorize_request('api_reassign_lead_admin', request.user)
         lead_id = request.data.get("lead_id") or request.data.get("id")
         new_telecaller_id = request.data.get("new_telecaller_id") or request.data.get("telecaller_id") or request.data.get("assigned_to_id")
         reason = request.data.get("reason") or request.data.get("remarks") or request.data.get("reassigned_reason")

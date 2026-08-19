@@ -2,7 +2,6 @@ from django.contrib.auth.models import (
     AbstractBaseUser, BaseUserManager, PermissionsMixin
 )
 from django.db import models
-from .role import Role
 from datetime import datetime,date
 from rest_framework.exceptions import APIException
 from django.utils.crypto import get_random_string
@@ -71,7 +70,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     user_type = models.CharField(max_length=25, null=True)
     address = models.CharField(max_length=500, null = True)
     wrong_pwd_counts = models.IntegerField(default=0)
-    role = models.ManyToManyField(Role,related_name="user")
+    role = models.ForeignKey('adm.Role', on_delete=models.SET_NULL, null=True, blank=True, related_name="users")
     team = models.ForeignKey('adm.Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
     # starting_date = models.DateField()"
     starting_date = models.DateField(default=date.today)  # Sets today's date by default
@@ -91,15 +90,19 @@ class User(AbstractBaseUser, PermissionsMixin):
     # In this case we want it to be the email field.
     USERNAME_FIELD = 'username'
     # USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['email']
-    REQUIRED_FIELDS=['mobile']   ##b add
+    REQUIRED_FIELDS = ['email', 'mobile']
 
     # Tells Django that the UserManager class defined above should manage
     # objects of this type.
     objects = UserManager()
 
+    class Meta:
+        db_table = "telecalling_user"
+        verbose_name = "User"
+        verbose_name_plural = "Users"
+
     def __str__(self):
-        return self.email
+        return self.username
 
     def get_full_name(self):
         if self.first_name is None and self.last_name is None:
@@ -115,18 +118,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.username
 
     def get_perms(self):
-     
-        perms_list = []
-        ##logger.info("User name: " + self.username)
-        ##logger.info("Roles List: " + str(self.roles))
-        for r in self.roles.all():
-            ##logger.info(r)
-            
-            perms_list = perms_list + list(r.perms.all().values_list("name", flat=True))
-           
-      
-        ##logger.info("Perms List: " + str(perms_list))
-        return perms_list
+        if not self.role:
+            return []
+        if self.role.code == 'DEV' or self.role.name == 'developer' or self.is_superuser:
+            from adm.models import Perm
+            return list(Perm.objects.values_list("name", flat=True))
+        return list(self.role.perms.values_list("name", flat=True))
         
     def get_users(self):
         users = User.objects.all()

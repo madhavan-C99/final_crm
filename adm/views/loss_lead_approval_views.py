@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework import serializers, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -36,10 +37,12 @@ class FetchLossLeadApprovalRequestsAdmin(APIView):
         page_size = serializers.IntegerField(required=False, allow_null=True, default=250)
 
     def get(self, request):
+        authorize_request('api_fetch_loss_lead_approval_requests_admin', request.user)
         result = fetch_loss_lead_approval_requests_admin(**request.query_params.dict())
         return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request):
+        authorize_request('api_fetch_loss_lead_approval_requests_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -65,10 +68,12 @@ class GetLossLeadApprovalFilterDropdownsAdmin(APIView):
     GET & POST -> Filter Modal Dropdown Options API for Loss Lead Approval Page.
     """
     def get(self, request):
+        authorize_request('api_get_loss_lead_approval_filter_dropdowns_admin', request.user)
         result = get_loss_lead_approval_filter_dropdowns_admin()
         return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request):
+        authorize_request('api_get_loss_lead_approval_filter_dropdowns_admin', request.user)
         result = get_loss_lead_approval_filter_dropdowns_admin()
         return Response(result, status=status.HTTP_200_OK)
 
@@ -88,10 +93,12 @@ class ExportLossLeadApprovalRequestsAdmin(APIView):
         assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
 
     def get(self, request):
+        authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
         result = export_loss_lead_approval_requests_admin(**request.query_params.dict())
         return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request):
+        authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -121,6 +128,7 @@ class ActionLossLeadApprovalAdmin(APIView):
         comments = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
+        authorize_request('api_action_loss_lead_approval_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 

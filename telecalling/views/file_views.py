@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -11,6 +12,7 @@ class ExcelUpload(APIView):
     class InputSerializer(serializers.Serializer):
         leads= serializers.JSONField(required = True)
     def post(self, request):
+        authorize_request('api_excel_upload', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
     
@@ -55,6 +57,7 @@ class PreviewLeadExcel(APIView):
         file = serializers.FileField(required=True)
  
     def post(self, request):
+        authorize_request('api_preview_lead_excel', request.user)
  
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from rest_framework.decorators import authentication_classes, permission_classes
 from rest_framework import serializers, status
@@ -18,10 +19,12 @@ class GetPendingPaymentFilterDropdownsAdmin(APIView):
     Supports GET & POST requests.
     """
     def get(self, request):
+        authorize_request('api_get_pending_payment_filter_dropdowns_admin', request.user)
         result = get_pending_payment_filter_dropdowns_admin()
         return Response({"data": result}, status=status.HTTP_200_OK)
 
     def post(self, request):
+        authorize_request('api_get_pending_payment_filter_dropdowns_admin', request.user)
         result = get_pending_payment_filter_dropdowns_admin()
         return Response({"data": result}, status=status.HTTP_200_OK)
 
@@ -50,6 +53,7 @@ class FetchAllPendingPaymentsAdmin(APIView):
         limit = serializers.IntegerField(required=False, default=1000)
 
     def get(self, request):
+        authorize_request('api_fetch_all_pending_payments_admin', request.user)
         query_params = {
             "search": request.query_params.get("search"),
             "date_filter": request.query_params.get("date_filter") or request.query_params.get("date_filter_type"),
@@ -69,6 +73,7 @@ class FetchAllPendingPaymentsAdmin(APIView):
         return Response({"data": result}, status=status.HTTP_200_OK)
 
     def post(self, request):
+        authorize_request('api_fetch_all_pending_payments_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -109,6 +114,7 @@ class ExportPendingPaymentsAdmin(APIView):
         pending_amount_range = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def get(self, request):
+        authorize_request('api_export_pending_payments_admin', request.user)
         query_params = {
             "search": request.query_params.get("search"),
             "date_filter": request.query_params.get("date_filter") or request.query_params.get("date_filter_type"),
@@ -125,6 +131,7 @@ class ExportPendingPaymentsAdmin(APIView):
         return export_pending_payments_admin(**query_params)
 
     def post(self, request):
+        authorize_request('api_export_pending_payments_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 

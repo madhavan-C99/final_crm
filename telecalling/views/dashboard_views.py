@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from rest_framework import serializers
 from rest_framework.response import Response
@@ -14,6 +15,7 @@ class DashboardTopTile(APIView):
         filter_type = serializers.CharField(required=False, default="monthly") 
     
     def post(self,request):
+        authorize_request('api_dashboard_top_tile', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         card=dashboard_top_tile(user=request.user,**serializer.validated_data)
@@ -39,6 +41,7 @@ class FetchPipelineFunnel(APIView):
         filter_type = serializers.CharField(required=False, default="year") 
     
     def post(self,request):
+        authorize_request('api_fetch_pipeline_funnel', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         card=fetch_pipeline_funnel(user=request.user,**serializer.validated_data)
@@ -65,6 +68,7 @@ class FetchTelePerformance(APIView):
         filter_type = serializers.CharField(required=False, default="year") 
     
     def post(self,request):
+        authorize_request('api_fetch_tele_performance', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         card=fetch_dashboard_analytics(user=request.user,**serializer.validated_data)
@@ -92,6 +96,7 @@ class GetDashboardPDFData(APIView):
         filter_type = serializers.CharField(required=False, default="year") 
     
     def post(self, request):
+        authorize_request('api_get_dashboard_p_d_f_data', request.user)
         try:
             serializer = self.InputSerializers(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -137,6 +142,7 @@ class AddCourseDetails(APIView):
         
     
     def post(self,request):
+        authorize_request('api_add_course_details', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         card=add_course_details(user=request.user,**serializer.validated_data)
@@ -158,6 +164,7 @@ class Coursename(APIView):
         name=serializers.CharField(required=True)
         
     def post(self,request):
+        authorize_request('api_coursename', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         card=add_course(user=request.user,**serializer.validated_data)
@@ -171,6 +178,7 @@ class MarkNotificationRead(APIView):
         notification_id=serializers.IntegerField(required=True)
         
     def post(self,request):
+        authorize_request('api_mark_notification_read', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         card=mark_notification_read(user=request.user,**serializer.validated_data)

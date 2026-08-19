@@ -19,6 +19,9 @@ from .views.performance_views import (
     UpdateTelecallerTargetAdmin, GetPerformanceFilterDropdownsAdmin,
     ExportPerformanceOverviewAdmin
 )
+from .views.permission_views import (
+    AddPermAPIView, FetchPermsListAPIView, FetchRolesListAPIView, AssignRolePermAPIView
+)
 
 urlpatterns = [
     path('fetch_all_leads_admin', FetchAllLeadsAdmin.as_view()),
@@ -54,4 +57,10 @@ urlpatterns = [
     path('update_telecaller_target_admin', UpdateTelecallerTargetAdmin.as_view()),
     path('get_performance_filter_dropdowns_admin', GetPerformanceFilterDropdownsAdmin.as_view()),
     path('export_performance_overview_admin', ExportPerformanceOverviewAdmin.as_view()),
+    
+    # 👑 Role & Permission Management APIs (TL's MoneyShift Schema)
+    path('perm/add/', AddPermAPIView.as_view()),
+    path('perm/list/', FetchPermsListAPIView.as_view()),
+    path('role/list/', FetchRolesListAPIView.as_view()),
+    path('role/assign-perm/', AssignRolePermAPIView.as_view()),
 ]

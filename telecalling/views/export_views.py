@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from ..services.query_services import *
 from rest_framework.views import APIView
@@ -18,6 +19,7 @@ class ExportColumnsView(APIView):
         page = serializers.CharField(required=True)
 
     def post(self, request):
+        authorize_request('api_export_columns_view', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data=get_export_columns(user=request.user,**serializer.validated_data)
@@ -49,6 +51,7 @@ class ExportData(APIView):
         course_time_id = serializers.IntegerField(required=False, allow_null=True, default=0)
 
     def post(self, request):
+        authorize_request('api_export_data', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

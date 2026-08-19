@@ -2,6 +2,10 @@ from .loss_lead_approval import AdminLossActionLog, AdminApprovedLossLead
 from .reassign_lead_history import AdminLeadReassignHistory
 from .team import Team
 from .user_target import UserTarget
+from .perms import Perm
+from .role import Role
+from .user_role import UserRole
+from .user import User
 
 __all__ = [
     'AdminLossActionLog',
@@ -9,4 +13,8 @@ __all__ = [
     'AdminLeadReassignHistory',
     'Team',
     'UserTarget',
+    'Perm',
+    'Role',
+    'UserRole',
+    'User',
 ]

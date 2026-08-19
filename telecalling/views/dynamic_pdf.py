@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 
 
 
@@ -34,6 +35,7 @@ class DynamicPdfGenrate(APIView):
     #     id=serializers.IntegerField(required=False)
 
     def get(self, request, table_name,id):
+        authorize_request('api_dynamic_pdf_genrate', request.user)
         print(request)
         # 🔹 validate table
         query_key = QUERY_MAP.get(table_name)

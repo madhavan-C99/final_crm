@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from rest_framework import serializers
 from rest_framework.response import Response
@@ -15,6 +16,7 @@ class DailyReportApi(APIView):
 
         
     def post(self,request):
+        authorize_request('api_daily_report_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         report=daily_report( **serializer.validated_data)
@@ -41,6 +43,7 @@ class SubmitDailyReportView(APIView):
         own_message = serializers.CharField(required=False, default="")
     
     def post(self, request):
+        authorize_request('api_submit_daily_report_view', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -63,6 +66,7 @@ class SubmitDailyReportView(APIView):
 
 class DownloadDailyReportView(APIView):    
     def get(self, request):
+        authorize_request('api_download_daily_report_view', request.user)
         response_data = download_daily_reports(
             user=request.user
         )

@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from django.http import HttpResponse
 from django.apps import apps
@@ -70,6 +71,7 @@ from ..services.payment_services import *
 class DynamicExportExcel(APIView):
 
     def post(self, request, *args, **kwargs):
+        authorize_request('api_dynamic_export_excel', request.user)
         json_data = request.data.get('data')
         file_name = request.data.get('file_name', 'export')
 

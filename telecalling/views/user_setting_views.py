@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import serializers, status
@@ -31,6 +32,7 @@ class GetAllSettingsApi(APIView):
     #     tele_id=serializers.IntegerField(required=True)
 
     def get(self, request):
+        authorize_request('api_get_all_settings_api', request.user)
         print(request.user)
         data = get_all_settings_service(user=request.user)
         log_data = {
@@ -59,6 +61,7 @@ class NotificationSettingApi(APIView):
         notify_reassigned_leads  = serializers.BooleanField(required=False)
 
     def post(self, request):
+        authorize_request('api_notification_setting_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_notification_service(
@@ -89,6 +92,7 @@ class FollowUpSettingApi(APIView):
         mark_followup_as_completed      = serializers.BooleanField(required=False)
 
     def post(self, request):
+        authorize_request('api_follow_up_setting_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_followup_service(
@@ -118,6 +122,7 @@ class CallerSettingApi(APIView):
         default_call_outcome      = serializers.CharField( required=False)
 
     def post(self, request):
+        authorize_request('api_caller_setting_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_caller_service(
@@ -147,6 +152,7 @@ class MessagingSettingApi(APIView):
         auto_send_messages       = serializers.BooleanField(required=False)
 
     def post(self, request):
+        authorize_request('api_messaging_setting_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_messaging_service(
@@ -175,6 +181,7 @@ class NotesSettingApi(APIView):
         enable_quick_note_templates = serializers.BooleanField(required=False)
 
     def post(self, request):
+        authorize_request('api_notes_setting_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_notes_service(
@@ -203,6 +210,7 @@ class LeadPreferenceSettingApi(APIView):
         sort_leads_by = serializers.CharField(required=False)
 
     def post(self, request):
+        authorize_request('api_lead_preference_setting_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_lead_preference_service(
@@ -230,6 +238,7 @@ class SecuritySettingApi(APIView):
         two_factor_authentication = serializers.BooleanField(required=False)
 
     def post(self, request):
+        authorize_request('api_security_setting_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_security_service(
@@ -253,6 +262,7 @@ class SecuritySettingApi(APIView):
 #     class InputSerializer(serializers.Serializer):
 #         tele_id=serializers.IntegerField(required=True)
 #     def post(self, request):
+#         pass
 #         serializer = self.InputSerializer(data=request.data)
 #         serializer.is_valid(raise_exception=True)
 #         data = notification_reminder_services(

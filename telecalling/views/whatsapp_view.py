@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 # whatsapp meta code setup
 from rest_framework.views import APIView
 from rest_framework import serializers
@@ -136,6 +137,7 @@ class WhatsappWebhook(APIView):
         hub_challenge = serializers.CharField()
 
     def get(self, request):
+        authorize_request('api_whatsapp_webhook', request.user)
         data = {
             "hub_mode": request.GET.get("hub.mode"),
             "hub_verify_token": request.GET.get("hub.verify_token"),
@@ -157,6 +159,7 @@ class WhatsappWebhook(APIView):
     
     
     def post(self,request):
+        authorize_request('api_whatsapp_webhook', request.user)
         try:
                 data = request.data
                 print("FULL DATA:", data)

@@ -1,3 +1,4 @@
+from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
 from rest_framework import serializers
 from rest_framework.response import Response
@@ -23,6 +24,7 @@ class FetchAllLeads(APIView):
         campaign_name_id = serializers.IntegerField(required=False, allow_null=True,default=0)
         
     def post(self,request):
+        authorize_request('api_fetch_all_leads', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=fetch_leads(user=request.user,**serializer.validated_data)
@@ -49,6 +51,7 @@ class UpdateCourse(APIView):
         count=serializers.IntegerField(required=True)
         
     def post(self,request):
+        authorize_request('api_update_course', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=course_count(**serializer.validated_data)
@@ -63,6 +66,7 @@ class AddNewLead(APIView):
         lead_source_id = serializers.IntegerField(required=False, allow_null=True) 
         
     def post(self,request):
+        authorize_request('api_add_new_lead', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=add_new_lead(user=request.user,**serializer.validated_data)
@@ -94,6 +98,7 @@ class FetchPipelineLead(APIView):
         followup_status = serializers.CharField(required=False, allow_blank=True, allow_null=True,default=0)
 
     def post(self, request):
+        authorize_request('api_fetch_pipeline_lead', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead = fetch_pipeline_leads(user=request.user, **serializer.validated_data)
@@ -118,6 +123,7 @@ class GetSelectedOption(APIView):
         course_name_id=serializers.CharField(required=False,allow_null=True,allow_blank=True)        
         
     def post(self,request):
+        authorize_request('api_get_selected_option', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=get_selected_option(user=request.user,**serializer.validated_data)
@@ -179,6 +185,7 @@ class LeadFormDetail(APIView):
         referal_list=serializers.JSONField(required=False)
 
     def post(self,request):
+        authorize_request('api_lead_form_detail', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=lead_form_details(user=request.user,**serializer.validated_data)
@@ -199,6 +206,7 @@ class FetchOneLead(APIView):
         lead_id=serializers.IntegerField(required=True)
         
     def post(self,request):
+        authorize_request('api_fetch_one_lead', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=fetch_one_lead(user=request.user,**serializer.validated_data)
@@ -222,6 +230,7 @@ class FetchCallHistoryApi(APIView):
         lead_id=serializers.IntegerField(required=True)
         
     def post(self,request):
+        authorize_request('api_fetch_call_history_api', request.user)
         serializer=self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=fetch_call_history(user=request.user,**serializer.validated_data)
@@ -251,6 +260,7 @@ class CallConnectForm(APIView):
         upload_record = serializers.FileField(required=False)
 
     def post(self, request):
+        authorize_request('api_call_connect_form', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = call_connect_api(user=request.user, **serializer.validated_data)
@@ -271,6 +281,7 @@ class CallDisconnectSelectTag(APIView):
     class InputSerializers(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)  
     def post(self, request):
+        authorize_request('api_call_disconnect_select_tag', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = call_disconnect_select_api(user=request.user, **serializer.validated_data) 
@@ -294,6 +305,7 @@ class CallDisconnectForm(APIView):
         other_reason=serializers.CharField(required=False,allow_null=True,allow_blank=True)
 
     def post(self, request):
+        authorize_request('api_call_disconnect_form', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = call_disconnect_api(user=request.user, **serializer.validated_data) 
@@ -315,6 +327,7 @@ class FetchOneLossLeadDetail(APIView):
     class InputSerializers(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)    
     def post(self,request):
+        authorize_request('api_fetch_one_loss_lead_detail', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = fetch_one_loss_detail(user=request.user, **serializer.validated_data)  
@@ -342,6 +355,7 @@ class LossLeadUpdateApi(APIView):
         loss_reason = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
         
     def post(self,request):
+        authorize_request('api_loss_lead_update_api', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = loss_detail_update(user=request.user, **serializer.validated_data)  
@@ -362,6 +376,7 @@ class FetchOneWonLeadDetail(APIView):
     class InputSerializers(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)    
     def post(self,request):
+        authorize_request('api_fetch_one_won_lead_detail', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = fetch_one_won_detail(user=request.user, **serializer.validated_data)
@@ -387,6 +402,7 @@ class WonLeadUpdateApi(APIView):
         notes=serializers.CharField(required=False, allow_null=True, allow_blank=True)
         
     def post(self,request):
+        authorize_request('api_won_lead_update_api', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         payment=won_detail_update(request.user,**serializer.validated_data)
