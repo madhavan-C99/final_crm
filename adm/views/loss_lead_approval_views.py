@@ -13,8 +13,8 @@ from ..services.loss_lead_approval_services import (
 )
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class FetchLossLeadApprovalRequestsAdmin(APIView):
     """
     POST & GET -> Loss Lead Approval Request Page Table Data & Summary API.
@@ -61,8 +61,8 @@ class FetchLossLeadApprovalRequestsAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class GetLossLeadApprovalFilterDropdownsAdmin(APIView):
     """
     GET & POST -> Filter Modal Dropdown Options API for Loss Lead Approval Page.
@@ -78,8 +78,8 @@ class GetLossLeadApprovalFilterDropdownsAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class ExportLossLeadApprovalRequestsAdmin(APIView):
     """
     POST & GET -> Lime Green Excel Export API for Loss Lead Approval Requests Page.
@@ -106,8 +106,8 @@ class ExportLossLeadApprovalRequestsAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class ActionLossLeadApprovalAdmin(APIView):
     """
     POST -> Action Buttons API for Loss Lead Approval Requests Page.

@@ -1,6 +1,6 @@
 from django.db import models
 from .leads import *
-from .user import User
+from adm.models import User
 from django.conf import settings
 from .delete_base_model import SafeDeleteModel
 
@@ -12,18 +12,16 @@ class CallDetails(SafeDeleteModel):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='calls')
     telecaller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='made_calls')
 
-    # --- Call Status & Outcomes ---
-    # connection_status: Answered, No Answer, Busy, Switched Off
+    # --- Call Status & Direction ---
     connection_status = models.CharField(max_length=50) 
+    call_direction = models.CharField(max_length=20, default='Outgoing', null=True, blank=True) 
     
     # conversation_outcome: Interested, Not Interested, Busy - Call Back, Wrong Number
-    stage = models.ForeignKey(Stages,  blank=True,on_delete=models.SET_NULL, null=True, related_name='select_tag')
-    
-    # key_objective: Degree inquiry, Course Fee details, Location inquiry
-    select_tag = models.ForeignKey(SelectTag, blank=True,on_delete=models.SET_NULL, null=True, related_name='stage')
+    stage = models.ForeignKey(PipelineStage, blank=True, on_delete=models.SET_NULL, null=True, related_name='call_stages')
+    select_tag = models.ForeignKey(Priority, blank=True, on_delete=models.SET_NULL, null=True, related_name='call_priorities')
 
     # --- Content & Recording ---
-    conversation_summary = models.TextField(null=True, blank=True) # Ithu dhaan 'Call Notes'
+    conversation_summary = models.TextField(null=True, blank=True) 
     upload_recording = models.FileField(upload_to='call_recordings/', null=True, blank=True)
     duration_seconds = models.IntegerField(default=0)
     called_at = models.DateTimeField(auto_now_add=True)

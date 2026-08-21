@@ -19,10 +19,6 @@ from .views.export_views import *
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('create_token',CreateToken.as_view()),
-    path('api/token/refresh/', RefreshTokenView.as_view(), name='refresh_token'),
-    path('create_user',CreateUser.as_view()),
-    path('create_role',CreateRole.as_view()),
     path('get_select_option',GetSelectOption.as_view()),
     path('collection_query',CollectionQueryApi.as_view()),    #collection api
     path('lead_upload_excel',ExcelUpload.as_view()),
@@ -70,7 +66,6 @@ urlpatterns = [
     path('get_selected_option',GetSelectedOption.as_view()),
     path('disconnect_select_tag',CallDisconnectSelectTag.as_view()),
     path('mark_notification_read',MarkNotificationRead.as_view()),
-    path('generate_otp',GenerateOtpView.as_view()),
     path('get_export_column',ExportColumnsView.as_view()),
     path('export_json_data',ExportData.as_view()),     #export excel code 
     path('dashboard/pdf-data/', GetDashboardPDFData.as_view(), name='dashboard-pdf-data'),

@@ -35,7 +35,7 @@ class FetchAllPayment(APIView):
             'status_code': 202
         }
         api_history_log(log_data)
-        return Response({"data":payment},status=status.HTTP_202_ACCEPTED)
+        return Response({"data":payment},status=status.HTTP_200_OK)
     
   
   
@@ -52,7 +52,7 @@ class PendingPaymentTiles(APIView):
             'status_code': 202
         }
         api_history_log(log_data)
-        return Response({"data":tile},status=status.HTTP_202_ACCEPTED)
+        return Response({"data":tile},status=status.HTTP_200_OK)
             
   
   

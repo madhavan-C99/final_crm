@@ -142,7 +142,7 @@ class AddCourseDetails(APIView):
         
     
     def post(self,request):
-        authorize_request('api_add_course_details', request.user)
+        authorize_request('api_add_course', request.user)
         serializer=self.InputSerilaizers(data=request.data)
         serializer.is_valid(raise_exception=True)
         card=add_course_details(user=request.user,**serializer.validated_data)

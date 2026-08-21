@@ -11,13 +11,13 @@ class Notification(SafeDeleteModel):
 
     message = models.CharField(max_length=255)
 
-    follow_up = models.ForeignKey(
-        FollowUp,
+    lead = models.ForeignKey(
+        Lead,
         on_delete=models.CASCADE,
         null=True
     )
-    lead = models.ForeignKey(
-        Lead,
+    follow_up = models.ForeignKey(
+        FollowUp,
         on_delete=models.CASCADE,
         null=True
     )

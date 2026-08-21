@@ -25,25 +25,32 @@ class PaymentInfo(SafeDeleteModel):
 
     def save(self, *args, **kwargs):
 
-        # ✅ course fee
-        if self.lead and self.lead.course and getattr(self.lead.course, 'course_fees', None):
-            total_fee = self.lead.course.course_fees
+        # ✅ course fee lookup safely
+        total_fee = 0.0
+        if self.lead and self.lead.course and self.lead.course.course_fees:
+            total_fee = float(self.lead.course.course_fees)
+        elif self.lead and self.lead.course_name_id and self.lead.course_plan_id:
+            c_obj = Course.objects.filter(course_name_id=self.lead.course_name_id, course_plan_id=self.lead.course_plan_id).first()
+            if c_obj and c_obj.course_fees:
+                total_fee = float(c_obj.course_fees)
+        elif Course.objects.filter(course_fees__gt=0).first():
+            total_fee = float(Course.objects.filter(course_fees__gt=0).first().course_fees)
         else:
-            total_fee = 16000
+            total_fee = 16000.0
+
+        if total_fee <= 0:
+            total_fee = 16000.0
 
         # ✅ pending calculation
-        amount_paid = self.amount_paid or 0
-        self.pending_amount = max(total_fee - amount_paid, 0)
+        self.pending_amount = max(0.0, total_fee - self.amount_paid)
 
         # ✅ status
-        if amount_paid >= total_fee:
+        if self.amount_paid >= total_fee:
             self.is_full_payment = True
             self.payment_status = 1
-
-        elif amount_paid > 0:
+        elif self.amount_paid > 0:
             self.is_full_payment = False
             self.payment_status = 2
-
         else:
             self.is_full_payment = False
             self.payment_status = 3

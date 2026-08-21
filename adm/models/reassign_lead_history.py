@@ -1,5 +1,6 @@
 from django.db import models
-from telecalling.models import Lead, User
+from telecalling.models.leads import Lead
+from .user import User
 
 class AdminLeadReassignHistory(models.Model):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='reassign_history')

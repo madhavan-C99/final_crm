@@ -1,4 +1,5 @@
 from django.urls import path
+
 from .views.lead_views import (
     ExportAllLeadsAdmin, FetchAllLeadsAdmin, AddNewLeadAdmin, 
     FetchPipelineLeadsAdmin, GetFilterDropdownsAdmin, UploadLeadExcelAdmin, 
@@ -23,7 +24,46 @@ from .views.permission_views import (
     AddPermAPIView, FetchPermsListAPIView, FetchRolesListAPIView, AssignRolePermAPIView
 )
 
+from .views.user_views import (
+    CreateToken,
+    RefreshTokenView,
+    FetchUserPermissionsView,
+    CreateUserView,
+    CreateRoleView,
+)
+
+# Poomani
+from .views.campaign_stats_views import EducationPipelineStats, CampaignCardsList, FilterOptionsView
+from .views.enquiry_sheet_views import (
+    CampaignEnquirySheetView,
+    LeadSummaryReportView,
+    UpdateLeadSummaryView,
+    DeleteLeadSummaryView,
+    MoveLeadCampaignView,
+    AssignLeadTelecallerView,
+    ChangeLeadStatusView,
+    CallLogReportView,
+    DispositionLogView,
+)
+
+from .views.campaign_management_views import (
+    PipelineCategoriesView,
+    CampaignManagersView,
+    CampaignAgentsView,
+    CreateCampaignView,
+    ToggleCampaignStatusView,
+    FetchCampaignDetailView,
+    UpdateCampaignDetailView,
+)
+
+from .views.add_new_lead_views import (
+    AddLeadDropdownsView,
+    AddNewLeadView,
+)
+
 urlpatterns = [
+    
+    # Lead Management APIs
     path('fetch_all_leads_admin', FetchAllLeadsAdmin.as_view()),
     path('add_new_lead_admin', AddNewLeadAdmin.as_view()),  
     path('upload_lead_excel_admin', UploadLeadExcelAdmin.as_view()),
@@ -59,8 +99,38 @@ urlpatterns = [
     path('export_performance_overview_admin', ExportPerformanceOverviewAdmin.as_view()),
     
     # 👑 Role & Permission Management APIs (TL's MoneyShift Schema)
-    path('perm/add/', AddPermAPIView.as_view()),
-    path('perm/list/', FetchPermsListAPIView.as_view()),
-    path('role/list/', FetchRolesListAPIView.as_view()),
-    path('role/assign-perm/', AssignRolePermAPIView.as_view()),
+    path('perm_add', AddPermAPIView.as_view()),
+    path('perm_list', FetchPermsListAPIView.as_view()),
+    path('role_list', FetchRolesListAPIView.as_view()),
+    path('role_assign_perm', AssignRolePermAPIView.as_view()),
+    
+    # User Management APIs
+    path('create_token', CreateToken.as_view()),
+    path('api_token_refresh', RefreshTokenView.as_view()),
+    path('api_user_permissions', FetchUserPermissionsView.as_view()),
+    path('create_user', CreateUserView.as_view()),
+    path('create_role', CreateRoleView.as_view()),
+    
+    # Poomani
+    path('campaign_stats_tile', EducationPipelineStats.as_view()),
+    path('campaign_cards_tile', CampaignCardsList.as_view()),
+    path('campaign_enquiry_sheet', CampaignEnquirySheetView.as_view()),
+    path('filter_options', FilterOptionsView.as_view()),
+    path('lead_summary_report', LeadSummaryReportView.as_view()),
+    path('update_lead_summary', UpdateLeadSummaryView.as_view()),
+    path('delete_lead_summary', DeleteLeadSummaryView.as_view()),
+    path('move_lead_campaign', MoveLeadCampaignView.as_view()),
+    path('assign_lead_telecaller', AssignLeadTelecallerView.as_view()),
+    path('change_lead_status', ChangeLeadStatusView.as_view()),
+    path('call_log_report', CallLogReportView.as_view()),
+    path('disposition_log_report', DispositionLogView.as_view()),
+    path('get_pipeline_categories', PipelineCategoriesView.as_view()),
+    path('get_campaign_managers', CampaignManagersView.as_view()),
+    path('get_campaign_agents', CampaignAgentsView.as_view()),
+    path('create_campaign', CreateCampaignView.as_view()),
+    path('toggle_campaign_status', ToggleCampaignStatusView.as_view()),
+    path('get_campaign_detail', FetchCampaignDetailView.as_view()),
+    path('update_campaign_detail', UpdateCampaignDetailView.as_view()),
+    path('get_add_lead_options', AddLeadDropdownsView.as_view()),
+    path('add_new_lead', AddNewLeadView.as_view()),
 ]

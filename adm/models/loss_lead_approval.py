@@ -1,5 +1,6 @@
 from django.db import models
-from telecalling.models import Lead, SelectTag, User
+from telecalling.models.leads import Lead, SelectTag
+from .user import User
 
 
 class AdminLossActionLog(models.Model):

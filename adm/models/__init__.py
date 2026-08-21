@@ -6,6 +6,9 @@ from .perms import Perm
 from .role import Role
 from .user_role import UserRole
 from .user import User
+from .collection_query import CollectionQuery
+from .pipeline_category import PipelineCategory
+from .CampaignAssignedAgent import CampaignAssignedAgent
 
 __all__ = [
     'AdminLossActionLog',
@@ -17,4 +20,7 @@ __all__ = [
     'Role',
     'UserRole',
     'User',
+     'CollectionQuery',
+    'PipelineCategory',
+    'CampaignAssignedAgent',
 ]

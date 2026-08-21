@@ -1,4 +1,4 @@
-from ..models.user import User
+from adm.models import User
 from ..models.courses import CourseName 
 from ..models.courses import CoursePlan
 from ..models.courses import Course

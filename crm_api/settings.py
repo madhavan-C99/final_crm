@@ -2,6 +2,8 @@ from pathlib import Path
 from datetime import timedelta
 import multiprocessing
 import os
+from corsheaders.defaults import default_headers, default_methods
+
 
 if os.name == 'nt':
     multiprocessing.set_start_method('spawn', force=True)
@@ -25,11 +27,23 @@ ALLOWED_HOSTS = [
 # 🌐 100% CORS Permission Allowed for Frontend
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_HEADERS = ["*"]
-CORS_ALLOW_METHODS = ["*"]
-
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'authorization',
+    'content-type',
+    'ngrok-skip-browser-warning',
+    'accept',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+ 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
     "https://trench-probing-decimeter.ngrok-free.dev",
     "https://unaligned-faceted-gander.ngrok-free.dev",
     "https://autopilot-elude-ungloved.ngrok-free.dev",
@@ -138,9 +152,10 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Authentication User model
-AUTH_USER_MODEL = 'telecalling.User'
+AUTH_USER_MODEL = 'adm.User'
 
-# Rest framework exception handler
+# Rest framework exception handlerr
+
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'utils.exceptions.api_exception_handler',
     'DEFAULT_PERMISSION_CLASSES': (

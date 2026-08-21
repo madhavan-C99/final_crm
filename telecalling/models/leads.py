@@ -86,18 +86,50 @@ class LeadSource(SafeDeleteModel):
         
         
 class CampaignName(SafeDeleteModel):
-    name=models.CharField(max_length=100)
-    is_active=models.BooleanField(default=False)
-    created_at=models.DateTimeField(auto_now_add=True,null=True)
-    created_by=models.CharField(max_length=50,null=True)
-    updated_at=models.DateTimeField(auto_now=True,null=True)
-    updated_by=models.CharField(max_length=50,null=True)
+    name = models.CharField(max_length=100)
+    
+    # 🌟 1. Pipeline Category
+    pipeline_category = models.ForeignKey(
+        'adm.PipelineCategory', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='campaigns',
+        db_column='pipeline_category_id'
+    )
+
+    # 🌟 2. Single Campaign Manager (நேரடியாக இங்கே சேர்க்கப்பட்டுள்ளது!)
+    manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='managed_campaigns',
+        db_column='manager_id'
+    )
+    
+    # 🌟 3. Lead Distribution Type
+    lead_distribution_type = models.CharField(max_length=50, default='on_demand', null=True, blank=True)
+    
+    # 🌟 4. Multiple Agents Link
+    assigned_agents = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, 
+        through='adm.CampaignAssignedAgent', 
+        related_name='assigned_campaigns', 
+        blank=True
+    )
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    created_by = models.CharField(max_length=50, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    updated_by = models.CharField(max_length=50, null=True)
 
     def __str__(self):
         return str(self.name)
+
     class Meta:
-        db_table = 'telecalling_campaign_name'
-        
+        db_table = 'telecalling_campaign_name'    
         
 class Priority(SafeDeleteModel):
     name=models.CharField(max_length=100)
@@ -160,25 +192,24 @@ class Education(SafeDeleteModel):
         db_table = 'telecalling_education'
         
         
-class Stages(SafeDeleteModel):
-    name=models.CharField(max_length=100)
-    is_active=models.BooleanField(default=False)
-    created_at=models.DateTimeField(auto_now_add=True,null=True)
-    created_by=models.CharField(max_length=50,null=True)
-    updated_at=models.DateTimeField(auto_now=True,null=True)
-    updated_by=models.CharField(max_length=50,null=True)
+# class Stages(SafeDeleteModel):
+#     name=models.CharField(max_length=100)
+#     is_active=models.BooleanField(default=False)
+#     created_at=models.DateTimeField(auto_now_add=True,null=True)
+#     created_by=models.CharField(max_length=50,null=True)
+#     updated_at=models.DateTimeField(auto_now=True,null=True)
+#     updated_by=models.CharField(max_length=50,null=True)
 
-    def __str__(self):
-        return str(self.name)
-    class Meta:
-        db_table = 'telecalling_stages'
+#     def __str__(self):
+#         return str(self.name)
+#     class Meta:
+#         db_table = 'telecalling_stages'
         
         
         
 class SelectTag(SafeDeleteModel):
-    stages=models.ForeignKey(Stages,on_delete=models.SET_NULL,null=True,related_name="stages")
+    # stages=models.ForeignKey(Stages,on_delete=models.SET_NULL,null=True,related_name="stages")
     name=models.CharField(max_length=100)
-    display_value=models.CharField(max_length=100, null=True, blank=True)
     is_active=models.BooleanField(default=False)
     created_at=models.DateTimeField(auto_now_add=True,null=True)
     created_by=models.CharField(max_length=50,null=True)
@@ -273,6 +304,7 @@ class FilterPipeline(SafeDeleteModel):
     created_by=models.CharField(max_length=50,null=True)
     updated_at=models.DateTimeField(auto_now=True,null=True)
     updated_by=models.CharField(max_length=50,null=True)
+
     def __str__(self):
         return str(self.name)
     class Meta:

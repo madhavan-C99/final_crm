@@ -14,8 +14,8 @@ from ..services.lead_services import (
 )
 from telecalling.tasks.api_log_task import api_history_log
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class FetchAllLeadsAdmin(APIView):
    
     class InputSerializers(serializers.Serializer):
@@ -60,8 +60,8 @@ class FetchAllLeadsAdmin(APIView):
    
 # -------------------------------------admin add new lead views------------------------------------------
     
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class AddNewLeadAdmin(APIView):
     """
     GET  -> Modal open aagum podhu Dropdowns tarum (Pipelines, Campaigns, Sources, Telecallers)
@@ -114,8 +114,8 @@ class AddNewLeadAdmin(APIView):
 
 # ----------------------------upload lead excel file view------------------------------------------
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class UploadLeadExcelAdmin(APIView):
     """
     Admin Bulk Excel/CSV Lead Upload API (.csv, .xls, .xlsx).
@@ -146,8 +146,8 @@ class UploadLeadExcelAdmin(APIView):
     
 # ------------------------------export_all_leads_admin-----------------------
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class ExportAllLeadsAdmin(APIView):
     """
     Admin Leads Page -> Export Button API.
@@ -191,8 +191,8 @@ class ExportAllLeadsAdmin(APIView):
 
 # -------------------------------get_filter_dropdowns_admin-----------------------
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class GetFilterDropdownsAdmin(APIView):
     """
     Admin Leads Page -> Filter Modal Dropdowns API (Supports both GET & POST).
@@ -212,8 +212,8 @@ class GetFilterDropdownsAdmin(APIView):
     
 # --------------------------------------fetch_pipeline_leads_admin----------------------------------
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class FetchPipelineLeadsAdmin(APIView):
     """
     Admin Pipeline View (Kanban Cards API).
@@ -251,8 +251,8 @@ class FetchPipelineLeadsAdmin(APIView):
 
 # --------------------------------------fetch_lead_details_admin----------------------------------
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class FetchLeadDetailsAdmin(APIView):
     """
     Admin Lead Details & Activity Timeline Modal API.
@@ -284,8 +284,8 @@ class FetchLeadDetailsAdmin(APIView):
     
 # ---------------------------get_mark_as_won_info_admin-----------------------------
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class GetMarkAsWonInfoAdmin(APIView):
     """
     Get Mark as Won Modal Details API (POST with Serializer Validation).
@@ -319,8 +319,8 @@ class GetMarkAsWonInfoAdmin(APIView):
     
 # --------------------------------------mark_as_won_admin----------------------------------
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class MarkAsWonAdmin(APIView):
     """
     Submit Mark as Won Modal API.
@@ -360,8 +360,8 @@ class MarkAsWonAdmin(APIView):
 
 # ---------------------------get_mark_as_lost_info_admin, mark_as_lost_admin--------------------
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class GetMarkAsLostInfoAdmin(APIView):
     """
     Get Mark as Lost Modal Details API (POST).
@@ -390,8 +390,8 @@ class GetMarkAsLostInfoAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class MarkAsLostAdmin(APIView):
     """
     Submit Mark as Lost Modal API.
@@ -433,8 +433,8 @@ class MarkAsLostAdmin(APIView):
 
 # --------------------------------------edit_lead_admin----------------------------------
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class EditLeadAdmin(APIView):
     """
     Admin Leads Page -> Edit Lead Modal Save API.
@@ -482,8 +482,8 @@ class EditLeadAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class DeleteLeadAdmin(APIView):
     def post(self, request):
         authorize_request('api_delete_lead_admin', request.user)
@@ -503,8 +503,8 @@ class DeleteLeadAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class ReassignLeadAdmin(APIView):
     def post(self, request):
         authorize_request('api_reassign_lead_admin', request.user)

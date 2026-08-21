@@ -114,11 +114,16 @@ def fetch_all_pending_payments_admin(search=None, date_filter=None, from_date=No
             )
 
         # 5. Pending Amount Range Filter
-        if pending_amount_range == "below_5000":
-            payments_qs = payments_qs.filter(pending_amount__lt=5000)
-        elif pending_amount_range == "5000_10000":
+        p_range_str = str(pending_amount_range or "").lower().strip()
+        if p_range_str in ["above_5k", "1", "above_5000"]:
+            payments_qs = payments_qs.filter(pending_amount__gt=5000)
+        elif p_range_str in ["below_5k", "2", "below_5000"]:
+            payments_qs = payments_qs.filter(pending_amount__lte=5000, pending_amount__gt=0)
+        elif p_range_str in ["below_2k", "3", "below_2000"]:
+            payments_qs = payments_qs.filter(pending_amount__lte=2000, pending_amount__gt=0)
+        elif p_range_str == "5000_10000":
             payments_qs = payments_qs.filter(pending_amount__gte=5000, pending_amount__lte=10000)
-        elif pending_amount_range == "above_10000":
+        elif p_range_str == "above_10000":
             payments_qs = payments_qs.filter(pending_amount__gt=10000)
 
         # 4. Resolve Due Date for all pending payments in memory to guarantee 100% accuracy

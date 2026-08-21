@@ -12,8 +12,8 @@ from adm.services.performance_services import (
     export_performance_overview_admin
 )
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class FetchPerformanceOverviewAdmin(APIView):
     def post(self, request):
         authorize_request('api_fetch_performance_overview_admin', request.user)
@@ -21,8 +21,8 @@ class FetchPerformanceOverviewAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class AssignUsersToTeamAdmin(APIView):
     def post(self, request):
         authorize_request('api_assign_users_to_team_admin', request.user)
@@ -31,8 +31,8 @@ class AssignUsersToTeamAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class UpdateTelecallerTargetAdmin(APIView):
     def post(self, request):
         authorize_request('api_update_telecaller_target_admin', request.user)
@@ -41,8 +41,8 @@ class UpdateTelecallerTargetAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class GetPerformanceFilterDropdownsAdmin(APIView):
     def get(self, request):
         authorize_request('api_get_performance_filter_dropdowns_admin', request.user)
@@ -50,8 +50,8 @@ class GetPerformanceFilterDropdownsAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class ExportPerformanceOverviewAdmin(APIView):
     def post(self, request):
         authorize_request('api_export_performance_overview_admin', request.user)

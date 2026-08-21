@@ -2,8 +2,8 @@
 
 import requests
 from django.conf import settings
-from ..models import Lead, User
-
+from ..models import Lead
+from adm.models import User
 
 def assign_telecaller():
     telecallers = list(User.objects.filter(role__name="telecaller"))

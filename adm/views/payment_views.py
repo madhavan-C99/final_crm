@@ -11,8 +11,8 @@ from ..services.payment_services import (
 from telecalling.tasks.api_log_task import api_history_log
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class GetPendingPaymentFilterDropdownsAdmin(APIView):
     """
     Pending Payments Page -> Filter Modal Dropdowns API.
@@ -29,8 +29,8 @@ class GetPendingPaymentFilterDropdownsAdmin(APIView):
         return Response({"data": result}, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class FetchAllPendingPaymentsAdmin(APIView):
     """
     Pending Payments Page -> 1st API: Fetch All Pending Payments & Summary Cards API.
@@ -92,8 +92,8 @@ class FetchAllPendingPaymentsAdmin(APIView):
         return Response({"data": result}, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
+# @authentication_classes([])
+# @permission_classes([])
 class ExportPendingPaymentsAdmin(APIView):
     """
     Pending Payments Page -> Export Pending Payments Excel API.

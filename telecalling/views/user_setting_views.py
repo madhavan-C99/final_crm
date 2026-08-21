@@ -61,7 +61,7 @@ class NotificationSettingApi(APIView):
         notify_reassigned_leads  = serializers.BooleanField(required=False)
 
     def post(self, request):
-        authorize_request('api_notification_setting_api', request.user)
+        authorize_request('api_notification_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_notification_service(
@@ -92,7 +92,7 @@ class FollowUpSettingApi(APIView):
         mark_followup_as_completed      = serializers.BooleanField(required=False)
 
     def post(self, request):
-        authorize_request('api_follow_up_setting_api', request.user)
+        authorize_request('api_followup_update_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_followup_service(
@@ -152,7 +152,7 @@ class MessagingSettingApi(APIView):
         auto_send_messages       = serializers.BooleanField(required=False)
 
     def post(self, request):
-        authorize_request('api_messaging_setting_api', request.user)
+        authorize_request('api_message_Setting_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_messaging_service(
@@ -210,7 +210,7 @@ class LeadPreferenceSettingApi(APIView):
         sort_leads_by = serializers.CharField(required=False)
 
     def post(self, request):
-        authorize_request('api_lead_preference_setting_api', request.user)
+        authorize_request('api_lead_preference_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_lead_preference_service(
@@ -238,7 +238,7 @@ class SecuritySettingApi(APIView):
         two_factor_authentication = serializers.BooleanField(required=False)
 
     def post(self, request):
-        authorize_request('api_security_setting_api', request.user)
+        authorize_request('api_tw_fa_api', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = update_security_service(
@@ -262,7 +262,7 @@ class SecuritySettingApi(APIView):
 #     class InputSerializer(serializers.Serializer):
 #         tele_id=serializers.IntegerField(required=True)
 #     def post(self, request):
-#         pass
+        authorize_request('api_testing_notifiy', request.user)
 #         serializer = self.InputSerializer(data=request.data)
 #         serializer.is_valid(raise_exception=True)
 #         data = notification_reminder_services(

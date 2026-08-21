@@ -127,8 +127,8 @@ from rest_framework.decorators import authentication_classes, permission_classes
 
 
 
-@authentication_classes([])
-@permission_classes([]) 
+# @authentication_classes([])
+# @permission_classes([]) 
 class WhatsappWebhook(APIView):
 
     class InputSerializer(serializers.Serializer):

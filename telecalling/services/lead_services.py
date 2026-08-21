@@ -134,6 +134,7 @@ def fetch_pipeline_leads(user, **data):
 
         params = {
             "id": user.id,
+            "telecaller_id": user.id,
             "from_date": str(from_date),
             "to_date": str(to_date),
             "filter_type": filter_type,
@@ -196,7 +197,7 @@ DROPDOWN_MODEL_MAP = {
     "payment_stage":PaymentStage,
     "payment_status":PaymentStage,
     "pending_amount":AmountStage,
-    "call_stage":Stages,
+    "call_stage":PipelineStage,
     "call_select_tag":SelectTag,
     "payment_filter":FilterPayment,
     "pipeline_filter":FilterPipeline
@@ -227,7 +228,7 @@ DROPDOWN_VALUE_MAP = {
 DROPDOWN_FILTER_MAP = {
     "course_plan": ["courses__name_id"],
     "course_time": ["courses__name_id", "courses__plan_id"],
-    "call_select_tag": ["stages__id"],
+    # "call_select_tag": ["stages__id"],
     "priority": ["pipeline_stage_id"],
 }
 
@@ -341,8 +342,16 @@ def lead_form_details(user, **data):
             lead.email = data.get("email")
         if data.get("location"):
             lead.location = data.get("location")
-        if data.get("education_id"):
-            lead.education_id = data.get("education_id")
+        if data.get("education"):
+            edu_name = str(data.get("education")).strip()
+            if edu_name:
+                edu_obj, _ = Education.objects.get_or_create(
+                name__iexact=edu_name,
+                defaults={"name": edu_name, "is_active": True, "created_by": str(user)}
+              )
+                lead.education = edu_obj
+        elif data.get("education_id"):
+              lead.education_id = data.get("education_id")
         if data.get("passed_out_year"):
             lead.passed_out_year = data.get("passed_out_year")
         if data.get("experience"):
@@ -657,13 +666,25 @@ def call_connect_api(user,**data):
         won_stage_id = won_stage_id.id if won_stage_id else None
         print(data)
     
+        conn_stat = data.get("connection_status") or "Connected"
+        call_dir = data.get("call_direction") or ("Incoming" if str(conn_stat).strip().lower() == "incoming" else "Outgoing")
+
+        # 🟢 Safe Priority / Select Tag assignment (prevents FK error if tag_id is from adm_priority):
+        tag_exists = SelectTag.objects.filter(id=parsed_tag_id).exists()
+        select_tag_val = parsed_tag_id if tag_exists else None
+
+        # 🟢 Safe Stage assignment for CallDetails (prevents FK error if stage_id is not in adm_stages):
+        stage_exists = PipelineStage.objects.filter(id=parsed_stage_id).exists()
+        stage_val = parsed_stage_id if stage_exists else None
+
         call=CallDetails.objects.create(
                 lead=lead,
                 telecaller=user,
-                connection_status=data.get("connection_status") or "Connected",
+                connection_status=conn_stat,
+                call_direction=call_dir,
                 duration_seconds=data.get("call_duration") or 0,
-                stage_id=parsed_stage_id,
-                select_tag_id=parsed_tag_id,
+                stage_id=stage_val,
+                select_tag_id=select_tag_val,
                 conversation_summary=data.get("call_summary"),
                 upload_recording=data.get("upload_record"),
                 created_by=str(user)    
@@ -809,19 +830,14 @@ def call_disconnect_api(user, **data):
 
         # Only update stage if not Won
         if current_stage != won_stage.id:
-            existing_calls_count = CallDetails.objects.filter(lead=lead).count()
-            if existing_calls_count == 0:
-                # 1st time disconnected -> "contact_attempt" stage
-                next_stage = PipelineStage.objects.filter(name__icontains="attempt").first()
-                if next_stage is None:
-                    raise APIException("Pipeline stage 'contact_attempt' is not configured")
-            else:
-                # 2nd time or more disconnected -> "unreached" stage
-                next_stage = PipelineStage.objects.filter(name__icontains="unreach").first()
-                if next_stage is None:
-                    raise APIException("Pipeline stage 'unreached' is not configured")
-            lead.pipeline_stage = next_stage
-            lead.save()
+            # 🟢 Call Disconnect ஆனாலே நேரடியாக "Call Not Connected" (ID 7) Stage-க்கு மாறும்
+            not_connected_stage = PipelineStage.objects.filter(name__icontains="not connected").first()
+            if not not_connected_stage:
+                not_connected_stage = PipelineStage.objects.filter(id=7).first()
+
+            if not_connected_stage:
+                lead.pipeline_stage = not_connected_stage
+                lead.save()
         # <<< CHANGED
 
         call = CallDetails.objects.create(
@@ -1093,22 +1109,17 @@ def won_detail_update(user, **data):
             lead=lead
         ).first()
 
-        req_pending = data.get("pending_amount")
-        if req_pending is not None and float(req_pending) == 0:
-            total_paid = total_fee
-        elif paid_amount >= total_fee:
-            total_paid = total_fee
-        elif payment_info:
-            if payment_info.amount_paid + paid_amount >= total_fee:
-                total_paid = total_fee
-            elif paid_amount > payment_info.amount_paid:
-                total_paid = paid_amount
-            else:
-                total_paid = payment_info.amount_paid + paid_amount
+        # 🟢 சரியான கட்டணக் கணக்கீடு:
+        if payment_info:
+            total_paid = payment_info.amount_paid + paid_amount
         else:
             total_paid = paid_amount
 
-        pending_amount = max(0.0, total_fee - total_paid)
+        if total_paid >= total_fee:
+            total_paid = total_fee
+            pending_amount = 0.0
+        else:
+            pending_amount = max(0.0, total_fee - total_paid)
         is_full = (pending_amount <= 0)
 
         # ==========================================

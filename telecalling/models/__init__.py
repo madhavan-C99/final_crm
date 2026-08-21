@@ -6,7 +6,7 @@ from .leads import *
 from .paymentinfo import PaymentInfo,PaymentFollowUp,PaymentHistory
 # from .perm import Perm
 # from .role import Role
-from .user import User
+from adm.models import User
 from .follow_up import FollowUp
 from .user_settings import UserSettings,MessageTemplate
 from .notification import Notification,MissedFollowUpHistory

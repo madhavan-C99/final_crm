@@ -43,8 +43,8 @@ class FetchAllLeads(APIView):
 
 
 
-@authentication_classes([])
-@permission_classes([])   
+# @authentication_classes([])
+# @permission_classes([])   
 class UpdateCourse(APIView):
     class InputSerializers(serializers.Serializer):
         id=serializers.IntegerField(required=True)
@@ -87,7 +87,7 @@ class FetchPipelineLead(APIView):
     class InputSerializers(serializers.Serializer):
         from_date = serializers.DateField(required=False)
         to_date = serializers.DateField(required=False)
-        date_filter_type = serializers.CharField(required=False, default="today")
+        date_filter_type = serializers.CharField(required=False, default="year")
         
         pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True,default=0)
         lead_source_id = serializers.IntegerField(required=False, allow_null=True,default=0)
@@ -114,8 +114,8 @@ class FetchPipelineLead(APIView):
         return Response({"data": lead}, status=status.HTTP_202_ACCEPTED)
 
 
-@authentication_classes([])
-@permission_classes([])   
+# @authentication_classes([])
+# @permission_classes([])   
 class GetSelectedOption(APIView):
     class InputSerializers(serializers.Serializer):
         dropdown_category=serializers.CharField(required=True)
@@ -154,6 +154,7 @@ class LeadFormDetail(APIView):
         email=serializers.EmailField(required=False,allow_null=True,allow_blank=True)
         location=serializers.CharField(required=False,allow_null=True,allow_blank=True)
         education_id=serializers.IntegerField(required=False,allow_null=True)
+        education = serializers.CharField(required=False, allow_null=True, allow_blank=True)
         passed_out_year=serializers.CharField(required=False,allow_null=True,allow_blank=True)
         experience=serializers.CharField(required=False,allow_null=True,allow_blank=True)
         
