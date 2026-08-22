@@ -109,7 +109,7 @@ def fetch_all_leads_admin(**data):
         new_lead_qs = base_qs.filter(Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")).distinct()
         follow_up_qs = base_qs.filter(Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")).distinct()
         won_qs = base_qs.filter(Q(pipeline_stage_id=3) | Q(pipeline_stage__name__icontains="won")).distinct()
-        lost_qs = base_qs.filter(Q(pipeline_stage_id=4) | Q(pipeline_stage__name__icontains="loss") | Q(pipeline_stage__name__icontains="lost")).distinct()
+        lost_qs = Lead.objects.filter(id__in=approved_loss_lead_ids).distinct()
 
         # Missed / Pending followups: unattended past followups
         missed_follow_up_qs = base_qs.filter(
@@ -712,11 +712,7 @@ def get_filter_dropdowns_admin():
             })
 
         # 1. Lost Reasons (from SelectTag)
-        loss_reasons_qs = SelectTag.objects.filter(stages_id=9).order_by("id")
-        if not loss_reasons_qs.exists():
-            loss_reasons_qs = SelectTag.objects.filter(
-                Q(name__icontains="issue") | Q(name__icontains="not interested") | Q(name__icontains="no response") | Q(name__icontains="competitor") | Q(name__icontains="eligible")
-            ).order_by("id")
+        loss_reasons_qs = SelectTag.objects.filter(is_active=True).order_by("id")
         if not loss_reasons_qs.exists():
             loss_reasons_qs = SelectTag.objects.all().order_by("id")
 
@@ -1117,28 +1113,33 @@ def mark_as_won_admin(**data):
         summary = data.get("summary") or ""
         next_followup = data.get("next_followup")
 
-        # 🛑 Validation: Amount Paid must be entered before marking as WON!
+        # 🛑 1. Validation: Must enter valid Amount Paid (>0) OR select Full Payment!
         if amount_paid <= 0 and not is_full_payment:
-            raise APIException("Paid amount is required to mark a lead as WON. Please enter valid amount_paid.")
+            raise APIException("Amount Paid or Full Payment selection is required to mark a lead as WON. Please enter valid amount_paid or select Full Payment.")
 
-        # 1. Update Lead Pipeline Stage to WON (Stage ID 3)
+        # 2. Update Lead Pipeline Stage to WON (Stage ID 3) & Clear any Loss Approvals
         won_stage = PipelineStage.objects.filter(id=3).first() or PipelineStage.objects.filter(name__icontains="won").first()
         if won_stage:
             lead.pipeline_stage = won_stage
+            lead.current_status = "won"
             lead.save()
+            try:
+                AdminApprovedLossLead.objects.filter(lead=lead).delete()
+            except Exception:
+                pass
 
-        # 🛡️ 2. Safe Course Fee Calculation (Prevents NoneType error if lead.course is None)
-        course_fee = 16000
+        # 🛡️ 3. Safe Course Fee Calculation (Prevents NoneType error if lead.course is None)
+        course_fee = 16000.0
         if lead.course and getattr(lead.course, 'course_fees', None):
-            course_fee = lead.course.course_fees
+            course_fee = float(lead.course.course_fees)
 
         if is_full_payment:
             amount_paid = course_fee
-            pending_amount = 0
+            pending_amount = 0.0
         else:
-            pending_amount = max(course_fee - amount_paid, 0)
+            pending_amount = max(course_fee - amount_paid, 0.0)
 
-        # 3. Create or Update PaymentInfo
+        # 4. Create or Update PaymentInfo
         payment_obj, created = PaymentInfo.objects.get_or_create(
             lead=lead,
             defaults={
@@ -1155,13 +1156,20 @@ def mark_as_won_admin(**data):
             payment_obj.summary = summary
             payment_obj.save()
 
-        # 4. Create PaymentHistory Record
+        # 5. Create PaymentHistory Record safely parsing due_date
+        clean_due_date = None
+        if due_date and str(due_date).strip() not in ["", "null", "None"]:
+            try:
+                clean_due_date = str(due_date).split('T')[0]
+            except Exception:
+                clean_due_date = None
+
         PaymentHistory.objects.create(
             payment=payment_obj,
             paid_amount=amount_paid,
             pending_amount=pending_amount,
             notes=f"Paid via {paid_through}. {summary}",
-            due_date=due_date if due_date else None
+            due_date=clean_due_date
         )
 
         # 5. Create FollowUp if next_followup date is provided
@@ -1297,7 +1305,7 @@ def mark_as_lost_admin(**data):
             loss_obj.detailed_reason = detailed_reason
             loss_obj.save()
 
-        # 4. Record Action Log in AdminLossActionLog
+        # 4. Record Action Log in AdminLossActionLog & Auto-Approve for Admin View
         try:
             AdminLossActionLog.objects.create(
                 lead=lead,
@@ -1305,6 +1313,19 @@ def mark_as_lost_admin(**data):
                 action_type='submitted',
                 previous_assigned_to=lead.assigned_to,
                 remarks=f"Marked as Lost: {main_reason_obj.name if main_reason_obj else detailed_reason}"
+            )
+        except Exception:
+            pass
+
+        try:
+            AdminApprovedLossLead.objects.get_or_create(
+                lead=lead,
+                defaults={
+                    'approved_by': lead.assigned_to,
+                    'main_reason': main_reason_obj,
+                    'final_remarks': detailed_reason or "Marked as Lost by Admin",
+                    'created_by': "Admin"
+                }
             )
         except Exception:
             pass

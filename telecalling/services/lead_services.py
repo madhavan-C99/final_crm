@@ -1090,7 +1090,7 @@ def won_detail_update(user, **data):
         if lead.course and lead.course.course_fees:
             total_fee = float(lead.course.course_fees)
         elif lead.course_name_id and lead.course_plan_id:
-            c_obj = Course.objects.filter(course_name_id=lead.course_name_id, course_plan_id=lead.course_plan_id).first()
+            c_obj = Course.objects.filter(name_id=lead.course_name_id, plan_id=lead.course_plan_id).first()
             if c_obj and c_obj.course_fees:
                 total_fee = float(c_obj.course_fees)
         elif Course.objects.filter(course_fees__gt=0).first():

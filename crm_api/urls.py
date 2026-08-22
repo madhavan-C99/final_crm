@@ -7,13 +7,12 @@ from telecalling.views.whatsapp_view import *
 from django.http import HttpResponse
 
 urlpatterns = [
-    # path('', lambda request: HttpResponse("CRM API Backend Server Running Successfully!")),
     path('admin/', admin.site.urls),
+    
     path('telecalling/', include('telecalling.urls')),
+    path('adm/', include('adm.urls')),
 
-    # ✅ message receive (POST)
-    path('api/whatsapp/webhook/', WhatsappWebhook.as_view()),
-    path('adm/', include('adm.urls')),  
+    path('api/whatsapp/webhook/', WhatsappWebhook.as_view()),      
 ]
 
 # Media Files Path Routing

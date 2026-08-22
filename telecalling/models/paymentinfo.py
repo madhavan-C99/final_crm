@@ -30,7 +30,7 @@ class PaymentInfo(SafeDeleteModel):
         if self.lead and self.lead.course and self.lead.course.course_fees:
             total_fee = float(self.lead.course.course_fees)
         elif self.lead and self.lead.course_name_id and self.lead.course_plan_id:
-            c_obj = Course.objects.filter(course_name_id=self.lead.course_name_id, course_plan_id=self.lead.course_plan_id).first()
+            c_obj = Course.objects.filter(name_id=self.lead.course_name_id, plan_id=self.lead.course_plan_id).first()
             if c_obj and c_obj.course_fees:
                 total_fee = float(c_obj.course_fees)
         elif Course.objects.filter(course_fees__gt=0).first():

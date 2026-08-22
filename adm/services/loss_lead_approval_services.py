@@ -160,7 +160,7 @@ def fetch_loss_lead_approval_requests_admin(**data):
             # Loss Reason
             loss_reason_str = "-"
             if loss_detail and loss_detail.main_reason:
-                loss_reason_str = loss_detail.main_reason.display_value or loss_detail.main_reason.name
+                loss_reason_str = getattr(loss_detail.main_reason, 'display_value', None) or getattr(loss_detail.main_reason, 'name', "-")
             elif loss_detail and loss_detail.detailed_reason:
                 loss_reason_str = loss_detail.detailed_reason
 
@@ -249,11 +249,7 @@ def get_loss_lead_approval_filter_dropdowns_admin():
         pipeline_stages_qs = PipelineStage.objects.all().order_by("id")
         pipeline_stages = [{"id": p.id, "name": getattr(p, 'display_value', None) or p.name} for p in pipeline_stages_qs]
 
-        loss_reasons_qs = SelectTag.objects.filter(stages_id=9).order_by("id")
-        if not loss_reasons_qs.exists():
-            loss_reasons_qs = SelectTag.objects.filter(
-                Q(name__icontains="issue") | Q(name__icontains="not interested") | Q(name__icontains="admitted") | Q(name__icontains="no response")
-            ).order_by("id")
+        loss_reasons_qs = SelectTag.objects.filter(is_active=True).order_by("id")
         if not loss_reasons_qs.exists():
             loss_reasons_qs = SelectTag.objects.all().order_by("id")
 

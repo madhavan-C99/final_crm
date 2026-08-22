@@ -20,23 +20,32 @@ def get_pending_payment_filter_dropdowns_admin():
     Returns dropdown options for Course Name, Course Plan, Course Time, Payment Stage, Pending Amount Ranges.
     """
     try:
-        course_names = [
-            {"id": c.id, "name": c.coursename}
-            for c in CourseName.objects.filter(is_active=True).order_by("coursename")
-            if c.coursename
-        ]
+        seen_cn = set()
+        course_names = []
+        for c in CourseName.objects.filter(is_active=True).order_by("coursename"):
+            if c.coursename:
+                norm_name = str(c.coursename).strip().lower()
+                if norm_name not in seen_cn:
+                    seen_cn.add(norm_name)
+                    course_names.append({"id": c.id, "name": c.coursename.title() if (c.coursename.islower() or c.coursename.isupper()) else c.coursename})
 
-        course_plans = [
-            {"id": cp.id, "name": cp.courseplan}
-            for cp in CoursePlan.objects.filter(is_active=True).order_by("courseplan")
-            if cp.courseplan
-        ]
+        seen_cp = set()
+        course_plans = []
+        for cp in CoursePlan.objects.filter(is_active=True).order_by("courseplan"):
+            if cp.courseplan:
+                norm_plan = str(cp.courseplan).strip().lower()
+                if norm_plan not in seen_cp:
+                    seen_cp.add(norm_plan)
+                    course_plans.append({"id": cp.id, "name": cp.courseplan})
 
-        course_timings = [
-            {"id": ct.id, "name": ct.coursetime}
-            for ct in CourseTiming.objects.filter(is_active=True).order_by("coursetime")
-            if ct.coursetime
-        ]
+        seen_ct = set()
+        course_timings = []
+        for ct in CourseTiming.objects.filter(is_active=True).order_by("coursetime"):
+            if ct.coursetime:
+                norm_time = str(ct.coursetime).strip().lower()
+                if norm_time not in seen_ct:
+                    seen_ct.add(norm_time)
+                    course_timings.append({"id": ct.id, "name": ct.coursetime})
 
         payment_stages = [
             {"id": "today_due", "name": "Today Due"},

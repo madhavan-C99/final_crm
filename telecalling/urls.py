@@ -54,7 +54,7 @@ urlpatterns = [
     
     path('get_all_settings',GetAllSettingsApi.as_view()),               # tele setting page all datas api
     path('notification_api',NotificationSettingApi.as_view()),          # tele notification update api
-    path('followup_update_api',FollowUpSettingApi.as_view()),           #
+    path('followup_update_api',FollowUpSettingApi.as_view()),           
     path('call_setting_update_api',CallerSettingApi.as_view()),
     path('message_Setting_api',MessagingSettingApi.as_view()),
     path('note_setting_api',NotesSettingApi.as_view()),
