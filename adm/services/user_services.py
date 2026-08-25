@@ -5,7 +5,7 @@ from rest_framework.exceptions import APIException, AuthenticationFailed
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import Q
-from adm.models import User, Role
+from adm.models import User, Role, UserRole
 
 logger = logging.getLogger('django')
 
@@ -24,7 +24,10 @@ def create_user(user_name, **data):
 
         user = User.objects.create_user(data.get('username'), data.get('email'), data.get('password'))
         if data.get('role_id'):
-            user.role = Role.objects.filter(id=data.get('role_id')).first()
+            role_obj = Role.objects.filter(id=data.get('role_id')).first()
+            if role_obj:
+                UserRole.objects.get_or_create(user=user, role=role_obj)
+
         user.first_name = data.get('first_name')
         user.last_name = data.get('last_name')
         user.is_active = True
@@ -99,15 +102,18 @@ def create_token(**data):
         "refresh": str(refresh_tkn)
     }
 
+    user_role_obj = user.user_roles.select_related('role').first() if hasattr(user, 'user_roles') else None
+    role_obj = user_role_obj.role if user_role_obj else None
+
     user_data = {
         "user_email": user.email,
         "user_id": user.id,
         "user_mobile": user.mobile,
         "user_name": user.first_name,
         "role": {
-            "id": user.role.id if hasattr(user, 'role') and user.role else None,
-            "code": user.role.code if hasattr(user, 'role') and user.role else None,
-            "name": user.role.name if hasattr(user, 'role') and user.role else None
+            "id": role_obj.id if role_obj else None,
+            "code": role_obj.code if role_obj else None,
+            "name": role_obj.name if role_obj else None
         }
     }
 
@@ -119,7 +125,8 @@ def fetch_user_permissions_service(user):
         if not user or not user.is_authenticated:
             raise APIException("Authentication required")
         perms = user.get_perms() if hasattr(user, 'get_perms') else []
-        role_code = user.role.code if hasattr(user, 'role') and user.role else None
+        user_role_obj = user.user_roles.select_related('role').first() if hasattr(user, 'user_roles') else None
+        role_code = user_role_obj.role.code if user_role_obj and user_role_obj.role else None
         return {
             "user_id": user.id,
             "role_code": role_code,

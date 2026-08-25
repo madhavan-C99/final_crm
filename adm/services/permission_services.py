@@ -17,8 +17,10 @@ def authorize_request(perm_name: str, user):
             raise PermissionDenied("Authentication required. Please login.")
 
         # 💻 Developer Super-Access Check (0.0001 seconds speed!)
-        if hasattr(user, 'role') and user.role:
-            if user.role.code == 'DEV' or user.role.name == 'developer' or getattr(user, 'is_superuser', False):
+        user_role_obj = user.user_roles.select_related('role').first() if hasattr(user, 'user_roles') else None
+        role_obj = user_role_obj.role if user_role_obj else None
+        if role_obj:
+            if role_obj.code == 'DEV' or role_obj.name == 'developer' or getattr(user, 'is_superuser', False):
                 return True
         elif getattr(user, 'is_superuser', False):
             return True

@@ -172,34 +172,20 @@ def get_user_details(user):
             elif hasattr(user_obj, 'username') and user_obj.username:
                 user_name = user_obj.username
             
-            # Get user role - IMPORTANT FIX: Check if role is a ManyToMany field
+            # Get user role - Check user_roles relationship first
             user_role = "Telecaller"
             
-            # If user has role attribute
-            if hasattr(user_obj, 'role'):
+            if hasattr(user_obj, 'user_roles') and user_obj.user_roles.exists():
+                first_ur = user_obj.user_roles.select_related('role').first()
+                if first_ur and first_ur.role:
+                    user_role = first_ur.role.display_value or first_ur.role.name
+            elif hasattr(user_obj, 'role') and user_obj.role:
                 role_value = user_obj.role
-                
-                # Check if it's a ManyRelatedManager (ManyToMany field)
-                if 'ManyRelatedManager' in str(type(role_value)):
-                    # It's a ManyToMany field, get the first role
-                    try:
-                        # Try to get role name from the many-to-many relation
-                        if hasattr(role_value, 'all'):
-                            roles = role_value.all()
-                            if roles.exists():
-                                first_role = roles.first()
-                                if hasattr(first_role, 'name'):
-                                    user_role = first_role.name
-                                elif hasattr(first_role, 'role_name'):
-                                    user_role = first_role.role_name
-                                elif hasattr(first_role, 'title'):
-                                    user_role = first_role.title
-                    except:
-                        pass
-                elif isinstance(role_value, str):
+                if isinstance(role_value, str):
                     user_role = role_value
+                elif hasattr(role_value, 'name'):
+                    user_role = role_value.name
                 else:
-                    # Try to convert to string
                     user_role = str(role_value)
             
             # If still "Telecaller", try other fields

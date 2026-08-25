@@ -51,7 +51,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     address = models.CharField(max_length=500, null=True, blank=True)
     wrong_pwd_counts = models.IntegerField(default=0)
 
-    role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True, related_name="adm_users")
     team = models.ForeignKey('adm.Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='adm_members')
 
     starting_date = models.DateField(default=date.today)
@@ -86,17 +85,19 @@ class User(AbstractBaseUser, PermissionsMixin):
     def get_short_name(self):
         return self.username
 
-    # 🔑 Custom RBAC Permission Engine (adm_role_perms Table Query)
+    # 🔑 Custom RBAC Permission Engine (adm_role_perms Table Query via UserRole)
     def get_perms(self):
         if self.is_superuser:
             from .perms import Perm
             return list(Perm.objects.values_list("name", flat=True))
 
-        if not self.role:
+        user_role_obj = self.user_roles.select_related('role').first()
+        if not user_role_obj or not user_role_obj.role:
             return []
 
-        if self.role.code == 'DEV' or self.role.name == 'developer':
+        role_obj = user_role_obj.role
+        if role_obj.code == 'DEV' or role_obj.name == 'developer':
             from .perms import Perm
             return list(Perm.objects.values_list("name", flat=True))
 
-        return list(self.role.perms.values_list("name", flat=True))
+        return list(role_obj.perms.values_list("name", flat=True))
