@@ -1,7 +1,7 @@
 from rest_framework.exceptions import APIException
 from telecalling.models.courses import CourseName, CoursePlan
-from telecalling.models.leads import Lead, CampaignName, LeadSource, Priority
-from telecalling.models.user import User
+from telecalling.models.leads import Lead, CampaignName, LeadSource, Priority, PipelineStage
+from adm.models.user import User
 from .query_services import exec_raw_sql
 
 

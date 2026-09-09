@@ -15,15 +15,9 @@ from telecalling.tasks.api_log_task import api_history_log
 # @permission_classes([])
 class GetPendingPaymentFilterDropdownsAdmin(APIView):
     """
-    Pending Payments Page -> Filter Modal Dropdowns API.
-    Supports GET & POST requests.
+    Pending Payments Page -> Filter Modal Dropdowns API (No inputs required).
     """
     def get(self, request):
-        authorize_request('api_get_pending_payment_filter_dropdowns_admin', request.user)
-        result = get_pending_payment_filter_dropdowns_admin()
-        return Response({"data": result}, status=status.HTTP_200_OK)
-
-    def post(self, request):
         authorize_request('api_get_pending_payment_filter_dropdowns_admin', request.user)
         result = get_pending_payment_filter_dropdowns_admin()
         return Response({"data": result}, status=status.HTTP_200_OK)

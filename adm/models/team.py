@@ -12,6 +12,7 @@ class Team(models.Model):
         related_name='led_teams'
     )
     badge_color = models.CharField(max_length=20, default="#E3F2FD")
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='teams')
     is_active = models.BooleanField(default=True)
     
     # Audit trail fields

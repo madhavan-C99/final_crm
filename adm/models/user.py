@@ -52,6 +52,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     wrong_pwd_counts = models.IntegerField(default=0)
 
     team = models.ForeignKey('adm.Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='adm_members')
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
+    employee_id = models.CharField(max_length=50, null=True, blank=True, unique=True)
+    reporting_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates')
+    disable_lead_assignment = models.BooleanField(default=False)
 
     starting_date = models.DateField(default=date.today)
     ending_date = models.DateField(null=True, blank=True)

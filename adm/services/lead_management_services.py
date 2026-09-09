@@ -1,6 +1,7 @@
+from django.db.models import Q
 from rest_framework.exceptions import APIException
 from django.utils import timezone
-from telecalling.models.user import User
+from adm.models.user import User
 from telecalling.models.leads import Lead, CampaignName, LeadSource, PipelineStage
 from adm.models.pipeline_category import PipelineCategory
 
@@ -11,7 +12,13 @@ def fetch_add_lead_dropdowns(user, **data):
         categories = PipelineCategory.objects.filter(is_active=True).values("id", "category_name", "display_name").order_by("id")
         sources = LeadSource.objects.filter(is_active=True).values("id", "name").order_by("id")
         
-        telecallers = User.objects.filter(is_active=True, role__name__iexact="telecaller").values(
+        telecallers_qs = User.objects.filter(is_active=True).filter(
+            Q(user_roles__role__name__iexact="telecaller") | 
+            Q(user_roles__role__code__iexact="TEL") | 
+            Q(user_type__icontains="telecaller")
+        ).distinct()
+
+        telecallers = telecallers_qs.values(
             "id", "username", "first_name", "last_name"
         ).order_by("id")
 

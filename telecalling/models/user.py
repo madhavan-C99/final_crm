@@ -1,1 +1,0 @@
-from adm.models import User

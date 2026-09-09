@@ -7,7 +7,7 @@ from telecalling.models.leads import Lead, CampaignName, PipelineStage, Priority
 from telecalling.models.courses import Course, CourseName, CoursePlan
 from telecalling.models.call_details import CallDetails
 from telecalling.models.follow_up import FollowUp
-from telecalling.models.user import User
+from adm.models.user import User
 from telecalling.models.delete_base_model import SafeDeleteModel
 from .query_services import exec_raw_sql
 

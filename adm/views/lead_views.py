@@ -82,7 +82,7 @@ class AddNewLeadAdmin(APIView):
         source = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
         enquiry_date = serializers.DateTimeField(required=False, allow_null=True)
-        priority_id = serializers.IntegerField(required=False, default=4)
+        priority_id = serializers.IntegerField(required=False, allow_null=True, default=None)
         
         
     def get(self, request):
@@ -194,15 +194,8 @@ class ExportAllLeadsAdmin(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class GetFilterDropdownsAdmin(APIView):
-    """
-    Admin Leads Page -> Filter Modal Dropdowns API (Supports both GET & POST).
-    """
-    def get(self, request):
-        authorize_request('api_get_filter_dropdowns_admin', request.user)
-        result = get_filter_dropdowns_admin()
-        return Response({"data": result}, status=status.HTTP_200_OK)
 
-    def post(self, request):
+    def get(self, request):
         authorize_request('api_get_filter_dropdowns_admin', request.user)
         result = get_filter_dropdowns_admin()
         return Response({"data": result}, status=status.HTTP_200_OK)

@@ -65,14 +65,9 @@ class FetchLossLeadApprovalRequestsAdmin(APIView):
 # @permission_classes([])
 class GetLossLeadApprovalFilterDropdownsAdmin(APIView):
     """
-    GET & POST -> Filter Modal Dropdown Options API for Loss Lead Approval Page.
+    Filter Modal Dropdown Options API for Loss Lead Approval Page (No inputs required).
     """
     def get(self, request):
-        authorize_request('api_get_loss_lead_approval_filter_dropdowns_admin', request.user)
-        result = get_loss_lead_approval_filter_dropdowns_admin()
-        return Response(result, status=status.HTTP_200_OK)
-
-    def post(self, request):
         authorize_request('api_get_loss_lead_approval_filter_dropdowns_admin', request.user)
         result = get_loss_lead_approval_filter_dropdowns_admin()
         return Response(result, status=status.HTTP_200_OK)

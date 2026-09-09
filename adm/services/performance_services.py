@@ -63,7 +63,7 @@ def fetch_performance_overview_admin(data):
         
         # Role filtering if user_type exists
         if hasattr(User, 'user_type') and User.objects.filter(user_type__icontains='telecaller').exists():
-            users_qs = users_qs.filter(Q(user_type__icontains='telecaller') | Q(role__name__icontains='telecaller')).distinct()
+            users_qs = users_qs.filter(Q(user_type__icontains='telecaller') | Q(user_roles__role__name__icontains='telecaller')).distinct()
 
         # Filter by Team if specified
         if team_id and int(team_id) > 0:

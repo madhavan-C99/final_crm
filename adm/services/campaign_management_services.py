@@ -1,5 +1,5 @@
 from rest_framework.exceptions import APIException
-from telecalling.models.user import User
+from adm.models.user import User
 from telecalling.models.leads import CampaignName
 from adm.models.pipeline_category import PipelineCategory
 from adm.models.CampaignAssignedAgent import CampaignAssignedAgent
@@ -18,11 +18,17 @@ from django.db.models import Q
 
 def fetch_campaign_managers(user, **data):
     try:
-        managers = User.objects.filter(is_active=True).filter(
-            Q(role__name__iexact="admin") | 
-            Q(role__name__iexact="team leader") | 
+        managers_qs = User.objects.filter(is_active=True).filter(
+            Q(user_roles__role__name__iexact="admin") | 
+            Q(user_roles__role__name__iexact="team leader") | 
+            Q(user_type__icontains="admin") |
+            Q(user_type__icontains="team leader") |
             Q(is_superuser=True)
-        ).distinct().values("id", "username", "first_name", "last_name", "email").order_by("id")
+        ).distinct()
+        if not managers_qs.exists():
+            managers_qs = User.objects.filter(is_active=True)
+
+        managers = managers_qs.values("id", "username", "first_name", "last_name", "email").order_by("id")
         
         result = []
         for m in managers:
@@ -40,10 +46,13 @@ def fetch_campaign_managers(user, **data):
 
 def fetch_campaign_agents(user, **data):
     try:
-        agents = User.objects.filter(
-            is_active=True,
-            role__name__iexact="telecaller"
-        ).values("id", "username", "first_name", "last_name", "email").order_by("id")
+        agents_qs = User.objects.filter(is_active=True).filter(
+            Q(user_roles__role__name__iexact="telecaller") | Q(user_type__icontains="telecaller")
+        ).distinct()
+        if not agents_qs.exists():
+            agents_qs = User.objects.filter(is_active=True)
+
+        agents = agents_qs.values("id", "username", "first_name", "last_name", "email").order_by("id")
         
         result = []
         for a in agents:

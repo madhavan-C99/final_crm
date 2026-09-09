@@ -108,14 +108,28 @@ ASGI_APPLICATION = 'crm_api.asgi.application'
 WSGI_APPLICATION = 'crm_api.wsgi.application'
 
 # Database
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
+#         'NAME': 'crm_testing_db',
+#         'USER': 'postgres',
+#         'PASSWORD': 'Siva@2002',
+#         'HOST': 'localhost',
+#         'PORT': '5432',
+#     }
+# }
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'crm_testing_db',
-        'USER': 'postgres',
-        'PASSWORD': 'Siva@2002',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres',
+        'USER': 'postgres.ghrzxjhikqugbmlaasyn',
+        'PASSWORD': 't0iPn27PVWxzqK2u',
+        'HOST': 'aws-0-ap-south-1.pooler.supabase.com',
+        'PORT': '6543',
+        'OPTIONS': {
+            'sslmode': 'require',
+        },
     }
 }
 

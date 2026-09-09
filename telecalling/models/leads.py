@@ -38,6 +38,7 @@ class Lead(SafeDeleteModel):
     priority = models.ForeignKey('Priority',on_delete=models.SET_NULL, null=True, related_name='priority')
 
     # --- Assignment & Dates ---
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='leads')
     assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='leads')
     course=models.ForeignKey(Course,on_delete=models.SET_NULL, null=True, related_name='course')
     # next_followup_date = models.DateTimeField(null=True, blank=True)
@@ -72,6 +73,7 @@ class ReferalDetails(SafeDeleteModel):
         
 class LeadSource(SafeDeleteModel):
     name=models.CharField(max_length=100)
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='lead_sources')
     is_active=models.BooleanField(default=False)
     created_at=models.DateTimeField(auto_now_add=True,null=True)
     created_by=models.CharField(max_length=50,null=True)
@@ -119,6 +121,7 @@ class CampaignName(SafeDeleteModel):
         blank=True
     )
 
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='campaigns')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     created_by = models.CharField(max_length=50, null=True)
@@ -150,6 +153,7 @@ class Priority(SafeDeleteModel):
 class PipelineStage(SafeDeleteModel):
     name=models.CharField(max_length=100)
     display_value=models.CharField(max_length=100, null=True, blank=True)
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='pipeline_stages')
     is_active=models.BooleanField(default=False)
     created_at=models.DateTimeField(auto_now_add=True,null=True)
     created_by=models.CharField(max_length=50,null=True)

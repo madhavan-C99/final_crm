@@ -260,7 +260,11 @@ def get_add_lead_dropdowns_admin():
         campaigns = [{"id": c.id, "name": c.name} for c in campaigns_qs]
         sources_qs = LeadSource.objects.all()
         sources = [{"id": s.id, "name": s.name} for s in sources_qs]
-        users_qs = User.objects.filter(is_active=True)
+        users_qs = User.objects.filter(is_active=True).filter(
+            Q(user_roles__role__name__iexact='telecaller') |
+            Q(user_roles__role__code__iexact='TEL') |
+            Q(user_type__iexact='telecaller')
+        ).distinct().order_by("first_name")
         telecallers = [{"id": u.id, "name": get_user_display_name(u)} for u in users_qs]
         return {
             "pipelines": pipelines,
@@ -355,7 +359,12 @@ def add_new_lead_admin(user, **data):
         else:
             created_by_info = "Admin API (Unauthenticated)"
             
-        # 8. Create Lead Row
+        raw_p_id = data.get("priority_id") or data.get("priority")
+        valid_priority_id = None
+        if raw_p_id and stage:
+            if Priority.objects.filter(id=raw_p_id, pipeline_stage=stage).exists():
+                valid_priority_id = raw_p_id
+
         lead = Lead.objects.create(
             full_name=full_name,
             mobile_no=mobile_no,
@@ -366,7 +375,7 @@ def add_new_lead_admin(user, **data):
             assigned_to_id=assigned_to_id,
             enquiry_date=data.get("enquiry_date") or timezone.now(),
             current_status="working",
-            priority_id=data.get("priority_id") or data.get("priority") or None,
+            priority_id=valid_priority_id,
             created_by=created_by_info
         )
         return {
@@ -502,7 +511,7 @@ def upload_lead_excel_admin(file_obj, user=None):
                 pipeline_stage=default_stage,
                 assigned_to=default_agent,
                 current_status="working",
-                priority_id=4,
+                priority_id=None,
                 created_by=creator_info,
                 enquiry_date=timezone.now()
             )
@@ -678,7 +687,11 @@ def get_filter_dropdowns_admin():
         course_plans_qs = CoursePlan.objects.all()
         course_plans = [{"id": cp.id, "name": getattr(cp, 'courseplan', getattr(cp, 'name', str(cp)))} for cp in course_plans_qs]
 
-        users_qs = User.objects.filter(is_active=True).order_by("first_name")
+        users_qs = User.objects.filter(is_active=True).filter(
+            Q(user_roles__role__name__iexact='telecaller') |
+            Q(user_roles__role__code__iexact='TEL') |
+            Q(user_type__iexact='telecaller')
+        ).distinct().order_by("first_name")
         telecallers = []
         for u in users_qs:
             user_leads = Lead.objects.filter(assigned_to=u)
@@ -1410,23 +1423,27 @@ def edit_lead_admin(**data):
             if camp_obj:
                 lead.campaign = camp_obj
 
-        stage_val = data.get("stage") or data.get("pipeline")
+        stage_val = data.get("stage") or data.get("pipeline") or data.get("pipeline_stage_id")
         if stage_val:
             stage_obj = PipelineStage.objects.filter(Q(id=stage_val if str(stage_val).isdigit() else 0) | Q(name__icontains=stage_val)).first()
             if stage_obj:
                 lead.pipeline_stage = stage_obj
 
-        # Priority Tag Resolution (Prospective, Interested, Just Follow Up)
         tag_val = data.get("tag") or data.get("priority_id") or data.get("priority")
-        if tag_val:
+        if tag_val is not None:
             tag_map = {
                 "prospective": 1, "hot": 1, "1": 1, 1: 1,
                 "interested": 2, "warm": 2, "2": 2, 2: 2,
                 "just follow up": 3, "just_follow_up": 3, "cold": 3, "3": 3, 3: 3
             }
-            p_id = tag_map.get(str(tag_val).lower().strip())
-            if p_id:
-                lead.priority_id = p_id
+            raw_p = tag_map.get(str(tag_val).lower().strip()) if str(tag_val).lower().strip() in tag_map else (int(tag_val) if str(tag_val).isdigit() else None)
+            if raw_p and lead.pipeline_stage_id and Priority.objects.filter(id=raw_p, pipeline_stage_id=lead.pipeline_stage_id).exists():
+                lead.priority_id = raw_p
+            else:
+                lead.priority_id = None
+        elif lead.priority_id and lead.pipeline_stage_id:
+            if not Priority.objects.filter(id=lead.priority_id, pipeline_stage_id=lead.pipeline_stage_id).exists():
+                lead.priority_id = None
 
         lead.save()
 
@@ -1599,3 +1616,105 @@ def reassign_lead_admin(user, lead_id, new_telecaller_id, reason=None):
         }
     except Exception as e:
         raise APIException(str(e))
+
+
+# ----------------------------- bulk_transfer_leads_admin service -----------------------------
+
+def bulk_transfer_leads_admin(user, from_telecaller_id, to_telecaller_id, campaign_id=None, reason=None):
+    """
+    Bulk Transfer Leads Admin Service:
+    1. Transfers leads from from_telecaller to to_telecaller (bulk / campaign-wise).
+    2. Keeps existing pipeline_stage intact (NO stage change).
+    3. Creates audit records in AdminLeadReassignHistory for every transferred lead.
+    """
+    try:
+        if not from_telecaller_id:
+            raise APIException("From telecaller ID is required")
+        if not to_telecaller_id:
+            raise APIException("To telecaller ID is required")
+
+        if from_telecaller_id == to_telecaller_id:
+            raise APIException("From and To telecallers cannot be the same person")
+
+        from_telecaller = User.objects.filter(id=from_telecaller_id).first()
+        if not from_telecaller:
+            raise APIException(f"From Telecaller with ID {from_telecaller_id} not found")
+
+        to_telecaller = User.objects.filter(id=to_telecaller_id, is_active=True).first()
+        if not to_telecaller:
+            raise APIException(f"To Telecaller with ID {to_telecaller_id} not found or inactive")
+
+        # Query leads assigned to from_telecaller
+        leads_qs = Lead.objects.filter(assigned_to=from_telecaller)
+        if campaign_id:
+            leads_qs = leads_qs.filter(campaign_id=campaign_id)
+
+        leads_to_transfer = list(leads_qs)
+        if not leads_to_transfer:
+            raise APIException("No leads found matching the transfer criteria")
+
+        reassigned_by = user if (user and getattr(user, 'is_authenticated', False)) else None
+        reassigned_by_name = get_user_display_name(reassigned_by) if reassigned_by else "Admin"
+        transfer_reason = reason or ("Campaign Bulk Transfer" if campaign_id else "All Campaigns Bulk Transfer")
+
+        transferred_count = 0
+        history_records = []
+
+        followup_stage = PipelineStage.objects.filter(id=2).first() or PipelineStage.objects.filter(name__icontains="follow").first()
+
+        for lead in leads_to_transfer:
+            # Collect call history JSON
+            calls_qs = CallDetails.objects.filter(lead=lead, telecaller=from_telecaller).order_by('-created_at')[:20]
+            call_history_json = []
+            for c in calls_qs:
+                call_history_json.append({
+                    "call_id": c.id,
+                    "telecaller_id": c.telecaller_id,
+                    "telecaller_name": get_user_display_name(c.telecaller),
+                    "connection_status": c.connection_status,
+                    "duration_seconds": c.duration_seconds,
+                    "called_at": c.called_at.isoformat() if c.called_at else None,
+                })
+
+            # Create history record for audit log
+            history_rec = AdminLeadReassignHistory(
+                lead=lead,
+                previous_telecaller=from_telecaller,
+                new_telecaller=to_telecaller,
+                reassigned_by=reassigned_by,
+                attended_calls_count=len(call_history_json),
+                previous_call_history=call_history_json,
+                reassigned_reason=transfer_reason,
+                created_by=reassigned_by_name
+            )
+            history_records.append(history_rec)
+
+            # Update lead assigned_to & restore stage to Follow-up if currently in Loss stage
+            lead.assigned_to = to_telecaller
+            if lead.pipeline_stage_id in [4] or (lead.pipeline_stage and "loss" in lead.pipeline_stage.name.lower()):
+                if followup_stage:
+                    lead.pipeline_stage = followup_stage
+                lead.current_status = "working"
+
+            lead.save()
+            AdminApprovedLossLead.objects.filter(lead=lead).delete()
+            transferred_count += 1
+
+        # Bulk create audit history records
+        if history_records:
+            AdminLeadReassignHistory.objects.bulk_create(history_records)
+
+        from_name = get_user_display_name(from_telecaller)
+        to_name = get_user_display_name(to_telecaller)
+
+        return {
+            "status": "success",
+            "message": f"Successfully transferred {transferred_count} leads from '{from_name}' to '{to_name}'!",
+            "transferred_count": transferred_count,
+            "from_telecaller": from_name,
+            "to_telecaller": to_name,
+            "campaign_id": campaign_id
+        }
+
+    except Exception as e:
+        raise APIException(str(e))

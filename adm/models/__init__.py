@@ -9,6 +9,7 @@ from .user import User
 from .collection_query import CollectionQuery
 from .pipeline_category import PipelineCategory
 from .CampaignAssignedAgent import CampaignAssignedAgent
+from .organization import Organization
 
 __all__ = [
     'AdminLossActionLog',
@@ -23,4 +24,5 @@ __all__ = [
      'CollectionQuery',
     'PipelineCategory',
     'CampaignAssignedAgent',
+    'Organization',
 ]
