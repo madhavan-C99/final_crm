@@ -1,0 +1,729 @@
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Box,
+  Button,
+  MenuItem,
+  Menu,
+  Popover,
+  TextField,
+  Typography,
+} from "@mui/material";
+import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
+import FilterListOutlinedIcon from "@mui/icons-material/FilterListOutlined";
+import ImportExportOutlinedIcon from "@mui/icons-material/ImportExportOutlined";
+import KeyboardArrowDownOutlinedIcon from "@mui/icons-material/KeyboardArrowDownOutlined";
+import CustomDateRangePicker from "@/shared/components/table/CustomDateDialog";
+import { fetchLossLeadApprovalFilterDropdowns } from "@/apps/admin/services/leadService";
+
+const LossLeadApprovalFilter = ({
+  searchTerm,
+  setSearchTerm,
+  filterType,
+  setFilterType,
+  sortType,
+  setSortType,
+  fromDate,
+  setFromDate,
+  toDate,
+  setToDate,
+  selectedFilters,
+  setSelectedFilters,
+  tableData = [],
+}) => {
+  const [openCalendar, setOpenCalendar] = useState(false);
+
+  const handleApplyCustomRange = (from, to) => {
+    if (!from || !to) {
+      setFromDate("");
+      setToDate("");
+      setFilterType("all");
+    } else {
+      setFromDate(from);
+      setToDate(to);
+      setFilterType("custom");
+    }
+    setOpenCalendar(false);
+  };
+
+  const handleCloseCalendar = () => {
+    setOpenCalendar(false);
+    if (!fromDate || !toDate) {
+      setFilterType((prev) => (prev === "custom" ? "all" : prev));
+    }
+  };
+
+  // Popover Anchor states
+  const [filterAnchor, setFilterAnchor] = useState(null);
+  const [sortAnchor, setSortAnchor] = useState(null);
+
+  const [apiDropdowns, setApiDropdowns] = useState(null);
+
+  useEffect(() => {
+    fetchLossLeadApprovalFilterDropdowns()
+      .then((res) => {
+        const data = res?.data?.data || res?.data || null;
+        if (data) setApiDropdowns(data);
+      })
+      .catch((err) => {
+        console.log(
+          "Loss Lead Approval Filter dropdowns API error, using fallback tableData options:",
+          err,
+        );
+      });
+  }, []);
+
+  // Temp filters for Popover form draft state
+  const [tempFilters, setTempFilters] = useState(
+    selectedFilters || {
+      loss_reason: "All",
+      telecaller: "All",
+      course: "All",
+      lead_source: "All",
+    },
+  );
+
+  const handleOpenFilterPopover = (e) => {
+    setTempFilters(selectedFilters);
+    setFilterAnchor(e.currentTarget);
+  };
+
+  const handleApplyFilters = () => {
+    setSelectedFilters(tempFilters);
+    setFilterAnchor(null);
+  };
+
+  const handleResetFilters = () => {
+    const resetObj = {
+      loss_reason: "All",
+      telecaller: "All",
+      course: "All",
+      lead_source: "All",
+    };
+    setTempFilters(resetObj);
+    setSelectedFilters(resetObj);
+    setFilterAnchor(null);
+  };
+
+  // 1. Loss Reason Options (Strictly from API)
+  const lossReasonOptions = useMemo(() => {
+    const raw = apiDropdowns?.lost_reasons || apiDropdowns?.loss_reasons;
+    if (raw && Array.isArray(raw)) {
+      return raw
+        .map((item) => (typeof item === "object" ? item.name || item.loss_reason || item.reason : String(item)))
+        .filter(Boolean);
+    }
+    return [];
+  }, [apiDropdowns]);
+
+  // 2. Telecaller Options (Strictly from API)
+  const telecallerOptions = useMemo(() => {
+    if (apiDropdowns?.telecallers && Array.isArray(apiDropdowns.telecallers)) {
+      return apiDropdowns.telecallers
+        .map((item) => (typeof item === "object" ? item.name || item.telecaller_name : String(item)))
+        .filter(Boolean);
+    }
+    return [];
+  }, [apiDropdowns]);
+
+  // 3. Course Options (Strictly from API)
+  const courseOptions = useMemo(() => {
+    if (apiDropdowns?.courses && Array.isArray(apiDropdowns.courses)) {
+      return apiDropdowns.courses
+        .map((item) => (typeof item === "object" ? item.name || item.course_name : String(item)))
+        .filter(Boolean);
+    }
+    return [];
+  }, [apiDropdowns]);
+
+  // 4. Lead Source Options (Strictly from API)
+  const leadSourceOptions = useMemo(() => {
+    const raw =
+      apiDropdowns?.lead_sources ||
+      apiDropdowns?.sources ||
+      apiDropdowns?.lead_source ||
+      apiDropdowns?.source;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return Array.from(
+        new Set(
+          raw
+            .map((item) =>
+              typeof item === "object" ? item.name || item.source || item.lead_source : String(item)
+            )
+            .filter(Boolean)
+        )
+      );
+    }
+    return [];
+  }, [apiDropdowns]);
+
+  const isFilterActive = useMemo(() => {
+    return Object.values(selectedFilters || {}).some((val) => val !== "All");
+  }, [selectedFilters]);
+
+  return (
+    <>
+      <Box
+        sx={{
+          background: "#fff",
+          border: "1px solid #E5E5E5",
+          borderRadius: "7px",
+          p: 1.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2,
+          flexWrap: "wrap",
+          mt: 3,
+        }}
+      >
+        {/* LEFT: Search bar */}
+        <Box
+          sx={{
+            position: "relative",
+            minWidth: { xs: "100%", md: "350px" },
+            flex: 1,
+          }}
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              left: "10px",
+              top: "50%",
+
+              transform: "translateY(-50%)",
+              color: "#9E9E9E",
+              fontSize: "18px",
+              zIndex: 1,
+            }}
+          >
+            <AddOutlinedIcon
+              sx={{ transform: "rotate(90deg)", fontSize: "20px" ,mt:"8px"}}
+            />
+          </Box>
+
+          <TextField
+            fullWidth
+            placeholder="Search by name, phone......"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            size="small"
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                height: "38px",
+                borderRadius: "6px",
+                background: "#E6E6E6",
+                pl: "28px",
+                "& fieldset": { border: "none" },
+              },
+              "& input::placeholder": {
+                color: "#9E9E9E",
+                opacity: 1,
+                fontSize: "14px",
+              },
+            }}
+          />
+        </Box>
+
+        {/* RIGHT: Date Filter, Filter Button, Sort Button */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            flexWrap: "wrap",
+          }}
+        >
+          {/* DATE FILTER DROPDOWN */}
+          <TextField
+            select
+            size="small"
+            value={filterType || "all"}
+            onChange={(e) => {
+              setFilterType(e.target.value);
+              if (e.target.value === "custom") {
+                setOpenCalendar(true);
+              }
+            }}
+            slotProps={{
+              select: {
+                IconComponent: KeyboardArrowDownOutlinedIcon,
+              },
+            }}
+            sx={{
+              minWidth: "125px",
+              "& .MuiOutlinedInput-root": {
+                height: "38px",
+                borderRadius: "6px",
+                background: "#E6E6E6",
+                "& fieldset": { border: "none" },
+                fontSize: "14px",
+              },
+            }}
+          >
+            <MenuItem value="all">All</MenuItem>
+            <MenuItem value="today">Today</MenuItem>
+            <MenuItem value="yesterday">Yesterday</MenuItem>
+            <MenuItem value="last_7_days">Last 7 Days</MenuItem>
+            <MenuItem value="last_30_days">Last 30 Days</MenuItem>
+            <MenuItem value="this_month">This Month</MenuItem>
+            <MenuItem
+              value="custom"
+              onClick={() => {
+                setFilterType("custom");
+                setOpenCalendar(true);
+              }}
+            >
+              Custom Date
+            </MenuItem>
+          </TextField>
+
+          {/* FILTER BUTTON */}
+          <Button
+            startIcon={<FilterListOutlinedIcon />}
+            endIcon={<KeyboardArrowDownOutlinedIcon />}
+            onClick={handleOpenFilterPopover}
+            sx={{
+              height: "38px",
+              px: 2,
+              borderRadius: "6px",
+              background: isFilterActive ? "#8BC34A" : "#E6E6E6",
+              color: isFilterActive ? "#FFF" : "#333",
+              textTransform: "none",
+              fontSize: "14px",
+              fontWeight: 400,
+              "&:hover": {
+                background: isFilterActive ? "#79B22F" : "#ECECEC",
+              },
+            }}
+          >
+            Filter
+          </Button>
+
+          {/* FILTER LEADS POPOVER with width 450px */}
+          <Popover
+            open={Boolean(filterAnchor)}
+            anchorEl={filterAnchor}
+            onClose={() => setFilterAnchor(null)}
+            anchorOrigin={{
+              vertical: "bottom",
+              horizontal: "right",
+            }}
+            transformOrigin={{
+              vertical: "top",
+              horizontal: "right",
+            }}
+            PaperProps={{
+              sx: {
+                borderRadius: "12px",
+                boxShadow: "0px 10px 40px rgba(0, 0, 0, 0.12)",
+                overflow: "hidden",
+                bgcolor: "#fff",
+                mt: 0.5,
+              },
+            }}
+          >
+            {/* MAIN INNER CONTAINER WITH EXACT WIDTH 450px */}
+            <Box
+              sx={{
+                width: 450,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                bgcolor: "#fff",
+              }}
+            >
+              {/* HEADER BOX */}
+              <Box
+                sx={{
+                  px: 2.5,
+                  py: 1.2,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderBottom: "1px solid #ECECEC",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 22,
+                    fontWeight: 700,
+                    color: "#111827",
+                  }}
+                >
+                  Filter Leads
+                </Typography>
+
+                <Typography
+                  onClick={handleResetFilters}
+                  sx={{
+                    color: "#8BC34A",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    userSelect: "none",
+                  }}
+                >
+                  Reset
+                </Typography>
+              </Box>
+
+              {/* CONTENT GRID PANEL */}
+              <Box
+                sx={{
+                  flex: 1,
+                  px: 2.5,
+                  py: 1.5,
+                  overflow: "hidden",
+                }}
+              >
+                {/* 1. Loss Reason */}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "150px 1fr",
+                    alignItems: "center",
+                    columnGap: 1,
+                    mb: 1.1,
+                  }}
+                >
+                  <Typography
+                    sx={{ fontSize: 14, fontWeight: 500, color: "#333" }}
+                  >
+                    Loss Reason
+                  </Typography>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    value={tempFilters.loss_reason}
+                    onChange={(e) =>
+                      setTempFilters((prev) => ({
+                        ...prev,
+                        loss_reason: e.target.value,
+                      }))
+                    }
+                    slotProps={{
+                      select: {
+                        IconComponent: KeyboardArrowDownOutlinedIcon,
+                      },
+                    }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        height: 34,
+                        fontSize: 14,
+                        borderRadius: "6px",
+                      },
+                      "& .MuiSelect-select": {
+                        py: 0.7,
+                      },
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    <MenuItem value="All">All</MenuItem>
+                    {lossReasonOptions.map((r, i) => (
+                      <MenuItem
+                        key={i}
+                        value={r}
+                        sx={{ textTransform: "capitalize" }}
+                      >
+                        {r}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
+
+                {/* 2. Telecaller / Assigned To */}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "150px 1fr",
+                    alignItems: "center",
+                    columnGap: 1,
+                    mb: 1.1,
+                  }}
+                >
+                  <Typography
+                    sx={{ fontSize: 14, fontWeight: 500, color: "#333" }}
+                  >
+                    Telecaller
+                  </Typography>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    value={tempFilters.telecaller}
+                    onChange={(e) =>
+                      setTempFilters((prev) => ({
+                        ...prev,
+                        telecaller: e.target.value,
+                      }))
+                    }
+                    slotProps={{
+                      select: {
+                        IconComponent: KeyboardArrowDownOutlinedIcon,
+                      },
+                    }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        height: 34,
+                        fontSize: 14,
+                        borderRadius: "6px",
+                      },
+                      "& .MuiSelect-select": {
+                        py: 0.7,
+                      },
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    <MenuItem value="All">All</MenuItem>
+                    {telecallerOptions.map((t, i) => (
+                      <MenuItem
+                        key={i}
+                        value={t}
+                        sx={{ textTransform: "capitalize" }}
+                      >
+                        {t}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
+
+                {/* 3. Course */}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "150px 1fr",
+                    alignItems: "center",
+                    columnGap: 1,
+                    mb: 1.1,
+                  }}
+                >
+                  <Typography
+                    sx={{ fontSize: 14, fontWeight: 500, color: "#333" }}
+                  >
+                    Course
+                  </Typography>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    value={tempFilters.course}
+                    onChange={(e) =>
+                      setTempFilters((prev) => ({
+                        ...prev,
+                        course: e.target.value,
+                      }))
+                    }
+                    slotProps={{
+                      select: {
+                        IconComponent: KeyboardArrowDownOutlinedIcon,
+                      },
+                    }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        height: 34,
+                        fontSize: 14,
+                        borderRadius: "6px",
+                      },
+                      "& .MuiSelect-select": {
+                        py: 0.7,
+                      },
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    <MenuItem value="All">All</MenuItem>
+                    {courseOptions.map((c, i) => (
+                      <MenuItem
+                        key={i}
+                        value={c}
+                        sx={{ textTransform: "capitalize" }}
+                      >
+                        {c}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
+
+
+
+                {/* 5. Lead Source */}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "150px 1fr",
+                    alignItems: "center",
+                    columnGap: 1,
+                    mb: 1.1,
+                  }}
+                >
+                  <Typography
+                    sx={{ fontSize: 14, fontWeight: 500, color: "#333" }}
+                  >
+                    Lead Source
+                  </Typography>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    value={tempFilters.lead_source}
+                    onChange={(e) =>
+                      setTempFilters((prev) => ({
+                        ...prev,
+                        lead_source: e.target.value,
+                      }))
+                    }
+                    slotProps={{
+                      select: {
+                        IconComponent: KeyboardArrowDownOutlinedIcon,
+                      },
+                    }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        height: 34,
+                        fontSize: 14,
+                        borderRadius: "6px",
+                      },
+                      "& .MuiSelect-select": {
+                        py: 0.7,
+                      },
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    <MenuItem value="All">All</MenuItem>
+                    {leadSourceOptions.map((src, i) => (
+                      <MenuItem
+                        key={i}
+                        value={src}
+                        sx={{ textTransform: "capitalize" }}
+                      >
+                        {src}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
+              </Box>
+
+              {/* FOOTER BUTTONS */}
+              <Box
+                sx={{
+                  p: 2,
+                  display: "flex",
+                  gap: 1.5,
+                  borderTop: "1px solid #ECECEC",
+                }}
+              >
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  onClick={handleResetFilters}
+                  sx={{
+                    height: 36,
+                    textTransform: "none",
+                  }}
+                >
+                  Reset Filters
+                </Button>
+
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={handleApplyFilters}
+                  sx={{
+                    height: 36,
+                    background: "#8BC34A",
+                    textTransform: "none",
+                    "&:hover": {
+                      background: "#79B22F",
+                    },
+                  }}
+                >
+                  Apply Filters
+                </Button>
+              </Box>
+            </Box>
+          </Popover>
+
+          {/* SORT BY BUTTON */}
+          <Button
+            startIcon={<ImportExportOutlinedIcon />}
+            endIcon={<KeyboardArrowDownOutlinedIcon />}
+            onClick={(e) => setSortAnchor(e.currentTarget)}
+            sx={{
+              height: "38px",
+              px: 2,
+              borderRadius: "6px",
+              background: sortType === "oldest" ? "#8BC34A" : "#E6E6E6",
+              color: sortType === "oldest" ? "#FFF" : "#333",
+              textTransform: "none",
+              fontSize: "14px",
+              fontWeight: 400,
+              "&:hover": {
+                background: sortType === "oldest" ? "#79B22F" : "#ECECEC",
+              },
+            }}
+          >
+            {sortType === "oldest" ? "Oldest First" : "Sort by"}
+          </Button>
+
+          <Menu
+            anchorEl={sortAnchor}
+            open={Boolean(sortAnchor)}
+            onClose={() => setSortAnchor(null)}
+            PaperProps={{
+              sx: {
+                width: 160,
+                borderRadius: "8px",
+                boxShadow: "0px 4px 20px rgba(0,0,0,0.12)",
+                mt: 0.5,
+              },
+            }}
+          >
+            <MenuItem
+              selected={sortType === "newest"}
+              onClick={() => {
+                setSortType("newest");
+                setSortAnchor(null);
+              }}
+              sx={{
+                fontSize: "14px",
+                "&.Mui-selected": {
+                  backgroundColor: "#8BC34A !important",
+                  color: "#FFF",
+                },
+              }}
+            >
+              Newest First
+            </MenuItem>
+            <MenuItem
+              selected={sortType === "oldest"}
+              onClick={() => {
+                setSortType("oldest");
+                setSortAnchor(null);
+              }}
+              sx={{
+                fontSize: "14px",
+                "&.Mui-selected": {
+                  backgroundColor: "#8BC34A !important",
+                  color: "#FFF",
+                },
+              }}
+            >
+              Oldest First
+            </MenuItem>
+          </Menu>
+        </Box>
+      </Box>
+
+      {/* CUSTOM DATE POPUP — shared component matching Leads page */}
+      <CustomDateRangePicker
+        open={openCalendar}
+        onClose={handleCloseCalendar}
+        onApply={handleApplyCustomRange}
+        initialFrom={fromDate}
+        initialTo={toDate}
+        accentColor="#8BC34A"
+      />
+    </>
+  );
+};
+
+export default LossLeadApprovalFilter;
