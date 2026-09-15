@@ -120,3 +120,88 @@ export const toggleUserStatusAdmin = async (payload = {}) => {
   return await api.post("/adm/toggle_user_status_admin", data);
 };
 
+/**
+ * 1. Fetch User Campaigns List API
+ * Backend Endpoint: POST /adm/fetch_user_campaigns_admin
+ */
+export const fetchUserCampaignsAdmin = async (payload = {}) => {
+  const data = {
+    user_id: Number(payload.user_id || payload.id || 0),
+    id: payload.id !== undefined ? Number(payload.id) : undefined,
+    emp_id: payload.emp_id ? String(payload.emp_id) : undefined,
+  };
+  return await api.post("/adm/fetch_user_campaigns_admin", data);
+};
+
+/**
+ * 2. Fetch Available Telecallers List API for Lead Transfer
+ * Backend Endpoint: POST /adm/fetch_transfer_telecallers_admin
+ */
+export const fetchTransferTelecallersAdmin = async (payload = {}) => {
+  const data = {
+    from_user_id: Number(payload.from_user_id || payload.user_id || payload.id || 0),
+  };
+  try {
+    return await api.post("/adm/fetch_transfer_telecallers_admin", data);
+  } catch (err) {
+    if (err?.response?.status === 405 || err?.response?.status === 404) {
+      return await api.get("/adm/fetch_transfer_telecallers_admin");
+    }
+    throw err;
+  }
+};
+
+/**
+ * 3. Transfer Single Campaign Leads API
+ * Backend Endpoint: POST /adm/transfer_single_campaign_leads_admin
+ */
+export const transferSingleCampaignLeadsAdmin = async (payload = {}) => {
+  const data = {
+    from_user_id: Number(payload.from_user_id),
+    campaign_id: Number(payload.campaign_id),
+    total_leads: Number(payload.total_leads || 0),
+    distributions: Array.isArray(payload.distributions) ? payload.distributions : [],
+  };
+  return await api.post("/adm/transfer_single_campaign_leads_admin", data);
+};
+
+/**
+ * 4. Transfer ALL Campaigns Leads API
+ * Backend Endpoint: POST /adm/transfer_all_campaigns_leads_admin
+ */
+export const transferAllCampaignsLeadsAdmin = async (payload = {}) => {
+  const data = {
+    from_user_id: Number(payload.from_user_id),
+    to_telecaller_id: Number(payload.to_telecaller_id),
+    total_campaigns: Number(payload.total_campaigns || 0),
+    total_leads: Number(payload.total_leads || 0),
+  };
+  return await api.post("/adm/transfer_all_campaigns_leads_admin", data);
+};
+
+/**
+ * Fetch User Assigned Leads & Stats API (Pre-Delete Review Modal)
+ * Backend Endpoint: POST /adm/fetch_user_delete_summary_admin
+ */
+export const fetchUserDeleteSummaryAdmin = async (payload = {}) => {
+  const data = {
+    user_id: Number(payload.user_id || payload.id || 0),
+    id: payload.id !== undefined ? Number(payload.id) : undefined,
+    emp_id: payload.emp_id ? String(payload.emp_id) : undefined,
+  };
+  return await api.post("/adm/fetch_user_delete_summary_admin", data);
+};
+
+/**
+ * Delete User API
+ * Backend Endpoint: POST /adm/delete_user_admin
+ */
+export const deleteUserAdmin = async (payload = {}) => {
+  const data = {
+    id: Number(payload.id || payload.user_id || 0),
+    emp_id: String(payload.emp_id || payload.employee_id || payload.emp_code || ""),
+  };
+  return await api.post("/adm/delete_user_admin", data);
+};
+
+

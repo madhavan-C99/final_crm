@@ -13,6 +13,7 @@ import TransferLeadsView from "./Users/TransferLeadsView";
 import OrganizationView from "./Organization/OrganizationView";
 import TeamsView from "./Teams/TeamsView";
 import MonthlyTargetView from "./MonthlyTarget/MonthlyTargetView";
+import RolesAndPermissionsView from "./RolesAndPermissions/RolesAndPermissionsView";
 import {
   fetchUsersAdmin,
   createUserAdmin,
@@ -187,8 +188,9 @@ export default function Settings() {
     setIsDeleteUserOpen(true);
   };
 
-  const handleDeleteUserConfirm = (targetUser) => {
-    setUsersList((prev) => prev.filter((u) => u.id !== targetUser.id));
+  const handleDeleteUserConfirm = async (targetUser) => {
+    setUsersList((prev) => prev.filter((u) => u.id !== targetUser?.id));
+    await loadUsers();
   };
 
   const handleUpdateUser = async (updatedData) => {
@@ -367,6 +369,10 @@ export default function Settings() {
               user={userToDelete}
               onClose={() => setIsDeleteUserOpen(false)}
               onDeleteConfirm={handleDeleteUserConfirm}
+              onTransferLeads={(targetUser) => {
+                setIsDeleteUserOpen(false);
+                handleOpenTransferLeads(targetUser);
+              }}
             />
           </>
         ))}
@@ -376,6 +382,9 @@ export default function Settings() {
 
       {/* Render Teams View when activeTab === "teams" */}
       {activeTab === "teams" && <TeamsView />}
+
+      {/* Render Roles & Permissions View when activeTab === "roles" */}
+      {activeTab === "roles" && <RolesAndPermissionsView />}
 
       {/* Render Monthly Target View when activeTab === "target" */}
       {activeTab === "target" && <MonthlyTargetView />}

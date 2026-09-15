@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -15,6 +15,7 @@ import {
   Select,
   MenuItem,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AddIcon from "@mui/icons-material/Add";
@@ -22,66 +23,173 @@ import FirstPageIcon from "@mui/icons-material/FirstPage";
 import KeyboardArrowLeft from "@mui/icons-material/KeyboardArrowLeft";
 import KeyboardArrowRight from "@mui/icons-material/KeyboardArrowRight";
 import LastPageIcon from "@mui/icons-material/LastPage";
+import dayjs from "dayjs";
+import { toast } from "react-toastify";
 import TransferAllCampaignsModal from "./TransferAllCampaignsModal";
+import TransferSingleLeadModal from "./TransferSingleLeadModal";
 import TransferLeadsSuccessModal from "./TransferLeadsSuccessModal";
+import {
+  fetchUserCampaignsAdmin,
+  fetchTransferTelecallersAdmin,
+  transferSingleCampaignLeadsAdmin,
+  transferAllCampaignsLeadsAdmin,
+} from "@/apps/admin/services/userService";
 
 const ACCENT = "#90D916";
-
-const mockCampaignsData = [
-  { id: 1, s_no: 1, campaign_name: "500 enquiry sheet", pipeline_name: "Education" },
-  { id: 2, s_no: 1, campaign_name: "Samosa Mokkan", pipeline_name: "Education" },
-  { id: 3, s_no: 1, campaign_name: "EMP-a3f9c2b7", pipeline_name: "Priya" },
-  { id: 4, s_no: 1, campaign_name: "EMP-a3f9c2b7", pipeline_name: "Priya" },
-  { id: 5, s_no: 1, campaign_name: "EMP-a3f9c2b7", pipeline_name: "Priya" },
-  { id: 6, s_no: 1, campaign_name: "EMP-a3f9c2b7", pipeline_name: "Priya" },
-  { id: 7, s_no: 1, campaign_name: "EMP-a3f9c2b7", pipeline_name: "Priya" },
-  { id: 8, s_no: 1, campaign_name: "EMP-a3f9c2b7", pipeline_name: "Priya" },
-  { id: 9, s_no: 1, campaign_name: "EMP-a3f9c2b7", pipeline_name: "Priya" },
-  { id: 10, s_no: 1, campaign_name: "EMP-a3f9c2b7", pipeline_name: "Priya" },
-  { id: 11, s_no: 1, campaign_name: "EMP-a3f9c2b7", pipeline_name: "Priya" },
-];
 
 export default function TransferLeadsView({ user, onBack }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState(50);
-  const [modalState, setModalState] = useState({
-    isOpen: false,
-    title: "Transfer All Campaign",
-    subtitleText: null,
-    campaignValueText: null,
-    leadsCountValueText: null,
-  });
+  const [isAllTransferOpen, setIsAllTransferOpen] = useState(false);
+  const [isSingleTransferOpen, setIsSingleTransferOpen] = useState(false);
+  const [selectedRow, setSelectedRow] = useState(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successCount, setSuccessCount] = useState(30);
+  const [successDistributions, setSuccessDistributions] = useState([]);
+
+  const [loading, setLoading] = useState(false);
+  const [campaignsData, setCampaignsData] = useState([]);
+  const [userSummary, setUserSummary] = useState({
+    user_id: user?.id || user?.user_id,
+    user_name: user?.full_name || user?.name || "User",
+    total_campaigns: 0,
+    total_leads: 0,
+  });
+  const [telecallersList, setTelecallersList] = useState([]);
+
+  const loadUserCampaigns = useCallback(async () => {
+    try {
+      setLoading(true);
+      const userId = user?.id || user?.user_id;
+      const res = await fetchUserCampaignsAdmin({ user_id: userId, id: userId });
+      const rawData = res?.data;
+      const data = rawData?.data || rawData || {};
+
+      if (data.user_name || data.total_campaigns !== undefined) {
+        setUserSummary({
+          user_id: userId,
+          user_name: data.user_name || user?.full_name || user?.name || "User",
+          total_campaigns: data.total_campaigns ?? 0,
+          total_leads: data.total_leads ?? 0,
+        });
+      }
+
+      if (Array.isArray(data.campaigns)) {
+        setCampaignsData(data.campaigns);
+      } else if (Array.isArray(data)) {
+        setCampaignsData(data);
+      } else {
+        setCampaignsData([]);
+      }
+    } catch (err) {
+      console.error("Error loading user campaigns:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  const loadTelecallers = useCallback(async () => {
+    try {
+      const userId = user?.id || user?.user_id;
+      const res = await fetchTransferTelecallersAdmin({ from_user_id: userId });
+      const rawData = res?.data;
+      const list = Array.isArray(rawData?.data)
+        ? rawData.data
+        : Array.isArray(rawData)
+        ? rawData
+        : [];
+      setTelecallersList(list);
+    } catch (err) {
+      console.error("Error loading telecallers for transfer:", err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadUserCampaigns();
+    loadTelecallers();
+  }, [loadUserCampaigns, loadTelecallers]);
 
   const handleOpenAllTransfer = () => {
-    setModalState({
-      isOpen: true,
-      title: "Transfer All Campaign",
-      subtitleText: null,
-      campaignValueText: "10 Campaigns",
-      leadsCountValueText: "250 Leads",
-    });
-    setSuccessCount(250);
+    setIsAllTransferOpen(true);
+    setSuccessCount(userSummary.total_leads || 250);
+    setSuccessDistributions([]);
   };
 
   const handleOpenRowTransfer = (row) => {
-    setModalState({
-      isOpen: true,
-      title: "Transfer Lead",
-      subtitleText: "30 leads",
-      campaignValueText: row.campaign_name || "Google Ads",
-      leadsCountValueText: "30 Leads",
-    });
-    setSuccessCount(30);
+    setSelectedRow(row);
+    setIsSingleTransferOpen(true);
+    setSuccessCount(row.total_leads || 30);
   };
 
-  const filteredData = mockCampaignsData.filter((item) => {
+  const handleSingleTransferConfirm = async (transferPayload) => {
+    try {
+      const userId = user?.id || user?.user_id;
+      const payload = {
+        from_user_id: userId,
+        campaign_id: selectedRow?.id,
+        total_leads: selectedRow?.total_leads || 30,
+        distributions: transferPayload.distributions || [],
+      };
+      const res = await transferSingleCampaignLeadsAdmin(payload);
+      if (res?.data?.status !== false) {
+        toast.success(res?.data?.message || "Leads transferred successfully!");
+        setSuccessCount(selectedRow?.total_leads || 30);
+        setSuccessDistributions(transferPayload.distributions || []);
+        setIsSuccessModalOpen(true);
+        await loadUserCampaigns();
+      } else {
+        toast.error(res?.data?.message || "Transfer failed");
+      }
+    } catch (err) {
+      console.error("Error in single campaign transfer:", err);
+      toast.error(err?.response?.data?.message || "Failed to transfer leads");
+    }
+  };
+
+  const handleAllTransferConfirm = async (selectedTelecallerId) => {
+    try {
+      const userId = user?.id || user?.user_id;
+      const payload = {
+        from_user_id: userId,
+        to_telecaller_id: selectedTelecallerId,
+        total_campaigns: userSummary.total_campaigns || campaignsData.length || 10,
+        total_leads: userSummary.total_leads || 250,
+      };
+      const res = await transferAllCampaignsLeadsAdmin(payload);
+      if (res?.data?.status !== false) {
+        toast.success(res?.data?.message || "All campaign leads transferred successfully!");
+        const selectedTelecallerObj = telecallersList.find(
+          (t) => t.id === selectedTelecallerId
+        );
+        const telecallerName =
+          selectedTelecallerObj?.name ||
+          selectedTelecallerObj?.full_name ||
+          "Selected Telecaller";
+
+        setSuccessCount(userSummary.total_leads || 250);
+        setSuccessDistributions([
+          {
+            telecaller_name: telecallerName,
+            lead_count: userSummary.total_leads || 250,
+          },
+        ]);
+        setIsSuccessModalOpen(true);
+        await loadUserCampaigns();
+      } else {
+        toast.error(res?.data?.message || "Transfer all campaigns failed");
+      }
+    } catch (err) {
+      console.error("Error in bulk campaign transfer:", err);
+      toast.error(err?.response?.data?.message || "Failed to transfer all campaigns");
+    }
+  };
+
+  const filteredData = campaignsData.filter((item) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
-      item.campaign_name.toLowerCase().includes(term) ||
-      item.pipeline_name.toLowerCase().includes(term)
+      (item.campaign_name && item.campaign_name.toLowerCase().includes(term)) ||
+      (item.pipeline_name && item.pipeline_name.toLowerCase().includes(term))
     );
   });
 
@@ -251,71 +359,85 @@ export default function TransferLeadsView({ user, onBack }) {
 
           {/* Table Body */}
           <TableBody>
-            {filteredData.map((row) => (
-              <TableRow
-                key={row.id}
-                sx={{
-                  "&:hover": { backgroundColor: "#F8FAFC" },
-                  "&:last-child td, &:last-child th": { border: 0 },
-                }}
-              >
-                <TableCell
-                  sx={{
-                    fontSize: "14px",
-                    color: "#334155",
-                    fontFamily: "Inter, sans-serif",
-                    py: 1.2,
-                  }}
-                >
-                  {row.s_no}
-                </TableCell>
-                <TableCell
-                  sx={{
-                    fontSize: "14px",
-                    color: "#334155",
-                    fontFamily: "Inter, sans-serif",
-                    py: 1.2,
-                  }}
-                >
-                  {row.campaign_name}
-                </TableCell>
-                <TableCell
-                  sx={{
-                    fontSize: "14px",
-                    color: "#334155",
-                    fontFamily: "Inter, sans-serif",
-                    py: 1.2,
-                  }}
-                >
-                  {row.pipeline_name}
-                </TableCell>
-                <TableCell align="center" sx={{ py: 1.2 }}>
-                  <Button
-                    variant="contained"
-                    size="small"
-                    onClick={() => handleOpenRowTransfer(row)}
-                    sx={{
-                      backgroundColor: ACCENT,
-                      color: "#FFFFFF",
-                      fontFamily: "Inter, sans-serif",
-                      fontWeight: 600,
-                      fontSize: "13px",
-                      textTransform: "none",
-                      height: "28px",
-                      px: 2.5,
-                      borderRadius: "5px",
-                      boxShadow: "none",
-                      "&:hover": {
-                        backgroundColor: "#7EC610",
-                        boxShadow: "none",
-                      },
-                    }}
-                  >
-                    Transfer
-                  </Button>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={4} align="center" sx={{ py: 5 }}>
+                  <CircularProgress size={28} sx={{ color: ACCENT }} />
                 </TableCell>
               </TableRow>
-            ))}
+            ) : filteredData.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} align="center" sx={{ py: 4, color: "#64748B" }}>
+                  No campaigns found for transfer.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredData.map((row, index) => (
+                <TableRow
+                  key={row.id || index}
+                  sx={{
+                    "&:hover": { backgroundColor: "#F8FAFC" },
+                    "&:last-child td, &:last-child th": { border: 0 },
+                  }}
+                >
+                  <TableCell
+                    sx={{
+                      fontSize: "14px",
+                      color: "#334155",
+                      fontFamily: "Inter, sans-serif",
+                      py: 1.2,
+                    }}
+                  >
+                    {row.s_no ?? index + 1}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontSize: "14px",
+                      color: "#334155",
+                      fontFamily: "Inter, sans-serif",
+                      py: 1.2,
+                    }}
+                  >
+                    {row.campaign_name}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontSize: "14px",
+                      color: "#334155",
+                      fontFamily: "Inter, sans-serif",
+                      py: 1.2,
+                    }}
+                  >
+                    {row.pipeline_name}
+                  </TableCell>
+                  <TableCell align="center" sx={{ py: 1.2 }}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={() => handleOpenRowTransfer(row)}
+                      sx={{
+                        backgroundColor: ACCENT,
+                        color: "#FFFFFF",
+                        fontFamily: "Inter, sans-serif",
+                        fontWeight: 600,
+                        fontSize: "13px",
+                        textTransform: "none",
+                        height: "28px",
+                        px: 2.5,
+                        borderRadius: "5px",
+                        boxShadow: "none",
+                        "&:hover": {
+                          backgroundColor: "#7EC610",
+                          boxShadow: "none",
+                        },
+                      }}
+                    >
+                      Transfer
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
 
@@ -372,7 +494,7 @@ export default function TransferLeadsView({ user, onBack }) {
               mr: 1,
             }}
           >
-            1-10 of 10
+            1-{filteredData.length} of {filteredData.length}
           </Typography>
 
           {/* Pagination Navigation Icons */}
@@ -393,25 +515,41 @@ export default function TransferLeadsView({ user, onBack }) {
         </Box>
       </TableContainer>
 
-      {/* Transfer All Campaigns / Single Lead Modal */}
+      {/* 1. Transfer All Campaigns Modal */}
       <TransferAllCampaignsModal
-        open={modalState.isOpen}
-        onClose={() => setModalState((prev) => ({ ...prev, isOpen: false }))}
-        onTransferSuccess={() => setIsSuccessModalOpen(true)}
-        title={modalState.title}
-        subtitleText={modalState.subtitleText}
-        campaignValueText={modalState.campaignValueText}
-        leadsCountValueText={modalState.leadsCountValueText}
-        currentAssignee={user?.name || "Prakash Raj"}
-        totalLeadsCount={250}
-        totalCampaignsCount={10}
+        open={isAllTransferOpen}
+        onClose={() => setIsAllTransferOpen(false)}
+        onTransferConfirm={handleAllTransferConfirm}
+        telecallersList={telecallersList}
+        title="Transfer All Campaign"
+        subtitleText={null}
+        campaignValueText={`${userSummary.total_campaigns || campaignsData.length} Campaigns`}
+        leadsCountValueText={`${userSummary.total_leads} Leads`}
+        currentAssignee={userSummary.user_name || user?.full_name || user?.name || "Ezhil"}
+        totalLeadsCount={userSummary.total_leads}
+        totalCampaignsCount={userSummary.total_campaigns || campaignsData.length}
       />
 
-      {/* Transfer Leads Success Modal matching Image media_1788587943860.png */}
+      {/* 2. Single Campaign / Row Transfer Lead Modal */}
+      <TransferSingleLeadModal
+        open={isSingleTransferOpen}
+        onClose={() => setIsSingleTransferOpen(false)}
+        onTransferConfirm={handleSingleTransferConfirm}
+        telecallersList={telecallersList}
+        title="Transfer Leads"
+        subtitleText={`${selectedRow?.total_leads || 30} leads`}
+        campaignValueText={selectedRow?.campaign_name || "Campaign"}
+        leadsCountValueText={`${selectedRow?.total_leads || 30} Leads`}
+        currentAssignee={userSummary.user_name || user?.full_name || user?.name || "Ezhil"}
+        totalLeadsCount={selectedRow?.total_leads || 30}
+      />
+
+      {/* 3. Transfer Leads Success Modal */}
       <TransferLeadsSuccessModal
         open={isSuccessModalOpen}
         onClose={() => setIsSuccessModalOpen(false)}
         count={successCount}
+        distributions={successDistributions}
       />
     </Box>
   );

@@ -902,7 +902,7 @@ export default function OrganizationProfileForm({ onNext, onCancel }) {
                     GST IN
                   </Typography>
                   <Typography sx={{ fontSize: "12px", fontWeight: 600, color: "#1E293B", fontFamily: "Inter, sans-serif" }}>
-                    Code99 Technologies Pvt Ltd
+                    {gstIn || "-"}
                   </Typography>
                 </Box>
                 <Box sx={{ flex: 1 }}>
@@ -910,39 +910,19 @@ export default function OrganizationProfileForm({ onNext, onCancel }) {
                     Company Pan Card
                   </Typography>
                   <Typography sx={{ fontSize: "12px", fontWeight: 600, color: "#1E293B", fontFamily: "Inter, sans-serif" }}>
-                    Code99 Technologies Pvt Ltd
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Timezone & Currency */}
-              <Box sx={{ display: "flex", gap: "20px", width: "100%", mb: 1.5 }}>
-                <Box sx={{ flex: 1 }}>
-                  <Typography sx={{ fontSize: "10px",fontWeight:500, color: "#94A3B8", fontFamily: "Inter, sans-serif" }}>
-                    Timezone
-                  </Typography>
-                  <Typography sx={{ fontSize: "12px", fontWeight: 600, color: "#1E293B", fontFamily: "Inter, sans-serif" }}>
-                    IST
-                  </Typography>
-                </Box>
-                <Box sx={{ flex: 1 }}>
-                  <Typography sx={{ fontSize: "10px",fontWeight:500, color: "#94A3B8", fontFamily: "Inter, sans-serif" }}>
-                    Currency
-                  </Typography>
-                  <Typography sx={{ fontSize: "12px", fontWeight: 600, color: "#1E293B", fontFamily: "Inter, sans-serif" }}>
-                    ₹ Indian Rupees
+                    {companyPan || "-"}
                   </Typography>
                 </Box>
               </Box>
 
               {/* Date Format & Time Format */}
-              <Box sx={{ display: "flex", gap: "20px", width: "100%", mb: 1.5 }}>
+              <Box sx={{ display: "flex", gap: "20px", width: "100%" }}>
                 <Box sx={{ flex: 1 }}>
                   <Typography sx={{ fontSize: "10px", color: "#94A3B8", fontFamily: "Inter, sans-serif" }}>
                     Date Format
                   </Typography>
                   <Typography sx={{ fontSize: "12px", fontWeight: 600, color: "#1E293B", fontFamily: "Inter, sans-serif" }}>
-                    24hrs
+                    {dateFormat || "-"}
                   </Typography>
                 </Box>
                 <Box sx={{ flex: 1 }}>
@@ -950,19 +930,7 @@ export default function OrganizationProfileForm({ onNext, onCancel }) {
                     Time Format
                   </Typography>
                   <Typography sx={{ fontSize: "12px", fontWeight: 600, color: "#1E293B", fontFamily: "Inter, sans-serif" }}>
-                    DD/MM/YYY
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Language */}
-              <Box sx={{ display: "flex", gap: "20px", width: "100%" }}>
-                <Box sx={{ flex: 1 }}>
-                  <Typography sx={{ fontSize: "10px", color: "#94A3B8", fontFamily: "Inter, sans-serif" }}>
-                    Language
-                  </Typography>
-                  <Typography sx={{ fontSize: "12px", fontWeight: 600, color: "#1E293B", fontFamily: "Inter, sans-serif" }}>
-                    English
+                    {timeFormat || "-"}
                   </Typography>
                 </Box>
               </Box>

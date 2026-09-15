@@ -61,15 +61,20 @@ export const deleteTeamAdmin = async (payload) => {
 /**
  * Fetch team dropdown options (leads, users)
  * Backend Service: fetch_team_dropdowns_admin
- * Endpoint: GET /adm/fetch_team_dropdowns_admin
+ * Endpoint: POST /adm/fetch_team_dropdowns_admin
+ * Expected Body: { team_id }
  */
-export const fetchTeamDropdownsAdmin = async () => {
-  try {
-    return await api.post("/adm/fetch_team_dropdowns_admin");
-  } catch (err) {
-    if (err?.response?.status === 405 || err?.response?.status === 404) {
-      return await api.post("/adm/fetch_team_dropdowns_admin");
-    }
-    throw err;
+export const fetchTeamDropdownsAdmin = async (payload = {}) => {
+  let data = {};
+  if (typeof payload === "number" || typeof payload === "string") {
+    data = { team_id: Number(payload) };
+  } else if (payload && typeof payload === "object") {
+    data = {
+      ...payload,
+      ...(payload.team_id || payload.id
+        ? { team_id: Number(payload.team_id || payload.id) }
+        : {}),
+    };
   }
+  return await api.post("/adm/fetch_team_dropdowns_admin", data);
 };

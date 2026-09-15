@@ -107,6 +107,7 @@ const Table = ({
       <TableContainer
         sx={{
           width: "100%",
+          flex: 1,
           maxHeight: maxHeight,
           overflowX: "auto",
           overflowY: "auto",

@@ -79,15 +79,22 @@ const COLOR_OPTIONS = [
   { label: "Light Pink", value: "#FCE4EC" },
 ];
 
+import { fetchTeamDropdownsAdmin } from "@/apps/admin/services/teamService";
+
 export default function EditTeamModal({ open, onClose, onSave, team, leadsList = [], usersList = [] }) {
   const [teamName, setTeamName] = useState("");
   const [teamColor, setTeamColor] = useState("#6366F1");
   const [leadId, setLeadId] = useState("");
   const [memberIds, setMemberIds] = useState([]);
+  const [fetchedTeamUsers, setFetchedTeamUsers] = useState(null);
 
   const leadsOptions = leadsList.length > 0 ? leadsList : usersList;
 
+  // Use backend returned team-specific users if fetched, otherwise fallback to prop usersList
+  const rawUsersToUse = fetchedTeamUsers !== null ? fetchedTeamUsers : usersList;
+
   useEffect(() => {
+    let isMounted = true;
     if (open && team) {
       setTeamName(team.name || "");
       setTeamColor(team.color || "#6366F1");
@@ -128,7 +135,34 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
         });
       }
       setMemberIds(extractedMemberIds);
+
+      // Fetch team-specific dropdowns by passing team_id to backend API
+      fetchTeamDropdownsAdmin({ team_id: team.id })
+        ? fetchTeamDropdownsAdmin({ team_id: team.id })
+            .then((res) => {
+              if (!isMounted) return;
+              const dropData = res?.data?.data || res?.data || {};
+              const rawUsers = Array.isArray(dropData.users) ? dropData.users : null;
+              if (rawUsers) {
+                setFetchedTeamUsers(
+                  rawUsers.map((u) => ({
+                    id: u.id || u.user_id,
+                    name: u.name || u.full_name || "User",
+                  }))
+                );
+              }
+            })
+            .catch((err) => {
+              console.error("Error fetching team specific dropdowns:", err);
+            })
+        : null;
+    } else {
+      setFetchedTeamUsers(null);
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [open, team, leadsOptions, usersList]);
 
   if (!open) return null;
@@ -310,7 +344,7 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
                     </Typography>
                   );
                 }
-                const selectedNames = usersList
+                const selectedNames = rawUsersToUse
                   .filter((u) => selected.includes(u.id))
                   .map((u) => u.name || u.full_name);
                 return selectedNames.length > 0
@@ -319,7 +353,7 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
               }}
               sx={{ ...selectFieldStyles, flex: 1 }}
             >
-              {usersList.map((u) => (
+              {rawUsersToUse.map((u) => (
                 <MenuItem key={u.id} value={u.id}>
                   <Checkbox checked={memberIds.includes(u.id)} size="small" />
                   <ListItemText primary={u.name || u.full_name} />

@@ -29,6 +29,7 @@ export default function TransferAllCampaignsModal({
   onClose,
   onTransferConfirm,
   onTransferSuccess,
+  telecallersList = [],
   title = "Transfer All Campaign",
   subtitleText = null,
   campaignValueText = null,
@@ -42,7 +43,23 @@ export default function TransferAllCampaignsModal({
 
   if (!open) return null;
 
-  const filteredTelecallers = mockTelecallers.filter((t) =>
+  const telecallers =
+    Array.isArray(telecallersList) && telecallersList.length > 0
+      ? telecallersList.map((t, idx) => ({
+          id: t.id !== undefined ? t.id : idx + 1,
+          name: t.name || t.full_name || `Telecaller ${idx + 1}`,
+          badge: t.badge || null,
+          leads:
+            t.current_leads !== undefined
+              ? t.current_leads
+              : t.leads || t.currentLeads || 0,
+          segments: Array.isArray(t.segments)
+            ? t.segments
+            : ["#0205C8", "#90D916", "#DC2626"],
+        }))
+      : mockTelecallers;
+
+  const filteredTelecallers = telecallers.filter((t) =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -63,8 +80,8 @@ export default function TransferAllCampaignsModal({
       maxWidth={false}
       sx={{
         "& .MuiDialog-paper": {
-          width: "396px ",
-          maxHeight: "88vh ",
+          width: "396px",
+          maxHeight: "88vh",
           display: "flex !important",
           flexDirection: "column !important",
           borderRadius: "12px",

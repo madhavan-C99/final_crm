@@ -1,0 +1,615 @@
+import React, { useState, useEffect } from "react";
+import {
+  Dialog,
+  Box,
+  Typography,
+  IconButton,
+  Divider,
+  TextField,
+  InputAdornment,
+  Button,
+  Checkbox,
+  Avatar,
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import SearchIcon from "@mui/icons-material/Search";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CheckIcon from "@mui/icons-material/Check";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import RemoveIcon from "@mui/icons-material/Remove";
+import AddIcon from "@mui/icons-material/Add";
+import PersonIcon from "@mui/icons-material/Person";
+
+const PRIMARY_BLUE = "#0021CA";
+
+const initialTelecallers = [
+  {
+    id: 1,
+    name: "Priya Shankar",
+    currentLeads: 13,
+    totalLeadsText: "15 Leads",
+    segments: ["#2563EB", "#84CC16", "#DC2626"],
+  },
+  {
+    id: 2,
+    name: "Arun Kumar",
+    currentLeads: 21,
+    totalLeadsText: "21 Leads",
+    segments: ["#F97316", "#F97316", "#F97316"],
+  },
+  {
+    id: 3,
+    name: "Madhavan",
+    currentLeads: 10,
+    totalLeadsText: "10 Leads",
+    segments: ["#84CC16", "#84CC16", "#84CC16"],
+  },
+  {
+    id: 4,
+    name: "Ramya",
+    currentLeads: 18,
+    totalLeadsText: "18 Leads",
+    segments: ["#6366F1", "#6366F1", "#DC2626"],
+  },
+];
+
+export default function TransferSingleLeadModal({
+  open,
+  onClose,
+  onTransferConfirm,
+  onTransferSuccess,
+  telecallersList = [],
+  title = "Transfer Leads",
+  subtitleText = "30 leads",
+  campaignValueText = "Google Ads",
+  leadsCountValueText = "30 Leads",
+  currentAssignee = "Prakash Raj",
+  totalLeadsCount = 30,
+}) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTelecallerIds, setSelectedTelecallerIds] = useState([]);
+  const [allocations, setAllocations] = useState({});
+
+  const telecallers =
+    Array.isArray(telecallersList) && telecallersList.length > 0
+      ? telecallersList.map((t, idx) => ({
+          id: t.id !== undefined ? t.id : idx + 1,
+          name: t.name || t.full_name || `Telecaller ${idx + 1}`,
+          currentLeads:
+            t.current_leads !== undefined
+              ? t.current_leads
+              : t.currentLeads || 0,
+          totalLeadsText: `${
+            t.current_leads !== undefined
+              ? t.current_leads
+              : t.currentLeads || 0
+          } Leads`,
+          segments: Array.isArray(t.segments)
+            ? t.segments
+            : ["#0205C8", "#90D916", "#DC2626"],
+        }))
+      : initialTelecallers;
+
+  const targetCount = subtitleText
+    ? parseInt(String(subtitleText).replace(/\D/g, ""), 10) || totalLeadsCount || 30
+    : totalLeadsCount || 30;
+
+  useEffect(() => {
+    if (open) {
+      setSearchQuery("");
+      const initialSelected = telecallers.slice(0, 2).map((t) => t.id);
+      setSelectedTelecallerIds(initialSelected);
+
+      if (initialSelected.length > 0) {
+        const count = initialSelected.length;
+        const perPerson = Math.floor(targetCount / count);
+        const remainder = targetCount % count;
+        const newAlloc = {};
+        initialSelected.forEach((tId, idx) => {
+          newAlloc[tId] = perPerson + (idx === 0 ? remainder : 0);
+        });
+        setAllocations(newAlloc);
+      } else {
+        setAllocations({});
+      }
+    }
+  }, [open, telecallersList, targetCount]);
+
+  if (!open) return null;
+
+  const filteredTelecallers = telecallers.filter((t) =>
+    t.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleToggleTelecaller = (id) => {
+    let nextIds;
+    if (selectedTelecallerIds.includes(id)) {
+      nextIds = selectedTelecallerIds.filter((item) => item !== id);
+    } else {
+      nextIds = [...selectedTelecallerIds, id];
+    }
+    setSelectedTelecallerIds(nextIds);
+
+    // Auto distribute leads evenly whenever selection changes!
+    if (nextIds.length > 0) {
+      const count = nextIds.length;
+      const perPerson = Math.floor(targetCount / count);
+      const remainder = targetCount % count;
+      const newAlloc = {};
+      nextIds.forEach((tId, idx) => {
+        newAlloc[tId] = perPerson + (idx === 0 ? remainder : 0);
+      });
+      setAllocations(newAlloc);
+    } else {
+      setAllocations({});
+    }
+  };
+
+  const totalAllocated = selectedTelecallerIds.reduce(
+    (sum, id) => sum + (allocations[id] || 0),
+    0
+  );
+  const remainingLeads = Math.max(0, targetCount - totalAllocated);
+
+  const handleTransfer = () => {
+    const distributions = selectedTelecallerIds.map((tId) => {
+      const tObj = telecallers.find((t) => t.id === tId);
+      return {
+        telecaller_id: Number(tId),
+        telecaller_name: tObj?.name || "",
+        lead_count: Number(allocations[tId] || 0),
+      };
+    });
+
+    if (onTransferConfirm) {
+      onTransferConfirm({
+        selectedTelecallerIds,
+        allocations,
+        distributions,
+      });
+    }
+    if (onTransferSuccess) {
+      onTransferSuccess();
+    }
+    onClose();
+  };
+
+  return (
+    <Dialog
+      open={Boolean(open)}
+      onClose={onClose}
+      maxWidth={false}
+      sx={{
+        "& .MuiDialog-paper": {
+          width: "396px",
+          maxWidth: "95vw",
+          maxHeight: "92vh",
+          borderRadius: "12px",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          p: 0,
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.25)",
+          backgroundColor: "#FFFFFF",
+        },
+      }}
+    >
+      {/* 1. Header Bar matching Image */}
+      <Box
+        sx={{
+          height: "44px",
+          backgroundColor: PRIMARY_BLUE,
+          px: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexShrink: 0,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <SettingsOutlinedIcon sx={{ color: "#FFFFFF", fontSize: 16 }} />
+          <Typography
+            sx={{
+              color: "#FFFFFF",
+              fontWeight: 500,
+              fontSize: "16px",
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            {title || "Transfer Leads"}
+          </Typography>
+        </Box>
+        <IconButton
+          size="small"
+          onClick={onClose}
+          sx={{ color: "#FFFFFF", p: 0.5 }}
+        >
+          <CloseIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Box>
+
+      {/* Scrollable Body Content */}
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          p: 2,
+          display: "flex",
+          flexDirection: "column",
+          gap: 1.8,
+          backgroundColor: "#FFFFFF",
+          "&::-webkit-scrollbar": { width: "5px" },
+          "&::-webkit-scrollbar-thumb": {
+            backgroundColor: "#CBD5E1",
+            borderRadius: "4px",
+          },
+        }}
+      >
+        {/* Subtitle Banner */}
+        <Typography
+          sx={{
+            fontSize: "14px",
+            fontWeight:500,
+            color: "#475569",
+            fontFamily: "Inter, sans-serif",
+          }}
+        >
+          You're about to transfer{" "}
+          <Box component="span" sx={{ color: PRIMARY_BLUE, fontWeight: 600 }}>
+            {targetCount} leads
+          </Box>
+        </Typography>
+
+        {/* Current Assignment Card */}
+        <Box
+          sx={{
+            border: "1px solid #E2E8F0",
+            borderRadius: "8px",
+            p: 1.5,
+            backgroundColor: "#FAFAFA",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 1,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: "12px",
+                fontWeight: 500,
+                color: "#64748B",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              Current Assignment
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: "12px",
+                fontWeight:600,
+                color: "black",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              {leadsCountValueText || `${targetCount} Leads`}
+            </Typography>
+          </Box>
+
+          <Typography
+            sx={{
+              fontSize: "14px",
+              fontWeight: 600,
+              color: "#0F172A",
+              fontFamily: "Inter, sans-serif",
+              mb: 0.3,
+            }}
+          >
+            {currentAssignee}
+          </Typography>
+
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: "14px",
+                fontWeight:500,
+                color: "#64748B",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              Campaign
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: "10px",
+                fontWeight: 600,
+                color: "#64748B",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              {campaignValueText || "Google Ads"}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Section 1: Transfer Leads to */}
+        <Box sx={{ backgroundColor: "#F8FAFC", borderRadius: "8px", p: 1.5 }}>
+          <Typography
+            sx={{
+              fontSize: "15px",
+              fontWeight: 600,
+              color: "#0F172A",
+              fontFamily: "Inter, sans-serif",
+              mb: 1,
+            }}
+          >
+            Transfer Leads to
+          </Typography>
+
+          {/* Search Telecaller Input */}
+          <TextField
+            fullWidth
+            placeholder="Search Telecaller"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 16, color: "#94A3B8" }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              mb: 1.2,
+              "& .MuiOutlinedInput-root": {
+                height: "34px",
+                backgroundColor: "#FFFFFF",
+                borderRadius: "6px",
+                fontSize: "12.5px",
+                "& fieldset": { border: "1px solid #E2E8F0" },
+                "&:hover fieldset": { borderColor: "#CBD5E1" },
+                "&.Mui-focused fieldset": { borderColor: PRIMARY_BLUE },
+              },
+            }}
+          />
+
+          {/* Telecallers Checkbox List */}
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
+            {filteredTelecallers.map((telecaller) => {
+              const isChecked = selectedTelecallerIds.includes(telecaller.id);
+              return (
+                <Box
+                  key={telecaller.id}
+                  onClick={() => handleToggleTelecaller(telecaller.id)}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    p: 1,
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "6px",
+                    border:"1px solid #E2E8F0",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    "&:hover": { borderColor: PRIMARY_BLUE },
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                    <Checkbox
+                      checked={isChecked}
+                      onChange={() => handleToggleTelecaller(telecaller.id)}
+                      size="small"
+                      sx={{
+                        p: 0,
+                        color: "#CBD5E1",
+                        "&.Mui-checked": { color: PRIMARY_BLUE },
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#1E293B",
+                        fontFamily: "Inter, sans-serif",
+                      }}
+                    >
+                      {telecaller.name}
+                    </Typography>
+                  </Box>
+
+                  {/* Progress Segments & Leads count */}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+                    <Box sx={{ display: "flex", gap: "2px" }}>
+                      {telecaller.segments.map((color, idx) => (
+                        <Box
+                          key={idx}
+                          sx={{
+                            width: "28px",
+                            height: "8px",
+                            backgroundColor: color,
+                            borderRadius:
+                              idx === 0
+                                ? "4px 0 0 4px"
+                                : idx === 2
+                                ? "0 4px 4px 0"
+                                : "0",
+                          }}
+                        />
+                      ))}
+                    </Box>
+
+                    <Typography
+                      sx={{
+                        fontSize: "12px",
+                        fontWeight: 400,
+                        color: "#64748B",
+                        fontFamily: "Inter, sans-serif",
+                      }}
+                    >
+                      {telecaller.totalLeadsText}
+                    </Typography>
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+
+        {/* Section 2: Distribution Summary Card matching Image 1 */}
+        {selectedTelecallerIds.length > 0 && (
+          <Box
+            sx={{
+              border: "1px solid #E2E8F0",
+              borderRadius: "10px",
+              p: 2,
+              backgroundColor: "#FAFCFF",
+              boxShadow: "0px 1px 3px rgba(0,0,0,0.02)",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: "14px",
+                fontWeight: 600,
+                color: "#0F172A",
+                fontFamily: "Inter, sans-serif",
+                mb: 0.5,
+              }}
+            >
+              Lead Distribution 
+            </Typography>
+
+            <Divider sx={{ mb: 1.2, borderColor: "#E2E8F0" }} />
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {selectedTelecallerIds.map((id, index) => {
+                const telecaller = initialTelecallers.find((t) => t.id === id);
+                if (!telecaller) return null;
+                const allocated = allocations[id] || 0;
+
+                return (
+                  <React.Fragment key={id}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        py: 0.5,
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            backgroundColor: "#DBEAFE",
+                            color: PRIMARY_BLUE,
+                          }}
+                        >
+                          <PersonIcon sx={{ fontSize: 18 }} />
+                        </Avatar>
+                        <Typography
+                          sx={{
+                            fontSize: "12px",
+                            fontWeight: 500,
+                            color: "#0F172A",
+                            fontFamily: "Inter, sans-serif",
+                          }}
+                        >
+                          {telecaller.name}
+                        </Typography>
+                      </Box>
+
+                      <Typography
+                        sx={{
+                          fontSize: "12px",
+                          fontWeight: 500,
+                          color: "#64748B",
+                          fontFamily: "Inter, sans-serif",
+                        }}
+                      >
+                        {allocated} leads
+                      </Typography>
+                    </Box>
+                    {index < selectedTelecallerIds.length - 1 && (
+                      <Divider sx={{ borderColor: "#F1F5F9" }} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </Box>
+          </Box>
+        )}
+      </Box>
+
+      {/* Footer Action Buttons */}
+      <Box
+        sx={{
+          p: 2,
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: 1.2,
+          backgroundColor: "#FFFFFF",
+          borderTop: "1px solid #F1F5F9",
+          flexShrink: 0,
+        }}
+      >
+        <Button
+          variant="contained"
+          onClick={onClose}
+          sx={{
+            backgroundColor: "#F1F5F9",
+            color: "#475569",
+            fontFamily: "Inter, sans-serif",
+            fontWeight: 600,
+            fontSize: "13px",
+            textTransform: "none",
+            height: "36px",
+            px: 2.2,
+            borderRadius: "6px",
+            boxShadow: "none",
+            "&:hover": {
+              backgroundColor: "#E2E8F0",
+              boxShadow: "none",
+            },
+          }}
+        >
+          Cancel
+        </Button>
+
+        <Button
+          variant="contained"
+          onClick={handleTransfer}
+          endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
+          sx={{
+            backgroundColor: PRIMARY_BLUE,
+            color: "#FFFFFF",
+            fontFamily: "Inter, sans-serif",
+            fontWeight: 600,
+            fontSize: "13px",
+            textTransform: "none",
+            height: "36px",
+            px: 2.5,
+            borderRadius: "6px",
+            boxShadow: "0px 2px 4px rgba(0, 0, 0, 0.15)",
+            "&:hover": {
+              backgroundColor: "#0104A0",
+            },
+          }}
+        >
+          Transfer {targetCount} Leads
+        </Button>
+      </Box>
+    </Dialog>
+  );
+}

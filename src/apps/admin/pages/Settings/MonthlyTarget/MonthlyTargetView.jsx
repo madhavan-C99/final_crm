@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -12,16 +12,24 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  CircularProgress,
+  Collapse,
+  IconButton,
 } from "@mui/material";
 import PhoneInTalkOutlinedIcon from "@mui/icons-material/PhoneInTalkOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import CloseIcon from "@mui/icons-material/Close";
 import FirstPageIcon from "@mui/icons-material/FirstPage";
 import LastPageIcon from "@mui/icons-material/LastPage";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SetTargetModal from "./SetTargetModal";
+import CustomDateRangePicker from "@/shared/components/table/CustomDateDialog";
+import dayjs from "dayjs";
+import { toast } from "react-toastify";
 import {
   BarChart,
   Bar,
@@ -34,53 +42,221 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import {
+  fetchMonthlyTargetAdmin,
+  fetchTargetDropdownsAdmin,
+  setMonthlyTargetAdmin,
+} from "@/apps/admin/services/monthlyTargetService";
 
 const ACCENT_GREEN = "#84CC16";
 const ACCENT_PURPLE = "#6366F1";
 
-// Bar Chart Mock Data matching Image 1
-const barChartData = [
-  { team: "Alpha Team", Achieved: 130, Target: 95 },
-  { team: "Beta Team", Achieved: 175, Target: 130 },
-  { team: "Gamma Team", Achieved: 260, Target: 150 },
-  { team: "Delta Team", Achieved: 130, Target: 95 },
-];
-
-// Donut Chart Mock Data matching Image 1
-const doughnutData = [
-  { name: "Alpha Team", value: 50, percentage: "17%", color: "#6CBD45" },
-  { name: "Beta Team", value: 80, percentage: "27%", color: "#5CB0FF" },
-  { name: "Gamma Team", value: 70, percentage: "27%", color: "#AB79F8" },
-  { name: "Delta Team", value: 100, percentage: "33%", color: "#FFBA82" },
-];
-
-const initialProgressData = [
-  { id: 1, employee: "Priya", target: "Alpha Team", achieved: 45, balance: 23, status: "On Track" },
-  { id: 2, employee: "Priya", target: "Alpha Team", achieved: 45, balance: 23, status: "Low" },
-  { id: 3, employee: "Priya", target: "Alpha Team", achieved: 45, balance: 23, status: "On Track" },
-  { id: 4, employee: "Priya", target: "Alpha Team", achieved: 45, balance: 23, status: "On Track" },
-  { id: 5, employee: "Priya", target: "Alpha Team", achieved: 45, balance: 23, status: "On Track" },
-  { id: 6, employee: "Priya", target: "Alpha Team", achieved: 45, balance: 23, status: "On Track" },
-  { id: 7, employee: "Priya", target: "Alpha Team", achieved: 45, balance: 23, status: "On Track" },
-];
-
 export default function MonthlyTargetView() {
-  const [selectedMonth, setSelectedMonth] = useState("September 2026");
-  const [progressTab, setProgressTab] = useState("Individual");
+  const currentMonthName = dayjs().format("MMMM YYYY");
+  const [targetMonth, setTargetMonth] = useState(currentMonthName);
+  const [hasCustomRange, setHasCustomRange] = useState(false);
+  const [selectedMonthLabel, setSelectedMonthLabel] = useState(currentMonthName);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [openCalendar, setOpenCalendar] = useState(false);
+  const [progressTab, setProgressTab] = useState("Team");
+  const [expandedTeamId, setExpandedTeamId] = useState(null);
   const [isSetTargetOpen, setIsSetTargetOpen] = useState(false);
-  const [progressList, setProgressList] = useState(initialProgressData);
 
-  const handleSaveTarget = (newTarget) => {
-    const newItem = {
-      id: Date.now(),
-      employee: newTarget.name,
-      target: newTarget.type === "Team" ? newTarget.name : "Alpha Team",
-      achieved: 0,
-      balance: newTarget.target,
-      status: "On Track",
-    };
-    setProgressList((prev) => [newItem, ...prev]);
+  const [loading, setLoading] = useState(false);
+  const [summaryData, setSummaryData] = useState({
+    total_target: 0,
+    achieved: 0,
+    remaining: 0,
+    achievement_rate: "0%",
+    team_summary: null,
+    individual_summary: null,
+  });
+  const [barChartData, setBarChartData] = useState([]);
+  const [doughnutData, setDoughnutData] = useState([]);
+  const [teamList, setTeamList] = useState([]);
+  const [individualList, setIndividualList] = useState([]);
+  const [dropdownOptions, setDropdownOptions] = useState({
+    teams: [],
+    employees: [],
+  });
+
+  // Dynamically compute active summary data for Team vs Individual view
+  const activeSummaryData = React.useMemo(() => {
+    if (progressTab === "Team") {
+      if (summaryData.team_summary) return summaryData.team_summary;
+      if (teamList.length > 0) {
+        const total = teamList.reduce((acc, t) => acc + Number(t.target ?? t.lead_target ?? 0), 0);
+        const ach = teamList.reduce((acc, t) => acc + Number(t.achieved ?? 0), 0);
+        const rem = Math.max(0, total - ach);
+        const rate = total > 0 ? `${Math.round((ach / total) * 100)}%` : "0%";
+        return { total_target: total, achieved: ach, remaining: rem, achievement_rate: rate };
+      }
+      return summaryData;
+    } else {
+      if (summaryData.individual_summary) return summaryData.individual_summary;
+      if (individualList.length > 0) {
+        const total = individualList.reduce((acc, i) => acc + Number(i.target ?? i.lead_target ?? 0), 0);
+        const ach = individualList.reduce((acc, i) => acc + Number(i.achieved ?? 0), 0);
+        const rem = Math.max(0, total - ach);
+        const rate = total > 0 ? `${Math.round((ach / total) * 100)}%` : "0%";
+        return { total_target: total, achieved: ach, remaining: rem, achievement_rate: rate };
+      }
+      return summaryData;
+    }
+  }, [progressTab, summaryData, teamList, individualList]);
+
+  const loadMonthlyTargetData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const currentMonthFromDate = dayjs().startOf("month").format("YYYY-MM-DD");
+      const currentMonthToDate = dayjs().endOf("month").format("YYYY-MM-DD");
+
+      const params = {
+        month: hasCustomRange ? undefined : selectedMonthLabel,
+        from_date: hasCustomRange ? (fromDate || undefined) : (fromDate || currentMonthFromDate),
+        to_date: hasCustomRange ? (toDate || undefined) : (toDate || currentMonthToDate),
+      };
+      const res = await fetchMonthlyTargetAdmin(params);
+      console.log("[MonthlyTargetView] fetchMonthlyTargetAdmin response:", res);
+      const rawData = res?.data;
+      const data = rawData?.data || rawData || {};
+
+      if (data.summary || data.team_summary || data.individual_summary) {
+        setSummaryData({
+          total_target: data.summary?.total_target ?? 0,
+          achieved: data.summary?.achieved ?? 0,
+          remaining: data.summary?.remaining ?? 0,
+          achievement_rate: data.summary?.achievement_rate || "0%",
+          team_summary: data.team_summary || null,
+          individual_summary: data.individual_summary || null,
+        });
+      }
+
+      const teams = Array.isArray(data.team_targets) ? data.team_targets : [];
+      setTeamList(teams);
+
+      if (Array.isArray(data.individual_targets)) {
+        setIndividualList(data.individual_targets);
+      } else {
+        setIndividualList([]);
+      }
+
+      // Bar Chart handling with automatic fallback from team_targets
+      if (Array.isArray(data.bar_chart) && data.bar_chart.length > 0) {
+        setBarChartData(data.bar_chart);
+      } else if (teams.length > 0) {
+        setBarChartData(
+          teams.map((t) => ({
+            team: t.team || t.name || "Team",
+            Target: Number(t.target || 0),
+            Achieved: Number(t.achieved || 0),
+            color: t.color || "#6366F1",
+          }))
+        );
+      } else {
+        setBarChartData([]);
+      }
+
+      // Donut Chart handling with automatic fallback from team_targets
+      if (Array.isArray(data.donut_chart) && data.donut_chart.length > 0) {
+        const formattedDonut = data.donut_chart.map((item, index) => ({
+          ...item,
+          color: item.color || item.colour || (index % 2 === 0 ? "#6366F1" : "#84CC16"),
+        }));
+        setDoughnutData(formattedDonut);
+      } else if (teams.length > 0) {
+        const totalAch = teams.reduce((sum, t) => sum + Number(t.achieved || 0), 0);
+        setDoughnutData(
+          teams.map((t, index) => {
+            const val = Number(t.achieved || 0);
+            const pct = totalAch > 0 ? `${Math.round((val / totalAch) * 100)}%` : "0%";
+            return {
+              name: t.team || t.name || `Team ${index + 1}`,
+              value: val,
+              percentage: pct,
+              color: t.color || (index % 2 === 0 ? "#6366F1" : "#84CC16"),
+            };
+          })
+        );
+      } else {
+        setDoughnutData([]);
+      }
+    } catch (err) {
+      console.error("Error fetching monthly target data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedMonthLabel, fromDate, toDate, hasCustomRange]);
+
+  const loadDropdowns = useCallback(async () => {
+    try {
+      const res = await fetchTargetDropdownsAdmin();
+      console.log("[MonthlyTargetView] fetchTargetDropdownsAdmin response:", res);
+      const rawData = res?.data;
+      const data = rawData?.data || rawData || {};
+      setDropdownOptions({
+        teams: Array.isArray(data.teams) ? data.teams : [],
+        employees: Array.isArray(data.employees) ? data.employees : [],
+      });
+    } catch (err) {
+      console.error("Error fetching target dropdowns:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMonthlyTargetData();
+  }, [loadMonthlyTargetData]);
+
+  useEffect(() => {
+    loadDropdowns();
+  }, [loadDropdowns]);
+
+  useEffect(() => {
+    if (teamList.length === 0 && progressTab === "Team") {
+      setProgressTab("Individual");
+    }
+  }, [teamList, progressTab]);
+
+  const handleApplyCustomRange = (from, to) => {
+    if (from && to) {
+      setFromDate(from);
+      setToDate(to);
+      setHasCustomRange(true);
+      setSelectedMonthLabel(
+        `${dayjs(from).format("DD MMM YYYY")} - ${dayjs(to).format("DD MMM YYYY")}`
+      );
+    } else {
+      setFromDate("");
+      setToDate("");
+      setHasCustomRange(false);
+      setSelectedMonthLabel(targetMonth);
+    }
+    setOpenCalendar(false);
   };
+
+  const handleSaveTarget = async (newTargetData) => {
+    try {
+      const monthLabel = newTargetData.month || currentMonthName;
+      setTargetMonth(monthLabel);
+      if (!hasCustomRange) {
+        setSelectedMonthLabel(monthLabel);
+      }
+
+      const res = await setMonthlyTargetAdmin(newTargetData);
+      if (res?.data?.status !== false) {
+        toast.success(res?.data?.message || "Monthly Target set successfully!");
+        await loadMonthlyTargetData();
+      } else {
+        toast.error(res?.data?.message || "Failed to set target");
+      }
+    } catch (err) {
+      console.error("Error saving target:", err);
+      toast.error(err?.response?.data?.message || "Failed to set target");
+    }
+  };
+
+  const currentDisplayList = progressTab === "Team" ? teamList : individualList;
 
   return (
     <Box
@@ -92,6 +268,13 @@ export default function MonthlyTargetView() {
         pb: 4,
       }}
     >
+      <CustomDateRangePicker
+        open={openCalendar}
+        onClose={() => setOpenCalendar(false)}
+        onApply={handleApplyCustomRange}
+        initialFrom={fromDate}
+        initialTo={toDate}
+      />
       {/* 1. Header Title & Controls Row */}
       <Box
         sx={{
@@ -127,44 +310,95 @@ export default function MonthlyTargetView() {
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          {/* Month Selector Dropdown */}
-          <Select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            IconComponent={KeyboardArrowDownIcon}
-            renderValue={(val) => (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <CalendarTodayOutlinedIcon
-                  sx={{ fontSize: 16, color: "#64748B" }}
-                />
-                <Typography
-                  sx={{ fontSize: "14px", fontWeight: 400, color: "#334155" }}
-                >
-                  {val}
-                </Typography>
-              </Box>
+          {/* Team / Individual Segmented Toggle Button */}
+          <Box
+            sx={{
+              backgroundColor: "#FFFFFF",
+              border: "1.5px solid #E2E8F0",
+              borderRadius: "8px",
+              p: "3px",
+              display: "flex",
+              alignItems: "center",
+              height: "38px",
+              boxSizing: "border-box",
+            }}
+          >
+            {teamList.length > 0 && (
+              <Button
+                onClick={() => setProgressTab("Team")}
+                disableRipple
+                sx={{
+                  px: 2.2,
+                  py: 0.5,
+                  height: "30px",
+                  fontSize: "14px",
+                  fontWeight: progressTab === "Team" ? 600 : 500,
+                  color: progressTab === "Team" ? "#FFFFFF" : "#475569",
+                  backgroundColor:
+                    progressTab === "Team" ? ACCENT_GREEN : "transparent",
+                  borderRadius: "6px",
+                  textTransform: "none",
+                  minWidth: "auto",
+                  boxShadow: "none",
+                  "&:hover": {
+                    backgroundColor:
+                      progressTab === "Team" ? ACCENT_GREEN : "#F1F5F9",
+                  },
+                }}
+              >
+                Team
+              </Button>
             )}
+            <Button
+              onClick={() => setProgressTab("Individual")}
+              disableRipple
+              sx={{
+                px: 2.2,
+                py: 0.5,
+                height: "30px",
+                fontSize: "14px",
+                fontWeight: progressTab === "Individual" ? 600 : 500,
+                color: progressTab === "Individual" ? "#FFFFFF" : "#475569",
+                backgroundColor:
+                  progressTab === "Individual" ? ACCENT_GREEN : "transparent",
+                borderRadius: "6px",
+                textTransform: "none",
+                minWidth: "auto",
+                boxShadow: "none",
+                "&:hover": {
+                  backgroundColor:
+                    progressTab === "Individual" ? ACCENT_GREEN : "#F1F5F9",
+                },
+              }}
+            >
+              Individual
+            </Button>
+          </Box>
+
+          {/* Calendar Range Selector Button matching Image 1 & Image 2 */}
+          <Button
+            variant="outlined"
+            onClick={() => setOpenCalendar(true)}
+            startIcon={
+              <CalendarTodayOutlinedIcon
+                sx={{ fontSize: 16, color: "#1D4ED8" }}
+              />
+            }
             sx={{
               height: "38px",
               backgroundColor: "#FFFFFF",
               borderRadius: "8px",
-              "& .MuiOutlinedInput-notchedOutline": {
-                border: "1px solid #E2E8F0",
-              },
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: "#CBD5E1",
-              },
-              "& .MuiSelect-select": {
-                py: "6px !important",
-                px: "12px !important",
-              },
+              border: "1.5px solid  #E0E0E0",
+              color: "#1E293B",
+              fontFamily: "Inter, sans-serif",
+              fontSize: "14px",
+              fontWeight: 500,
+              textTransform: "none",
+              px: 2,  
             }}
           >
-            <MenuItem value="September 2026">September 2026</MenuItem>
-            <MenuItem value="October 2026">October 2026</MenuItem>
-            <MenuItem value="November 2026">November 2026</MenuItem>
-            <MenuItem value="December 2026">December 2026</MenuItem>
-          </Select>
+            {selectedMonthLabel}
+          </Button>
 
           {/* + Set Target Button */}
           <Button
@@ -246,7 +480,7 @@ export default function MonthlyTargetView() {
                 lineHeight: 1.2,
               }}
             >
-              100
+              {activeSummaryData.total_target}
             </Typography>
           </Box>
         </Paper>
@@ -293,7 +527,7 @@ export default function MonthlyTargetView() {
                 lineHeight: 1.2,
               }}
             >
-              34
+              {activeSummaryData.achieved}
             </Typography>
           </Box>
         </Paper>
@@ -340,7 +574,7 @@ export default function MonthlyTargetView() {
                 lineHeight: 1.2,
               }}
             >
-              63
+              {activeSummaryData.remaining}
             </Typography>
           </Box>
         </Paper>
@@ -387,273 +621,303 @@ export default function MonthlyTargetView() {
                 lineHeight: 1.2,
               }}
             >
-              34%
+              {activeSummaryData.achievement_rate}
             </Typography>
           </Box>
         </Paper>
       </Box>
 
-      {/* 3. Middle Section: 2 Charts Grid (50% / 50% split) */}
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "1.3fr 1fr" },
-          gap: 2.5,
-          width: "100%",
-          height: 367,
-        }}
-      >
-        {/* Left Chart: Bar Chart */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 3,
-            borderRadius: "8px",
-            border: "1px solid #F1F5F9",
-            backgroundColor: "#FFFFFF",
-            height: "367px",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+      {/* 3. Middle Section: 2 Charts Grid (50% / 50% split) - Visible ONLY in Team view */}
+      {progressTab === "Team" &&
+        (barChartData.length > 0 || doughnutData.length > 0) && (
           <Box
             sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 2,
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "1.3fr 1fr" },
+              gap: 2.5,
+              width: "100%",
+              height: 367,
             }}
           >
-            <Typography
-              sx={{ fontSize: "17px", fontWeight: 600, color: "#0F172A" }}
+            {/* Left Chart: Bar Chart */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: "8px",
+                border: "1px solid #F1F5F9",
+                backgroundColor: "#FFFFFF",
+                height: "367px",
+                display: "flex",
+                flexDirection: "column",
+              }}
             >
-              Target Vs Achievement Team Wise
-            </Typography>
-
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2.5 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                <Box
-                  sx={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: "2px",
-                    backgroundColor: "#85D614",
-                  }}
-                />
-                <Typography
-                  sx={{ fontSize: "14px", color: "#000000", fontWeight: 500 }}
-                >
-                  Target
-                </Typography>
-              </Box>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                <Box
-                  sx={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: "2px",
-                    backgroundColor: "#6161FF",
-                  }}
-                />
-                <Typography
-                  sx={{ fontSize: "14px", color: "#000000", fontWeight: 500 }}
-                >
-                  Achieved
-                </Typography>
-              </Box>
-            </Box>
-          </Box>
-
-          <Box sx={{ flex: 1, width: "100%", height: "100%", pt: 1 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={barChartData}
-                margin={{ top: 15, right: 15, left: -15, bottom: 5 }}
-                barGap={5}
-                barCategoryGap="20%"
-              >
-                <CartesianGrid
-                  strokeDasharray="2 2"
-                  vertical={true}
-                  horizontal={true}
-                  stroke="#D1D5DB"
-                />
-                <XAxis
-                  dataKey="team"
-                  tick={{ fontSize: 12, fontWeight: 500, fill: "#000000" }}
-                  axisLine={{ stroke: "#000000", strokeWidth: 1.5 }}
-                  tickLine={{ stroke: "#000000", strokeWidth: 1.5 }}
-                />
-                <YAxis
-                  domain={[0, 280]}
-                  ticks={[0, 70, 140, 210, 280]}
-                  tick={{ fontSize: 12, fontWeight: 500, fill: "#000000" }}
-                  axisLine={{ stroke: "#000000", strokeWidth: 1.5 }}
-                  tickLine={{ stroke: "#000000", strokeWidth: 1.5 }}
-                />
-                <Tooltip cursor={{ fill: "rgba(213, 30, 30, 0.04)" }} />
-                <Bar
-                  dataKey="Achieved"
-                  fill="#6161FF"
-                  radius={[5, 5, 0, 0]}
-                  barSize={48}
-                />
-                <Bar
-                  dataKey="Target"
-                  fill="#85D614"
-                  radius={[5, 5, 0, 0]}
-                  barSize={48}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </Box>
-        </Paper>
-
-        {/* Right Chart: Donut Chart */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 3,
-            borderRadius: "12px",
-            border: "1px solid #F1F5F9",
-            backgroundColor: "#FFFFFF",
-            height: "367px",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <Typography
-            sx={{ fontSize: "17px", fontWeight: 600, color: "#0F172A", mb: 2 }}
-          >
-            Target Vs Achievement Team Wise
-          </Typography>
-
-          <Box
-            sx={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              px: 2,
-            }}
-          >
-            {/* Doughnut Chart with Center Text */}
-            <Box sx={{ position: "relative", width: "220px", height: "220px" }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={doughnutData}
-                    cx="50%"
-                    cy="50%"
-                    startAngle={90}
-                    endAngle={-270}
-                    innerRadius={68}
-                    outerRadius={102}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {doughnutData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Center Content inside Donut */}
               <Box
                 sx={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  textAlign: "center",
-                  pointerEvents: "none",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 2,
                 }}
               >
                 <Typography
-                  sx={{
-                    fontSize: "32.5px",
-                    fontWeight: 600,
-                    color: "#000000",
-                    lineHeight: 1,
-                    fontFamily: "Inter, sans-serif",
-                  }}
+                  sx={{ fontSize: "17px", fontWeight: 600, color: "#0F172A" }}
                 >
-                  300
+                  Target Vs Achievement Team Wise
                 </Typography>
-                <Typography
-                  sx={{
-                    fontSize: "20px",
-                    fontWeight: 400,
-                    color: "#000000",
-                    mt: 0.5,
-                    fontFamily: "Inter, sans-serif",
-                  }}
-                >
-                  Total Leads
-                </Typography>
-              </Box>
-            </Box>
 
-            {/* Legend Side List matching Image 1 */}
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 2.2,
-                minWidth: "210px",
-              }}
-            >
-              {doughnutData.map((item) => (
-                <Box
-                  key={item.name}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2.5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                     <Box
                       sx={{
-                        width: 15,
-                        height: 15,
+                        width: 12,
+                        height: 12,
                         borderRadius: "2px",
-                        backgroundColor: item.color,
+                        backgroundColor: "#85D614",
                       }}
                     />
                     <Typography
                       sx={{
-                        fontSize: "16px",
+                        fontSize: "14px",
                         color: "#000000",
-                        fontWeight: 400,
+                        fontWeight: 500,
+                      }}
+                    >
+                      Target
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                    <Box
+                      sx={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: "2px",
+                        backgroundColor: "#6161FF",
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        fontSize: "14px",
+                        color: "#000000",
+                        fontWeight: 500,
+                      }}
+                    >
+                      Achieved
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+
+              <Box sx={{ flex: 1, width: "100%", height: "100%", pt: 1 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={barChartData}
+                    margin={{ top: 15, right: 15, left: -15, bottom: 5 }}
+                    barGap={5}
+                    barCategoryGap="20%"
+                  >
+                    <CartesianGrid
+                      strokeDasharray="2 2"
+                      vertical={true}
+                      horizontal={true}
+                      stroke="#D1D5DB"
+                    />
+                    <XAxis
+                      dataKey="team"
+                      tick={{ fontSize: 12, fontWeight: 500, fill: "#000000" }}
+                      axisLine={{ stroke: "#000000", strokeWidth: 1.5 }}
+                      tickLine={{ stroke: "#000000", strokeWidth: 1.5 }}
+                    />
+                    <YAxis
+                      domain={[0, 280]}
+                      ticks={[0, 70, 140, 210, 280]}
+                      tick={{ fontSize: 12, fontWeight: 500, fill: "#000000" }}
+                      axisLine={{ stroke: "#000000", strokeWidth: 1.5 }}
+                      tickLine={{ stroke: "#000000", strokeWidth: 1.5 }}
+                    />
+                    <Tooltip cursor={{ fill: "rgba(213, 30, 30, 0.04)" }} />
+                    <Bar
+                      dataKey="Achieved"
+                      fill="#6161FF"
+                      radius={[5, 5, 0, 0]}
+                      barSize={48}
+                    />
+                    <Bar
+                      dataKey="Target"
+                      fill="#85D614"
+                      radius={[5, 5, 0, 0]}
+                      barSize={48}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </Paper>
+
+            {/* Right Chart: Donut Chart */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: "12px",
+                border: "1px solid #F1F5F9",
+                backgroundColor: "#FFFFFF",
+                height: "367px",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: "17px",
+                  fontWeight: 600,
+                  color: "#0F172A",
+                  mb: 2,
+                }}
+              >
+                Target Vs Achievement Team Wise
+              </Typography>
+
+              <Box
+                sx={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  px: 2,
+                }}
+              >
+                {/* Doughnut Chart with Center Text */}
+                <Box
+                  sx={{ position: "relative", width: "220px", height: "220px" }}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    {(() => {
+                      const isAllDonutZero =
+                        doughnutData.length > 0 &&
+                        doughnutData.every(
+                          (item) => Number(item.value || 0) === 0,
+                        );
+
+                      return (
+                        <PieChart>
+                          <Pie
+                            data={doughnutData}
+                            cx="50%"
+                            cy="50%"
+                            startAngle={90}
+                            endAngle={-270}
+                            innerRadius={68}
+                            outerRadius={102}
+                            paddingAngle={2}
+                            dataKey={isAllDonutZero ? () => 1 : "value"}
+                          >
+                            {doughnutData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      );
+                    })()}
+                  </ResponsiveContainer>
+                  {/* Center Content inside Donut */}
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      textAlign: "center",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: "32.5px",
+                        fontWeight: 600,
+                        color: "#000000",
+                        lineHeight: 1,
                         fontFamily: "Inter, sans-serif",
                       }}
                     >
-                      {item.name}
+                      {summaryData.total_target}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "20px",
+                        fontWeight: 400,
+                        color: "#000000",
+                        mt: 0.5,
+                        fontFamily: "Inter, sans-serif",
+                      }}
+                    >
+                      Total Leads
                     </Typography>
                   </Box>
-                  <Typography
-                    sx={{
-                      fontSize: "12px",
-                      fontWeight: 400,
-                      color: "#000000",
-                      fontFamily: "Inter, sans-serif",
-                    }}
-                  >
-                    <Box
-                      component="span"
-                      sx={{ fontWeight: 700, fontSize: "12px", mr: 0.2 }}
-                    >
-                      {item.value}
-                    </Box>
-                    ({item.percentage})
-                  </Typography>
                 </Box>
-              ))}
-            </Box>
+
+                {/* Legend Side List matching Image 1 */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2.2,
+                    minWidth: "210px",
+                  }}
+                >
+                  {doughnutData.map((item) => (
+                    <Box
+                      key={item.name}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.2 }}
+                      >
+                        <Box
+                          sx={{
+                            width: 15,
+                            height: 15,
+                            borderRadius: "2px",
+                            backgroundColor: item.color,
+                          }}
+                        />
+                        <Typography
+                          sx={{
+                            fontSize: "16px",
+                            color: "#000000",
+                            fontWeight: 400,
+                            fontFamily: "Inter, sans-serif",
+                          }}
+                        >
+                          {item.name}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        sx={{
+                          fontSize: "12px",
+                          fontWeight: 400,
+                          color: "#000000",
+                          fontFamily: "Inter, sans-serif",
+                        }}
+                      >
+                        <Box
+                          component="span"
+                          sx={{ fontWeight: 700, fontSize: "12px", mr: 0.2 }}
+                        >
+                          {item.value}
+                        </Box>
+                        ({item.percentage})
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Paper>
           </Box>
-        </Paper>
-      </Box>
+        )}
 
       {/* 4. Bottom Section: Target Progress Table */}
       <Paper
@@ -679,68 +943,10 @@ export default function MonthlyTargetView() {
           <Typography
             sx={{ fontSize: "17px", fontWeight: 600, color: "#0F172A" }}
           >
-            Target Progress
+            {progressTab === "Team"
+              ? "Team Target Progress"
+              : "Individual Target Progress"}
           </Typography>
-
-          {/* Team / Individual Segmented Toggle Button */}
-          <Box
-            sx={{
-              backgroundColor: "#F1F5F9",
-              borderRadius: "6px",
-              p: "3px",
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
-            <Button
-              onClick={() => setProgressTab("Team")}
-              sx={{
-                px: 2,
-                py: "4px",
-                fontSize: "14px",
-                fontWeight: progressTab === "Team" ? 600 : 500,
-                color: progressTab === "Team" ? "#FFFFFF" : "#64748B",
-                backgroundColor:
-                  progressTab === "Team" ? ACCENT_GREEN : "transparent",
-                borderRadius: "4px",
-                textTransform: "none",
-                minWidth: "auto",
-                boxShadow:
-                  progressTab === "Team" ? "0 1px 2px rgba(0,0,0,0.1)" : "none",
-                "&:hover": {
-                  backgroundColor:
-                    progressTab === "Team" ? ACCENT_GREEN : "#E2E8F0",
-                },
-              }}
-            >
-              Team
-            </Button>
-            <Button
-              onClick={() => setProgressTab("Individual")}
-              sx={{
-                px: 2,
-                py: "4px",
-                fontSize: "14x",
-                fontWeight: progressTab === "Individual" ? 600 : 500,
-                color: progressTab === "Individual" ? "#FFFFFF" : "#64748B",
-                backgroundColor:
-                  progressTab === "Individual" ? ACCENT_GREEN : "transparent",
-                borderRadius: "4px",
-                textTransform: "none",
-                minWidth: "auto",
-                boxShadow:
-                  progressTab === "Individual"
-                    ? "0 1px 2px rgba(0,0,0,0.1)"
-                    : "none",
-                "&:hover": {
-                  backgroundColor:
-                    progressTab === "Individual" ? ACCENT_GREEN : "#E2E8F0",
-                },
-              }}
-            >
-              Individual
-            </Button>
-          </Box>
         </Box>
 
         {/* Table Container */}
@@ -758,7 +964,7 @@ export default function MonthlyTargetView() {
                     py: 1,
                   }}
                 >
-                  Employee
+                  {progressTab === "Team" ? "Team" : "Employee"}
                 </TableCell>
                 <TableCell
                   sx={{
@@ -804,74 +1010,327 @@ export default function MonthlyTargetView() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {progressList.map((row) => (
-                <TableRow
-                  key={row.id}
-                  sx={{
-                    height: "45px",
-                    "&:hover": { backgroundColor: "#F8FAFC" },
-                  }}
-                >
+              {currentDisplayList.length === 0 ? (
+                <TableRow>
                   <TableCell
+                    colSpan={5}
+                    align="center"
                     sx={{
+                      py: 4,
+                      color: "#64748B",
                       fontSize: "14px",
-                      color: "#334155",
-                      fontWeight: 600,
-                      py: 1,
+                      fontFamily: "Inter, sans-serif",
                     }}
                   >
-                    {row.employee}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      color: "#334155",
-                      py: 1,
-                    }}
-                  >
-                    {row.target}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      color: "#334155",
-                      py: 1,
-                    }}
-                  >
-                    {row.achieved}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      color: "#334155",
-                      py: 1,
-                    }}
-                  >
-                    {row.balance}
-                  </TableCell>
-                  <TableCell align="center" sx={{ py: 1 }}>
-                    <Box
-                      sx={{
-                        display: "inline-block",
-                        px: 2,
-                        py: "3px",
-                        borderRadius: "3px",
-                        fontSize: "14px",
-                        fontWeight: 600,
-                        backgroundColor:
-                          row.status === "On Track" ? "#E6F4EA" : "#FCE8E6",
-                        color:
-                          row.status === "On Track" ? "#10B981" : "#EF4444",
-                      }}
-                    >
-                      {row.status}
-                    </Box>
+                    No monthly target data found for the selected period. Click
+                    "Set Target" to add.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                currentDisplayList.map((row, rowIdx) => {
+                  const rowKey = row.id || row.team || row.employee || rowIdx;
+                  const isExpanded = progressTab === "Team" && expandedTeamId === rowKey;
+
+                  // Find members for this team
+                  let teamMembers = [];
+                  if (Array.isArray(row.members) && row.members.length > 0) {
+                    teamMembers = row.members;
+                  } else if (Array.isArray(row.employees) && row.employees.length > 0) {
+                    teamMembers = row.employees;
+                  } else if (progressTab === "Team") {
+                    teamMembers = individualList.filter(
+                      (ind) =>
+                        (ind.team && (ind.team || "").toLowerCase() === (row.team || "").toLowerCase()) ||
+                        (ind.team_name && (ind.team_name || "").toLowerCase() === (row.team || "").toLowerCase())
+                    );
+                  }
+
+                  const teamLeaderName =
+                    row.team_leader ||
+                    row.leader ||
+                    row.leader_name ||
+                    (teamMembers[0]?.employee || teamMembers[0]?.name || "N/A");
+
+                  return (
+                    <React.Fragment key={rowKey}>
+                      <TableRow
+                        onClick={() => {
+                          if (progressTab === "Team") {
+                            setExpandedTeamId(isExpanded ? null : rowKey);
+                          }
+                        }}
+                        sx={{
+                          height: "45px",
+                          cursor: progressTab === "Team" ? "pointer" : "default",
+                          backgroundColor: isExpanded ? "#F8FAFC" : "transparent",
+                          "&:hover": { backgroundColor: "#F1F5F9" },
+                          transition: "background-color 0.15s ease",
+                        }}
+                      >
+                        <TableCell
+                          sx={{
+                            fontSize: "14px",
+                            color: "#334155",
+                            fontWeight: 600,
+                            py: 1,
+                          }}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            {progressTab === "Team" && (
+                              <IconButton
+                                size="small"
+                                sx={{
+                                  p: 0.2,
+                                  color: isExpanded ? ACCENT_GREEN : "#64748B",
+                                }}
+                              >
+                                {isExpanded ? (
+                                  <KeyboardArrowUpIcon sx={{ fontSize: 20 }} />
+                                ) : (
+                                  <KeyboardArrowDownIcon sx={{ fontSize: 20 }} />
+                                )}
+                              </IconButton>
+                            )}
+                            <Typography
+                              sx={{
+                                fontSize: "14px",
+                                fontWeight: 600,
+                                color: isExpanded ? ACCENT_GREEN : "#0F172A",
+                              }}
+                            >
+                              {progressTab === "Team" ? row.team : row.employee}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            fontSize: "14px",
+                            fontWeight: 500,
+                            color: "#334155",
+                            py: 1,
+                          }}
+                        >
+                          {row.target}
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            fontSize: "14px",
+                            fontWeight: 500,
+                            color: "#334155",
+                            py: 1,
+                          }}
+                        >
+                          {row.achieved}
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            fontSize: "14px",
+                            fontWeight: 500,
+                            color: "#334155",
+                            py: 1,
+                          }}
+                        >
+                          {row.balance}
+                        </TableCell>
+                        <TableCell align="center" sx={{ py: 1 }}>
+                          <Box
+                            sx={{
+                              display: "inline-block",
+                              px: 2,
+                              py: "3px",
+                              borderRadius: "3px",
+                              fontSize: "14px",
+                              fontWeight: 600,
+                              backgroundColor:
+                                row.status === "On Track" ? "#E6F4EA" : "#FCE8E6",
+                              color:
+                                row.status === "On Track" ? "#10B981" : "#EF4444",
+                            }}
+                          >
+                            {row.status}
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Expandable Details Drawer matching Image 2 style */}
+                      {progressTab === "Team" && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={5}
+                            sx={{
+                              p: 0,
+                              borderBottom: isExpanded ? "1px solid #E2E8F0" : "none",
+                            }}
+                          >
+                            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                              <Box
+                                sx={{
+                                  m: 2,
+                                  p: 2.5,
+                                  borderRadius: "12px",
+                                  border: "1.5px solid #84CC16",
+                                  backgroundColor: "#FFFFFF",
+                                  boxShadow: "0 4px 12px rgba(132, 204, 22, 0.08)",
+                                  position: "relative",
+                                }}
+                              >
+                                {/* Header with Title, Team Leader & Close Button */}
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    mb: 2,
+                                    pb: 1.5,
+                                    borderBottom: "1px solid #F1F5F9",
+                                  }}
+                                >
+                                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                                    <Typography
+                                      sx={{ fontSize: "16px", fontWeight: 700, color: "#0F172A" }}
+                                    >
+                                      {row.team} - Team Details
+                                    </Typography>
+                                    <Box
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 0.8,
+                                        backgroundColor: "#F7FEE7",
+                                        border: "1px solid #BEF264",
+                                        px: 1.5,
+                                        py: "3px",
+                                        borderRadius: "20px",
+                                      }}
+                                    >
+                                      <Typography
+                                        sx={{ fontSize: "12px", fontWeight: 600, color: "#3F6212" }}
+                                      >
+                                        Team Leader:
+                                      </Typography>
+                                      <Typography
+                                        sx={{ fontSize: "13px", fontWeight: 700, color: "#15803D" }}
+                                      >
+                                        {teamLeaderName}
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+
+                                  {/* Close (X) Button matching Image 2 */}
+                                  <IconButton
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedTeamId(null);
+                                    }}
+                                    sx={{
+                                      color: "#64748B",
+                                      border: "1px solid #E2E8F0",
+                                      p: 0.5,
+                                      "&:hover": { backgroundColor: "#F1F5F9", color: "#0F172A" },
+                                    }}
+                                  >
+                                    <CloseIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Box>
+
+                                {/* Sub-Table for Team Members Breakdown */}
+                                <Typography
+                                  sx={{ fontSize: "14px", fontWeight: 600, color: "#334155", mb: 1.5 }}
+                                >
+                                  Team Members Target Breakdown ({teamMembers.length})
+                                </Typography>
+
+                                <TableContainer
+                                  sx={{
+                                    borderRadius: "8px",
+                                    border: "1px solid #E2E8F0",
+                                    backgroundColor: "#FAFAFA",
+                                  }}
+                                >
+                                  <MuiTable size="small">
+                                    <TableHead sx={{ backgroundColor: "#F1F5F9" }}>
+                                      <TableRow sx={{ height: "38px" }}>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: "13px", color: "#475569" }}>
+                                          Member Name
+                                        </TableCell>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: "13px", color: "#475569" }}>
+                                          Target
+                                        </TableCell>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: "13px", color: "#475569" }}>
+                                          Achieved
+                                        </TableCell>
+                                        <TableCell sx={{ fontWeight: 600, fontSize: "13px", color: "#475569" }}>
+                                          Balance
+                                        </TableCell>
+                                        <TableCell align="center" sx={{ fontWeight: 600, fontSize: "13px", color: "#475569" }}>
+                                          Status
+                                        </TableCell>
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {teamMembers.length === 0 ? (
+                                        <TableRow>
+                                          <TableCell colSpan={5} align="center" sx={{ py: 2, color: "#94A3B8" }}>
+                                            No individual members found for this team.
+                                          </TableCell>
+                                        </TableRow>
+                                      ) : (
+                                        teamMembers.map((member, index) => {
+                                          const mName = member.employee || member.name || member.user_name || `Member ${index + 1}`;
+                                          const mTarget = member.target ?? member.lead_target ?? 0;
+                                          const mAchieved = member.achieved ?? 0;
+                                          const mBalance = member.balance ?? Math.max(0, mTarget - mAchieved);
+                                          const mStatus = member.status || (mAchieved >= mTarget ? "On Track" : "Low");
+
+                                          return (
+                                            <TableRow
+                                              key={member.id || member.employee_id || index}
+                                              sx={{ "&:hover": { backgroundColor: "#F8FAFC" } }}
+                                            >
+                                              <TableCell sx={{ fontSize: "13px", fontWeight: 600, color: "#1E293B" }}>
+                                                {mName}
+                                              </TableCell>
+                                              <TableCell sx={{ fontSize: "13px", color: "#334155" }}>
+                                                {mTarget}
+                                              </TableCell>
+                                              <TableCell sx={{ fontSize: "13px", color: "#334155" }}>
+                                                {mAchieved}
+                                              </TableCell>
+                                              <TableCell sx={{ fontSize: "13px", color: "#334155" }}>
+                                                {mBalance}
+                                              </TableCell>
+                                              <TableCell align="center">
+                                                <Box
+                                                  sx={{
+                                                    display: "inline-block",
+                                                    px: 1.5,
+                                                    py: "2px",
+                                                    borderRadius: "3px",
+                                                    fontSize: "12px",
+                                                    fontWeight: 600,
+                                                    backgroundColor: mStatus === "On Track" ? "#E6F4EA" : "#FCE8E6",
+                                                    color: mStatus === "On Track" ? "#10B981" : "#EF4444",
+                                                  }}
+                                                >
+                                                  {mStatus}
+                                                </Box>
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })
+                                      )}
+                                    </TableBody>
+                                  </MuiTable>
+                                </TableContainer>
+                              </Box>
+                            </Collapse>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })
+              )}
             </TableBody>
           </MuiTable>
         </TableContainer>
@@ -934,6 +1393,17 @@ export default function MonthlyTargetView() {
         open={isSetTargetOpen}
         onClose={() => setIsSetTargetOpen(false)}
         onSave={handleSaveTarget}
+        teamsList={teamList.length > 0 ? teamList : dropdownOptions.teams}
+        employeesList={individualList.length > 0 ? individualList : dropdownOptions.employees}
+      />
+
+      {/* Date Range Picker Dialog */}
+      <CustomDateRangePicker
+        open={openCalendar}
+        onClose={() => setOpenCalendar(false)}
+        onApply={handleApplyCustomRange}
+        initialFrom={fromDate}
+        initialTo={toDate}
       />
     </Box>
   );

@@ -446,10 +446,10 @@ export default function OrganizationProfileDetails({ data = {}, onEdit }) {
       {/* 2. Bottom Row: Side-by-Side Cards (Contact Profile & Business Information) */}
       <Box
         sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
+          display: "flex",
           gap: 3,
           width: "100%",
+          "& > *": { flex: 1, minWidth: 0 },
         }}
       >
         {/* Left Card: Contact Profile */}
@@ -572,7 +572,7 @@ export default function OrganizationProfileDetails({ data = {}, onEdit }) {
           <Divider sx={{ mb: 2.5, backgroundColor: "#E2E8F0" }} />
 
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {/* Row 1 */}
+            {/* Row 1: GST IN & Company Pan Card */}
             <Box sx={{ display: "flex", gap: 2, width: "100%" }}>
               <Box sx={{ flex: 1 }}>
                 <ReadOnlyField
@@ -588,27 +588,11 @@ export default function OrganizationProfileDetails({ data = {}, onEdit }) {
               </Box>
             </Box>
 
-            {/* Row 2 */}
+            {/* Row 2: Date Format & Time Format */}
             <Box sx={{ display: "flex", gap: 2, width: "100%" }}>
               <Box sx={{ flex: 1 }}>
                 <ReadOnlyField
-                  label="Timezone "
-                  value={data.timezone}
-                />
-              </Box>
-              <Box sx={{ flex: 1 }}>
-                <ReadOnlyField
-                  label="Currency"
-                  value={data.currency}
-                />
-              </Box>
-            </Box>
-
-            {/* Row 3 */}
-            <Box sx={{ display: "flex", gap: 2, width: "100%" }}>
-              <Box sx={{ flex: 1 }}>
-                <ReadOnlyField
-                  label="Date Format "
+                  label="Date Format"
                   value={data.dateFormat}
                 />
               </Box>
@@ -618,17 +602,6 @@ export default function OrganizationProfileDetails({ data = {}, onEdit }) {
                   value={data.timeFormat}
                 />
               </Box>
-            </Box>
-
-            {/* Row 4 */}
-            <Box sx={{ display: "flex", gap: 2, width: "100%" }}>
-              <Box sx={{ flex: 1 }}>
-                <ReadOnlyField
-                  label="Language"
-                  value={data.language}
-                />
-              </Box>
-              <Box sx={{ flex: 1 }} />
             </Box>
           </Box>
         </Paper>

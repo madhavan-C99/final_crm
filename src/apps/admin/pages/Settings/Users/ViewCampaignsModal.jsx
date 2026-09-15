@@ -239,6 +239,12 @@ export default function ViewCampaignsModal({ open, onClose, user, campaignsData 
             rows={campaignsList}
             minWidth={900}
             maxHeight="calc(85vh - 210px)"
+            sx={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+            }}
           />
         )}
       </DialogContent>
