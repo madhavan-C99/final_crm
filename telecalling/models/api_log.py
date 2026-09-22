@@ -3,7 +3,7 @@ from adm.models import User
 from .delete_base_model import SafeDeleteModel
 
 
-class Api_Log(SafeDeleteModel):
+class ApiLog(SafeDeleteModel):
     user=models.ForeignKey(User, on_delete=models.CASCADE,null=True,blank=True)
     api_name=models.CharField(max_length=100)
     method=models.CharField(max_length=100)
@@ -16,4 +16,4 @@ class Api_Log(SafeDeleteModel):
         return (self.api_name) if self.api_name else "No Name"
     
     class Meta:
-        db_table="telecalling_api_log"
+        db_table="api_log"

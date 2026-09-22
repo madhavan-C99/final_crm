@@ -68,11 +68,13 @@ def fetch_leads(user,**data):
    
         params = {
             "id": id,
+            "organization_id": getattr(user, 'organization_id', 0) or 0,
             "filter_type": str(lead_filter_type) if lead_filter_type else "",
             "lead_filter_type": str(lead_filter_type) if lead_filter_type else "",
             "from_date": str(from_date) if from_date else "",
             "to_date": str(to_date) if to_date else "",
             "date_filter": str(date_filter_type),
+            "pipeline_id": data.get("pipeline_id") or 0,
             "pipeline_stage_id": data.get("pipeline_stage_id") or 0,
             "campaign_name_id": data.get("campaign_name_id") or 0,
             "campaign_id": data.get("campaign_name_id") or 0,
@@ -138,6 +140,7 @@ def fetch_pipeline_leads(user, **data):
             "from_date": str(from_date),
             "to_date": str(to_date),
             "filter_type": filter_type,
+            "pipeline_id": data.get("pipeline_id") or 0,
             "pipeline_stage_id": data.get("pipeline_stage_id") or 0,
             "lead_source_id": data.get("lead_source_id") or 0,
             "course_name_id": data.get("course_name_id") or 0,
@@ -925,7 +928,9 @@ def call_disconnect_api(user, **data):
     
 def add_new_lead(user,**data):
     try:
-        pipeline=PipelineStage.objects.filter(name="new lead").first()
+        pipeline = PipelineStage.objects.filter(name__iexact="new lead").first() or PipelineStage.objects.first()
+        if not pipeline:
+            raise APIException("Pipeline Stage 'New Lead' Not Found")
         
         campaign=CampaignName.objects.filter(id=data.get("campaign_id")).first()
         if campaign is None:
@@ -938,6 +943,11 @@ def add_new_lead(user,**data):
                f"{data.get("mobile")} already exists. Assigned to {number_exists.assigned_to}"
             )
         
+        user_org = getattr(user, 'organization', None)
+        if not user_org:
+            from adm.models import Organization
+            user_org = Organization.objects.first()
+
         lead=Lead.objects.create(
             full_name=data.get("full_name"),
             mobile_no=data.get("mobile"),
@@ -947,8 +957,8 @@ def add_new_lead(user,**data):
             pipeline_stage_id=pipeline.id,
             assigned_to_id=user.id,
             priority_id=None,
-            # lead_source_id=4,
-            created_by=user
+            created_by=user,
+            organization=user_org
         )
         send_lead_assigned_notification(lead.id, lead.assigned_to_id,assigned_by_id=None)
         return f"{lead.full_name} New Lead created successfully"

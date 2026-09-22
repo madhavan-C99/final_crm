@@ -16,7 +16,7 @@ from ..models import AdminLossActionLog, AdminApprovedLossLead
 from .lead_services import get_user_display_name
 
 
-def fetch_loss_lead_approval_requests_admin(**data):
+def fetch_loss_lead_approval_requests_admin(user=None, **data):
     """
     Loss Lead Approval Request Page -> Table Data & Summary API.
     Fetches leads in Loss stage (Stage 4) or Loss approval queue.
@@ -35,6 +35,11 @@ def fetch_loss_lead_approval_requests_admin(**data):
         ).select_related(
             "assigned_to", "pipeline_stage", "campaign", "lead_source", "course_plan", "course_name"
         ).order_by("-updated_at", "-created_at")
+
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            base_qs = base_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            base_qs = base_qs.none()
 
         # 2. Search Filter (name, phone, email)
         search = data.get("search")
@@ -240,7 +245,7 @@ def fetch_loss_lead_approval_requests_admin(**data):
     
 
 
-def get_loss_lead_approval_filter_dropdowns_admin():
+def get_loss_lead_approval_filter_dropdowns_admin(user=None):
     """
     Loss Lead Approval Page -> Filter Modal Dropdowns API.
     Returns Pipeline Stages, Loss Reasons, Telecallers, Course Plans, Campaigns.
@@ -256,6 +261,10 @@ def get_loss_lead_approval_filter_dropdowns_admin():
         loss_reasons = [{"id": r.id, "name": getattr(r, 'display_value', None) or r.name} for r in loss_reasons_qs]
 
         users_qs = User.objects.filter(is_active=True).order_by("first_name")
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            users_qs = users_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            users_qs = users_qs.none()
         telecallers = []
         for u in users_qs:
             user_leads = Lead.objects.filter(assigned_to=u)

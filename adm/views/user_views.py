@@ -14,7 +14,11 @@ from ..services.user_services import (
     toggle_user_status_admin_service, change_user_password_admin_service,
     enable_disable_lead_assignment_admin_service, transfer_leads_admin_service,
     delete_user_admin_service, fetch_user_dropdowns_admin_service,
-    fetch_user_campaigns_admin_service, fetch_user_transfer_campaigns_admin_service
+    fetch_user_campaigns_admin_service, fetch_user_transfer_campaigns_admin_service,
+    fetch_transfer_telecallers_admin_service,
+    transfer_single_campaign_leads_admin_service,
+    transfer_all_campaigns_leads_admin_service,
+    fetch_user_delete_summary_admin_service
 )
 
 
@@ -162,14 +166,34 @@ class TransferLeadsAdminApi(APIView):
         return Response(res, status=status_code)
 
 
-class DeleteUserAdminApi(APIView):
+class FetchUserDeleteSummaryAdminApi(APIView):
+    """
+    1. Fetch User Assigned Leads & Stats API (For Pre-Delete Review Modal)
+    POST /adm/fetch_user_delete_summary_admin
+    """
     class InputSerializer(serializers.Serializer):
+        user_id = serializers.IntegerField(required=False, allow_null=True)
         id = serializers.IntegerField(required=False, allow_null=True)
         emp_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
+        authorize_request('api_fetch_user_delete_summary_admin', request.user)
+        serializer = self.InputSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        res = fetch_user_delete_summary_admin_service(serializer.validated_data, admin_user=request.user)
+        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
+        return Response(res, status=status_code)
+
+
+class DeleteUserAdminApi(APIView):
+    class InputSerializer(serializers.Serializer):
+        id = serializers.IntegerField(required=False, allow_null=True)
+        user_id = serializers.IntegerField(required=False, allow_null=True)
+        emp_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def post(self, request):
         authorize_request('api_delete_user_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
+        serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         res = delete_user_admin_service(
             admin_user=request.user,
@@ -270,14 +294,14 @@ class CreateRoleView(APIView):
 class FetchUserDropdownsAdminApi(APIView):
     def get(self, request):
         authorize_request('api_fetch_user_dropdowns_admin', request.user)
-        res = fetch_user_dropdowns_admin_service()
+        res = fetch_user_dropdowns_admin_service(user=request.user)
         return Response(res, status=status.HTTP_200_OK)
 
 
 class FetchUserCampaignsAdminApi(APIView):
     """
-    User Management -> View Campaign Modal API.
-    POST method with InputSerializer.
+    1. Fetch User Campaigns List API
+    POST /adm/fetch_user_campaigns_admin
     """
     class InputSerializer(serializers.Serializer):
         id = serializers.IntegerField(required=False, allow_null=True)
@@ -287,25 +311,74 @@ class FetchUserCampaignsAdminApi(APIView):
 
     def post(self, request):
         authorize_request('api_fetch_user_campaigns_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
+        serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = fetch_user_campaigns_admin_service(**serializer.validated_data)
-        status_code = status.HTTP_200_OK if res.get('status') == 'success' else status.HTTP_400_BAD_REQUEST
+        res = fetch_user_campaigns_admin_service(serializer.validated_data, admin_user=request.user)
+        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
         return Response(res, status=status_code)
 
 
 class FetchUserTransferCampaignsAdminApi(APIView):
-    
     class InputSerializer(serializers.Serializer):
         from_user_id = serializers.IntegerField(required=False, allow_null=True)
         emp_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
         authorize_request('api_fetch_user_transfer_campaigns_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
+        serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = fetch_user_transfer_campaigns_admin_service(**serializer.validated_data)
-        status_code = status.HTTP_200_OK if res.get('status') == 'success' else status.HTTP_400_BAD_REQUEST
+        res = fetch_user_transfer_campaigns_admin_service(admin_user=request.user, **serializer.validated_data)
+        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
+        return Response(res, status=status_code)
+
+
+class FetchTransferTelecallersAdminApi(APIView):
+    
+    class InputSerializer(serializers.Serializer):
+        from_user_id = serializers.IntegerField(required=False, allow_null=True)
+        from_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def post(self, request):
+        authorize_request('api_fetch_transfer_telecallers_admin', request.user)
+        serializer = self.InputSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        res = fetch_transfer_telecallers_admin_service(serializer.validated_data, user=request.user)
+        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
+        return Response(res, status=status_code)
+
+
+
+class TransferSingleCampaignLeadsAdminApi(APIView):
+   
+    class InputSerializer(serializers.Serializer):
+        from_user_id = serializers.IntegerField(required=True)
+        campaign_id = serializers.IntegerField(required=True)
+        total_leads = serializers.IntegerField(required=False, allow_null=True)
+        distributions = serializers.ListField(child=serializers.DictField(), required=True)
+
+    def post(self, request):
+        authorize_request('api_transfer_single_campaign_leads_admin', request.user)
+        serializer = self.InputSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        res = transfer_single_campaign_leads_admin_service(admin_user=request.user, data=serializer.validated_data)
+        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
+        return Response(res, status=status_code)
+
+
+class TransferAllCampaignsLeadsAdminApi(APIView):
+   
+    class InputSerializer(serializers.Serializer):
+        from_user_id = serializers.IntegerField(required=True)
+        to_telecaller_id = serializers.IntegerField(required=True)
+        total_campaigns = serializers.IntegerField(required=False, allow_null=True)
+        total_leads = serializers.IntegerField(required=False, allow_null=True)
+
+    def post(self, request):
+        authorize_request('api_transfer_all_campaigns_leads_admin', request.user)
+        serializer = self.InputSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        res = transfer_all_campaigns_leads_admin_service(admin_user=request.user, data=serializer.validated_data)
+        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
         return Response(res, status=status_code)
 
 

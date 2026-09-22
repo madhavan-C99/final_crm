@@ -54,9 +54,11 @@ def fetch_campaign_enquiry_sheet(user, campaign_id=None, campaign_name=None, **k
     try:
         c_id, c_name = resolve_campaign_info(campaign_id, campaign_name)
 
+        org_id = user.organization_id if (user and hasattr(user, 'organization_id') and user.organization_id) else 0
         qry_vars = {
             "campaign_id": c_id,
-            "campaign_name": c_name
+            "campaign_name": c_name,
+            "organization_id": org_id
         }
             
         raw_cards = exec_raw_sql("D_FETCH_ENQUIRY_SHEET_CARDS", qry_vars) or []
@@ -129,9 +131,11 @@ def fetch_lead_summary_report(user, campaign_id=None, campaign_name=None, search
                 from_date = parts[0].strip()
                 to_date = parts[1].strip()
 
+        org_id = user.organization_id if (user and hasattr(user, 'organization_id') and user.organization_id) else 0
         qry_vars = {
             "campaign_id": c_id,
             "campaign_name": c_name,
+            "organization_id": org_id,
             "from_date": str(from_date) if from_date else "",
             "to_date": str(to_date) if to_date else "",
             "assigned_to": str(kwargs.get("assigned_to") or ""),

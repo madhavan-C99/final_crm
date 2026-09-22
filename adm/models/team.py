@@ -1,7 +1,8 @@
 from django.db import models
 from django.conf import settings
+from telecalling.models.delete_base_model import SafeDeleteModel
 
-class Team(models.Model):
+class Team(SafeDeleteModel):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=50, unique=True)
     leader = models.ForeignKey(

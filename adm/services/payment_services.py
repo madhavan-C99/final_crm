@@ -73,11 +73,8 @@ def get_pending_payment_filter_dropdowns_admin():
         raise APIException(str(e))
 
 
-def fetch_all_pending_payments_admin(search=None, date_filter=None, from_date=None, to_date=None, date_filter_type=None, sort_by=None, pipeline_id=None, course_name_id=None, course_plan_id=None, course_timing_id=None, payment_stage_id=None, pending_amount_range=None, page=1, limit=1000):
-    """
-    Pending Payments Page -> Fetch All Pending Payments & Summary Cards API.
-    Supports search, pipeline_id, Date Filters, Course Name, Course Plan, Course Time, Pending Amount Range.
-    """
+def fetch_all_pending_payments_admin(user=None, search=None, date_filter=None, from_date=None, to_date=None, date_filter_type=None, sort_by=None, pipeline_id=None, course_name_id=None, course_plan_id=None, course_timing_id=None, payment_stage_id=None, pending_amount_range=None, page=1, limit=1000, **kwargs):
+  
     try:
         date_filter = date_filter or date_filter_type
         today = timezone.now().date()
@@ -92,6 +89,11 @@ def fetch_all_pending_payments_admin(search=None, date_filter=None, from_date=No
             'lead', 'lead__assigned_to', 'lead__pipeline_stage', 
             'lead__campaign', 'lead__course_plan', 'lead__course_name', 'lead__course', 'lead__course_timing'
         ).filter(pending_amount__gt=0)
+
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            payments_qs = payments_qs.filter(lead__organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            payments_qs = payments_qs.none()
 
         # 2. Search Filter (Name, Mobile, Email)
         if search:

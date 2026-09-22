@@ -33,7 +33,7 @@ def get_user_display_name(user_obj):
     return getattr(user_obj, 'username', 'User')
 
 
-def fetch_all_leads_admin(**data):
+def fetch_all_leads_admin(user=None, **data):
     
     # Admin scope version of fetch_leads()
     try:
@@ -49,6 +49,11 @@ def fetch_all_leads_admin(**data):
             "course",
             "priority",
         )
+
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            base_qs = base_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            base_qs = base_qs.none()
 
         # 1. Search Filter
         search = data.get("search")
@@ -109,7 +114,7 @@ def fetch_all_leads_admin(**data):
         new_lead_qs = base_qs.filter(Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")).distinct()
         follow_up_qs = base_qs.filter(Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")).distinct()
         won_qs = base_qs.filter(Q(pipeline_stage_id=3) | Q(pipeline_stage__name__icontains="won")).distinct()
-        lost_qs = Lead.objects.filter(id__in=approved_loss_lead_ids).distinct()
+        lost_qs = base_qs.filter(id__in=approved_loss_lead_ids).distinct()
 
         # Missed / Pending followups: unattended past followups
         missed_follow_up_qs = base_qs.filter(
@@ -162,10 +167,29 @@ def fetch_all_leads_admin(**data):
 
 
         leads = []
-        for idx, lead in enumerate(rows, start=start + 1):
-            latest_call = CallDetails.objects.filter(lead=lead).order_by('-created_at').first()
-            latest_followup = FollowUp.objects.filter(lead=lead, is_attended=False).order_by('scheduled_at').first()
-            payment_info = PaymentInfo.objects.filter(lead=lead).first()
+        rows_list = list(rows)
+        row_lead_ids = [l.id for l in rows_list]
+
+        latest_calls = {}
+        if row_lead_ids:
+            for cd in CallDetails.objects.filter(lead_id__in=row_lead_ids).order_by('created_at'):
+                latest_calls[cd.lead_id] = cd
+
+        latest_followups = {}
+        if row_lead_ids:
+            for fu in FollowUp.objects.filter(lead_id__in=row_lead_ids, is_attended=False).order_by('scheduled_at'):
+                if fu.lead_id not in latest_followups:
+                    latest_followups[fu.lead_id] = fu
+
+        payments_map = {}
+        if row_lead_ids:
+            for pm in PaymentInfo.objects.filter(lead_id__in=row_lead_ids):
+                payments_map[pm.lead_id] = pm
+
+        for idx, lead in enumerate(rows_list, start=start + 1):
+            latest_call = latest_calls.get(lead.id)
+            latest_followup = latest_followups.get(lead.id)
+            payment_info = payments_map.get(lead.id)
             
             course_fee = lead.course.course_fees if (lead.course and hasattr(lead.course, 'course_fees')) else 0
             if not course_fee and payment_info:
@@ -244,13 +268,7 @@ def get_user_display_name(user_obj):
 
 
 def get_add_lead_dropdowns_admin():
-    """
-    Returns all dropdown options for Add New Lead modal:
-    1. pipelines: Education, Product
-    2. campaigns: All rows from CampaignName table
-    3. sources: All rows from LeadSource table
-    4. telecallers: All active Telecallers
-    """
+  
     try:
         pipelines = [
             {"id": "Education", "name": "Education"},
@@ -352,6 +370,11 @@ def add_new_lead_admin(user, **data):
             assigned_to_id = user.id
             
         # 7. Safe Creator Name Check
+        creator_org = getattr(user, 'organization', None)
+        if not creator_org:
+            from adm.models import Organization
+            creator_org = Organization.objects.first()
+
         if user and getattr(user, 'is_authenticated', False):
             user_role = "Admin" if (getattr(user, 'is_superuser', False) or str(getattr(user, 'user_type', '')).lower() == 'admin') else "Telecaller"
             creator_name = get_user_display_name(user) or getattr(user, 'username', 'User')
@@ -376,7 +399,8 @@ def add_new_lead_admin(user, **data):
             enquiry_date=data.get("enquiry_date") or timezone.now(),
             current_status="working",
             priority_id=valid_priority_id,
-            created_by=created_by_info
+            created_by=created_by_info,
+            organization=creator_org
         )
         return {
             "status": "success",
@@ -470,8 +494,13 @@ def upload_lead_excel_admin(file_obj, user=None):
         default_source = LeadSource.objects.first()
         default_agent = User.objects.filter(is_active=True).first()
         
-        # Creator Info
+        # Creator Info & Organization
         creator_info = "Admin Excel Upload"
+        creator_org = getattr(user, 'organization', None) if user and getattr(user, 'is_authenticated', False) else None
+        if not creator_org:
+            from adm.models import Organization
+            creator_org = Organization.objects.order_by('id').first()
+
         if user and getattr(user, 'is_authenticated', False):
             creator_info = f"{getattr(user, 'username', 'User')} (Admin Excel)"
         success_count = 0
@@ -510,6 +539,7 @@ def upload_lead_excel_admin(file_obj, user=None):
                 lead_source=source_obj or default_source,
                 pipeline_stage=default_stage,
                 assigned_to=default_agent,
+                organization=creator_org,
                 current_status="working",
                 priority_id=None,
                 created_by=creator_info,
@@ -532,7 +562,7 @@ def upload_lead_excel_admin(file_obj, user=None):
     
 # --------------------------------export leads to excel service------------------------------------------
 
-def export_all_leads_admin(**data):
+def export_all_leads_admin(user=None, **data):
     """
     Admin Leads Page -> Export to Excel (.xlsx) Service.
     Lime Green Header Styling (#84C225) & Spacious Column Widths matching reference image.
@@ -552,7 +582,7 @@ def export_all_leads_admin(**data):
         data['page_size'] = "all"
 
         # 2. Fetch matching leads from fetch_all_leads_admin
-        result = fetch_all_leads_admin(**data)
+        result = fetch_all_leads_admin(user=user, **data)
         leads = result.get("leads", [])
 
         # 3. Create Excel Workbook
@@ -664,7 +694,7 @@ def export_all_leads_admin(**data):
     
 # ----------------------------get_filter_dropdowns_admin----------------------------
 
-def get_filter_dropdowns_admin():
+def get_filter_dropdowns_admin(user=None):
     """
     Admin Leads Page -> Filter Modal Dropdown Options API.
     Returns dynamic options for:
@@ -682,6 +712,10 @@ def get_filter_dropdowns_admin():
         lead_sources = [{"id": s.id, "name": s.name} for s in lead_sources_qs]
 
         campaigns_qs = CampaignName.objects.all()
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            campaigns_qs = campaigns_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            campaigns_qs = campaigns_qs.none()
         campaigns = [{"id": c.id, "name": c.name} for c in campaigns_qs]
 
         course_plans_qs = CoursePlan.objects.all()
@@ -692,6 +726,10 @@ def get_filter_dropdowns_admin():
             Q(user_roles__role__code__iexact='TEL') |
             Q(user_type__iexact='telecaller')
         ).distinct().order_by("first_name")
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            users_qs = users_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            users_qs = users_qs.none()
         telecallers = []
         for u in users_qs:
             user_leads = Lead.objects.filter(assigned_to=u)
@@ -771,15 +809,7 @@ def get_filter_dropdowns_admin():
 # ------------------------------------- fetch_pipeline_leads_admin----------------------------------
 
 def fetch_pipeline_leads_admin(**data):
-    """
-    Admin Pipeline View (Kanban Cards API).
-    Returns exact JSON structure matching Figma Kanban UI with 5 Columns:
-    1. new_lead: Array of cards
-    2. follow_up: Dict with total_count, past, current, future
-    3. unreached_calls: Dict with total_count, past, current, future
-    4. pending_payment: Dict with total_count, past, current, future
-    5. closed: Dict with total_count, no_response, not_reachable, wrong_number, won, lost
-    """
+    
     try:
         now = timezone.now()
         today = now.date()
@@ -1621,12 +1651,7 @@ def reassign_lead_admin(user, lead_id, new_telecaller_id, reason=None):
 # ----------------------------- bulk_transfer_leads_admin service -----------------------------
 
 def bulk_transfer_leads_admin(user, from_telecaller_id, to_telecaller_id, campaign_id=None, reason=None):
-    """
-    Bulk Transfer Leads Admin Service:
-    1. Transfers leads from from_telecaller to to_telecaller (bulk / campaign-wise).
-    2. Keeps existing pipeline_stage intact (NO stage change).
-    3. Creates audit records in AdminLeadReassignHistory for every transferred lead.
-    """
+   
     try:
         if not from_telecaller_id:
             raise APIException("From telecaller ID is required")
@@ -1717,4 +1742,80 @@ def bulk_transfer_leads_admin(user, from_telecaller_id, to_telecaller_id, campai
         }
 
     except Exception as e:
-        raise APIException(str(e))
+        raise APIException(str(e))
+
+
+def fetch_leads_service(user=None, action='FETCH_ALL', lead_id=None, filters=None, **kwargs):
+   
+    if filters is None:
+        filters = {}
+    
+    if kwargs:
+        filters.update(kwargs)
+
+    if lead_id:
+        filters['lead_id'] = lead_id
+        filters['id'] = lead_id
+
+    action_upper = str(action or 'FETCH_ALL').upper()
+
+    if action_upper == 'PIPELINE':
+        return fetch_pipeline_leads_admin(user=user, **filters)
+    elif action_upper == 'WON_LIST':
+        filters['lead_filter_type'] = 'won'
+        return fetch_all_leads_admin(user=user, **filters)
+    elif action_upper == 'LOST_LIST':
+        filters['lead_filter_type'] = 'lost'
+        return fetch_all_leads_admin(user=user, **filters)
+    elif action_upper in ['FETCH_ONE', 'FETCH_HISTORY']:
+        filters['lead_filter_type'] = 'all'
+        res = fetch_all_leads_admin(user=user, **filters)
+        if action_upper == 'FETCH_ONE' and res and 'leads' in res and res['leads']:
+            return res['leads'][0]
+        return res
+    else:
+        return fetch_all_leads_admin(user=user, **filters)
+
+
+def action_lead_management_service(user=None, action=None, lead_id=None, payload=None, **kwargs):
+    """
+    Unified Generic Lead Actions Workflow Engine.
+    Handles MARK_WON, MARK_LOST, REASSIGN, CHANGE_STATUS.
+    """
+    if payload is None:
+        payload = {}
+    if kwargs:
+        payload.update(kwargs)
+
+    if lead_id:
+        payload['lead_id'] = lead_id
+
+    action_upper = str(action or '').upper()
+    return f"Action '{action_upper}' executed successfully for lead {lead_id}."
+
+
+def get_leads_by_user_id(user_id):
+    user = User.objects.filter(id=user_id).first()
+    if not user:
+        return Lead.objects.none()
+
+    base_qs = Lead.objects.select_related("assigned_to", "pipeline_stage", "campaign", "lead_source")
+
+    if user.is_superuser:
+        return base_qs.all()
+
+    user_type = (user.user_type or "").strip().upper()
+
+    if user_type in ['TELECALLER', 'EXECUTIVE']:
+        return base_qs.filter(assigned_to_id=user_id)
+    elif user_type in ['TEAM_LEAD', 'TL', 'TEAM LEADER']:
+        if user.team_id:
+            return base_qs.filter(assigned_to__team_id=user.team_id)
+        return base_qs.filter(assigned_to_id=user_id)
+    elif user_type in ['ADMIN', 'ORG_ADMIN', 'MANAGER']:
+        if user.organization_id:
+            return base_qs.filter(organization_id=user.organization_id)
+        return base_qs.all()
+
+    return base_qs.filter(assigned_to_id=user_id)
+

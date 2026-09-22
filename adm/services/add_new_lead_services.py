@@ -11,25 +11,39 @@ def fetch_add_lead_dropdowns(user, **data):
     try:
         campaign_id = data.get("campaign_id")
         campaign_name = data.get("campaign_name")
-        campaigns = CampaignName.objects.filter(is_active=True).values("id", "name").order_by("id")
-        categories = PipelineCategory.objects.filter(is_active=True).values("id", "category_name", "display_name").order_by("id")
-        sources = LeadSource.objects.filter(is_active=True).values("id", "name").order_by("id")
-        
+
+        campaigns_qs = CampaignName.objects.filter(is_active=True)
+        categories_qs = PipelineCategory.objects.filter(is_active=True)
+        sources_qs = LeadSource.objects.filter(is_active=True)
         telecallers_qs = User.objects.filter(is_active=True).filter(
             Q(user_roles__role__name__iexact="telecaller") | 
             Q(user_roles__role__code__iexact="TEL") | 
             Q(user_type__icontains="telecaller")
         ).distinct()
 
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            campaigns_qs = campaigns_qs.filter(organization=user.organization)
+            categories_qs = categories_qs.filter(organization=user.organization)
+            sources_qs = sources_qs.filter(organization=user.organization)
+            telecallers_qs = telecallers_qs.filter(organization=user.organization)
+
+        campaigns = campaigns_qs.values("id", "name").order_by("id")
+        categories = categories_qs.values("id", "category_name", "display_name").order_by("id")
+        sources = sources_qs.values("id", "name").order_by("id")
+
         telecallers = telecallers_qs.values(
             "id", "username", "first_name", "last_name"
         ).order_by("id")
 
         campaign = None
+        campaign_check_qs = CampaignName.objects.all()
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            campaign_check_qs = campaign_check_qs.filter(organization=user.organization)
+
         if campaign_id:
-            campaign = CampaignName.objects.filter(id=campaign_id).first()
+            campaign = campaign_check_qs.filter(id=campaign_id).first()
         elif campaign_name:
-            campaign = CampaignName.objects.filter(name__iexact=campaign_name.strip()).first()
+            campaign = campaign_check_qs.filter(name__iexact=campaign_name.strip()).first()
 
         assigned_map = {}
         if campaign:
@@ -61,6 +75,7 @@ def fetch_add_lead_dropdowns(user, **data):
 
 def create_new_lead(user, **data):
     try:
+        from datetime import datetime, date
         first_name = data.get("first_name", "").strip()
         last_name = data.get("last_name", "").strip()
         full_name = f"{first_name} {last_name}".strip()
@@ -76,9 +91,14 @@ def create_new_lead(user, **data):
         if not mobile_no:
             raise APIException("Mobile Number is required")
 
+        user_org = getattr(user, 'organization', None) if (user and getattr(user, 'is_authenticated', False)) else None
+
         # Check duplicate mobile number
-        if Lead.objects.filter(mobile_no=mobile_no).exists():
-            existing = Lead.objects.filter(mobile_no=mobile_no).first()
+        dup_qs = Lead.objects.filter(mobile_no=mobile_no)
+        if user_org:
+            dup_qs = dup_qs.filter(organization=user_org)
+        if dup_qs.exists():
+            existing = dup_qs.first()
             raise APIException(f"Mobile number {mobile_no} already exists (Lead: {existing.full_name})")
 
         # Check if selected agent has lead assignment disabled or is paused for campaign
@@ -113,7 +133,10 @@ def create_new_lead(user, **data):
             parsed_date = timezone.now()
 
         # Get default 'new lead' stage
-        stage = PipelineStage.objects.filter(name__iexact="new lead").first()
+        stage_qs = PipelineStage.objects.filter(name__iexact="new lead")
+        if user_org:
+            stage_qs = stage_qs.filter(organization=user_org)
+        stage = stage_qs.first() or PipelineStage.objects.filter(name__iexact="new lead").first()
         stage_id = stage.id if stage else 1
 
         creator = (getattr(user, "username", None) if user and hasattr(user, "username") else None) or "admin"
@@ -127,7 +150,8 @@ def create_new_lead(user, **data):
             pipeline_stage_id=stage_id,
             assigned_to_id=assigned_to_id,
             enquiry_date=parsed_date,
-            created_by=creator
+            created_by=creator,
+            organization=user_org
         )
 
         return {

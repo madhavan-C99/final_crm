@@ -1,4 +1,5 @@
 import datetime
+import calendar
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -7,8 +8,8 @@ from django.utils import timezone
 from django.http import HttpResponse
 from rest_framework.exceptions import APIException
 
-from telecalling.models import User, Lead, CallDetails, FollowUp
-from adm.models import Team, UserTarget
+from telecalling.models import User, Lead, CallDetails, FollowUp, PaymentInfo
+from adm.models import Team, TeamTarget, IndividualTarget
 
 def get_date_range(date_filter_type, from_date_str=None, to_date_str=None):
     """
@@ -39,11 +40,8 @@ def get_date_range(date_filter_type, from_date_str=None, to_date_str=None):
     return today.replace(day=1), today
 
 
-def fetch_performance_overview_admin(data):
-    """
-    Service to calculate and return Performance Overview metrics, 
-    100-Point Weighted Performance Score, Badges, and Tiered Ranking for Telecallers.
-    """
+def fetch_performance_overview_admin(data, user=None):
+    
     try:
         if not data:
             data = {}
@@ -60,6 +58,10 @@ def fetch_performance_overview_admin(data):
 
         # Base Telecaller queryset (Active Telecallers)
         users_qs = User.objects.filter(is_active=True).select_related('team')
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            users_qs = users_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            users_qs = users_qs.none()
         
         # Role filtering if user_type exists
         if hasattr(User, 'user_type') and User.objects.filter(user_type__icontains='telecaller').exists():
@@ -116,13 +118,34 @@ def fetch_performance_overview_admin(data):
             ).count()
             total_followups_done_sum += followups_done
 
-            # 6. Admissions (Won Stage - Stage ID 3) in Date Range
-            admissions = Lead.objects.filter(
+            # 6. Admissions (Won Stage) & Weighted Payment Credit in Date Range
+            won_leads = Lead.objects.filter(
                 assigned_to=user, 
-                pipeline_stage_id=3, 
                 updated_at__date__range=[start_date, end_date]
-            ).count()
+            ).filter(
+                Q(pipeline_stage_id=3) |
+                Q(pipeline_stage__name__icontains="won") |
+                Q(pipeline_stage__name__icontains="converted") |
+                Q(pipeline_stage__name__icontains="closed") |
+                Q(pipeline_stage__name__icontains="complete")
+            )
+            admissions = won_leads.count()
             total_admissions_sum += admissions
+
+            effective_admissions_credit = 0.0
+            full_payments_count = 0
+            partial_payments_count = 0
+
+            for lead_item in won_leads:
+                pay_obj = PaymentInfo.objects.filter(lead=lead_item).order_by('-id').first()
+                if pay_obj and (pay_obj.is_full_payment or pay_obj.payment_status == 1):
+                    effective_admissions_credit += 1.0
+                    full_payments_count += 1
+                elif pay_obj and (pay_obj.payment_status == 2 or pay_obj.amount_paid > 0):
+                    effective_admissions_credit += 0.5
+                    partial_payments_count += 1
+                else:
+                    effective_admissions_credit += 0.5
 
             # 7. Pending Follow-Ups (Unattended past follow-ups)
             pending_followups = FollowUp.objects.filter(
@@ -132,19 +155,23 @@ def fetch_performance_overview_admin(data):
             ).count()
             total_pending_followups_sum += pending_followups
 
-            # 8. Retrieve Target for Month (from adm_user_target or default 50 admissions / 800 calls)
-            target_obj = UserTarget.objects.filter(telecaller=user, target_month=target_month).first()
-            target_admissions = target_obj.target_admissions if target_obj else 50
-            target_calls = target_obj.target_calls if target_obj else 800
+            # 8. Retrieve Target for Month (from adm_individual_target or default 0)
+            target_obj = IndividualTarget.objects.filter(telecaller=user, target_month=target_month).first()
+            target_admissions = target_obj.target_admissions if target_obj else 0
+            target_calls = getattr(target_obj, 'target_calls', 0) if target_obj else 0
 
             # 9. 100-Point Mathematical Performance Score Calculations
-            # A. Admissions Score (Max 40 Pts)
-            adm_pct = (admissions / target_admissions) if target_admissions > 0 else 0
+            # A. Admissions Score (Max 40 Pts based on Payment-Weighted Credit: Full=1.0, Half=0.5)
+            adm_pct = (effective_admissions_credit / target_admissions) if target_admissions > 0 else 0
             adm_score = min(40.0, adm_pct * 40.0)
 
             # B. Calls Made Score (Max 30 Pts)
-            calls_pct = (calls_made / target_calls) if target_calls > 0 else 0
-            calls_score = min(30.0, calls_pct * 30.0)
+            if target_calls == 0:
+                calls_pct = 1.0
+                calls_score = 30.0
+            else:
+                calls_pct = (calls_made / target_calls) if target_calls > 0 else 0
+                calls_score = min(30.0, calls_pct * 30.0)
 
             # C. Followup Completion Score (Max 30 Pts)
             total_fups = followups_done + pending_followups
@@ -170,7 +197,9 @@ def fetch_performance_overview_admin(data):
                 rating_badge_color = "#FFEBEE" # Red
 
             special_badge = None
-            if admissions > target_admissions and calls_made > target_calls and pending_followups == 0:
+            if full_payments_count > 0 and admissions > 0 and full_payments_count >= round(admissions * 0.75):
+                special_badge = f"Full Payment Converter ({full_payments_count}/{admissions} Full Payments)"
+            elif admissions > target_admissions and calls_made > target_calls and pending_followups == 0:
                 special_badge = f"Triple Crown MVP ({round(adm_pct * 100)}% Target)"
             elif admissions > target_admissions:
                 special_badge = f"Star Performer ({round(adm_pct * 100)}% Target)"
@@ -327,8 +356,8 @@ def update_telecaller_target_admin(data, admin_user=None):
     
     try:
         telecaller_id = data.get('telecaller_id')
-        target_admissions = data.get('target_admissions', 50)
-        target_calls = data.get('target_calls', 800)
+        target_admissions = data.get('target_admissions', 0)
+        target_calls = data.get('target_calls', 0)
         target_month_str = data.get('target_month') # e.g. "2026-08-01"
 
         if not telecaller_id:
@@ -345,10 +374,11 @@ def update_telecaller_target_admin(data, admin_user=None):
 
         admin_name = getattr(admin_user, 'username', 'Admin') if admin_user else "Admin"
 
-        target_obj, created = UserTarget.objects.update_or_create(
+        target_obj, created = IndividualTarget.objects.update_or_create(
             telecaller=telecaller,
             target_month=target_month,
             defaults={
+                'team': telecaller.team,
                 'target_admissions': int(target_admissions),
                 'target_calls': int(target_calls),
                 'updated_by': admin_name
@@ -373,12 +403,17 @@ def update_telecaller_target_admin(data, admin_user=None):
         raise APIException(str(e))
 
 
-def get_performance_filter_dropdowns_admin():
+def get_performance_filter_dropdowns_admin(user=None):
     """
     Service to fetch teams dropdown & date range filter options for performance page.
     """
     try:
         teams_qs = Team.objects.select_related('leader').filter(is_active=True).order_by('id')
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            teams_qs = teams_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            teams_qs = teams_qs.none()
+
         teams_list = [{"id": 0, "name": "All Teams", "team_lead_name": "N/A", "badge_color": "#E0E0E0"}]
         
         for t in teams_qs:
@@ -411,10 +446,10 @@ def get_performance_filter_dropdowns_admin():
         raise APIException(str(e))
 
 
-def export_performance_overview_admin(data):
+def export_performance_overview_admin(data, user=None):
     
     try:
-        res_data = fetch_performance_overview_admin(data)
+        res_data = fetch_performance_overview_admin(data, user=user)
         performance_list = res_data['data']['performance_list']
 
         wb = openpyxl.Workbook()
@@ -487,5 +522,404 @@ def export_performance_overview_admin(data):
         wb.save(response)
         return response
 
+    except Exception as e:
+        raise APIException(str(e))
+
+
+def parse_month_or_dates(month_str, from_date_str, to_date_str):
+    today = timezone.now().date()
+    is_custom_range = False
+    
+    start_date = None
+    end_date = None
+    target_month = None
+
+    if from_date_str and to_date_str:
+        try:
+            start_date = datetime.datetime.strptime(str(from_date_str).strip()[:10], "%Y-%m-%d").date()
+            end_date = datetime.datetime.strptime(str(to_date_str).strip()[:10], "%Y-%m-%d").date()
+            target_month = start_date.replace(day=1)
+            is_custom_range = True
+        except Exception:
+            pass
+
+    if not start_date and month_str:
+        m_str = str(month_str).strip()
+        parsed_dt = None
+        for fmt in ["%B %Y", "%b %Y", "%Y-%m", "%Y-%m-%d"]:
+            try:
+                parsed_dt = datetime.datetime.strptime(m_str, fmt).date()
+                break
+            except Exception:
+                continue
+
+        if parsed_dt:
+            target_month = parsed_dt.replace(day=1)
+            start_date = target_month
+            _, last_day = calendar.monthrange(parsed_dt.year, parsed_dt.month)
+            end_date = datetime.date(parsed_dt.year, parsed_dt.month, last_day)
+
+    if not start_date:
+        target_month = today.replace(day=1)
+        start_date = target_month
+        _, last_day = calendar.monthrange(today.year, today.month)
+        end_date = datetime.date(today.year, today.month, last_day)
+
+    return target_month, start_date, end_date, is_custom_range
+
+
+def fetch_monthly_target_admin_service(data, user=None):
+    try:
+        if not data:
+            data = {}
+
+        month_str = data.get('month')
+        from_date_str = data.get('from_date')
+        to_date_str = data.get('to_date')
+
+        target_month, start_date, end_date, is_custom_range = parse_month_or_dates(month_str, from_date_str, to_date_str)
+
+        users_qs = User.objects.filter(is_active=True).select_related('team')
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            users_qs = users_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            users_qs = users_qs.none()
+
+        if hasattr(User, 'user_type') and User.objects.filter(user_type__icontains='telecaller').exists():
+            users_qs = users_qs.filter(
+                Q(user_type__icontains='telecaller') | 
+                Q(user_roles__role__name__icontains='telecaller')
+            ).distinct()
+
+        teams_qs = Team.objects.filter(is_active=True)
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            teams_qs = teams_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            teams_qs = teams_qs.none()
+
+        ind_target_objs = IndividualTarget.objects.filter(telecaller__in=users_qs, target_month=target_month)
+        ind_target_map = {it.telecaller_id: it.target_admissions for it in ind_target_objs}
+
+        team_target_objs = TeamTarget.objects.filter(team__in=teams_qs, target_month=target_month)
+        team_target_map = {tt.team_id: tt.target_admissions for tt in team_target_objs}
+
+        _, total_days_in_month = calendar.monthrange(start_date.year, start_date.month)
+        days_in_range = (end_date - start_date).days + 1
+        proportional_ratio = (days_in_range / total_days_in_month) if (is_custom_range and total_days_in_month > 0) else 1.0
+
+        won_stage_filter = (
+            Q(pipeline_stage_id=3) |
+            Q(pipeline_stage__name__icontains="won") |
+            Q(pipeline_stage__name__icontains="converted") |
+            Q(pipeline_stage__name__icontains="closed") |
+            Q(pipeline_stage__name__icontains="complete")
+        )
+
+        user_achieved_map = {}
+        if users_qs.exists():
+            achieved_counts = Lead.objects.filter(
+                assigned_to__in=users_qs,
+                updated_at__date__range=[start_date, end_date]
+            ).filter(won_stage_filter).values('assigned_to_id').annotate(cnt=Count('id'))
+            user_achieved_map = {item['assigned_to_id']: item['cnt'] for item in achieved_counts}
+
+        fallback_colors = ["#6CBD45", "#5CB0FF", "#AB79F8", "#FF9F43", "#FF6B6B"]
+        team_targets = []
+        bar_chart = []
+        donut_chart = []
+
+        all_users = list(users_qs)
+
+        for idx, t in enumerate(teams_qs):
+            raw_t_target = team_target_map.get(t.id, 0)
+            t_target = round(raw_t_target * proportional_ratio) if is_custom_range else raw_t_target
+            
+            t_members = [u for u in all_users if u.team_id == t.id]
+            t_achieved = sum(user_achieved_map.get(u.id, 0) for u in t_members)
+            t_balance = max(0, t_target - t_achieved)
+            t_status = "On Track" if (t_target == 0 or t_achieved >= t_target or (t_achieved / t_target) >= 0.7) else "Low"
+            color = t.badge_color or fallback_colors[idx % len(fallback_colors)]
+
+            members_list = []
+            for u in t_members:
+                raw_u_target = ind_target_map.get(u.id, 0)
+                u_target = round(raw_u_target * proportional_ratio) if is_custom_range else raw_u_target
+                u_achieved = user_achieved_map.get(u.id, 0)
+                u_balance = max(0, u_target - u_achieved)
+                u_status = "On Track" if (u_target == 0 or u_achieved >= u_target or (u_achieved / u_target) >= 0.7) else "Low"
+                fname = (u.first_name or "").strip()
+                lname = (u.last_name or "").strip()
+                u_name = f"{fname} {lname}".strip() or u.username
+
+                members_list.append({
+                    "name": u_name,
+                    "team": t.name,
+                    "target": u_target,
+                    "achieved": u_achieved,
+                    "balance": u_balance,
+                    "status": u_status
+                })
+
+            team_targets.append({
+                "id": t.id,
+                "team": t.name,
+                "target": t_target,
+                "achieved": t_achieved,
+                "balance": t_balance,
+                "status": t_status,
+                "color": color,
+                "members": members_list
+            })
+
+            bar_chart.append({
+                "team": t.name,
+                "Target": t_target,
+                "Achieved": t_achieved,
+                "color": color
+            })
+
+        total_team_achieved_sum = sum(t["achieved"] for t in team_targets)
+        for t in team_targets:
+            donut_pct = f"{round((t['achieved'] / total_team_achieved_sum) * 100)}%" if total_team_achieved_sum > 0 else "0%"
+            donut_chart.append({
+                "name": t["team"],
+                "value": t["achieved"],
+                "percentage": donut_pct,
+                "color": t["color"]
+            })
+
+        individual_targets = []
+        for u in all_users:
+            raw_u_target = ind_target_map.get(u.id, 0)
+            u_target = round(raw_u_target * proportional_ratio) if is_custom_range else raw_u_target
+            u_achieved = user_achieved_map.get(u.id, 0)
+            u_balance = max(0, u_target - u_achieved)
+            u_status = "On Track" if (u_target == 0 or u_achieved >= u_target or (u_achieved / u_target) >= 0.7) else "Low"
+            fname = (u.first_name or "").strip()
+            lname = (u.last_name or "").strip()
+            u_name = f"{fname} {lname}".strip() or u.username
+
+            individual_targets.append({
+                "id": u.id,
+                "employee": u_name,
+                "target": u_target,
+                "achieved": u_achieved,
+                "balance": u_balance,
+                "status": u_status
+            })
+
+        # Team Summary
+        team_total_target = sum(t['target'] for t in team_targets)
+        team_achieved = sum(t['achieved'] for t in team_targets)
+        team_remaining = max(0, team_total_target - team_achieved)
+        team_ach_rate = f"{round((team_achieved / team_total_target) * 100)}%" if team_total_target > 0 else "0%"
+
+        team_summary = {
+            "total_target": team_total_target,
+            "achieved": team_achieved,
+            "remaining": team_remaining,
+            "achievement_rate": team_ach_rate
+        }
+
+        # Individual Summary
+        ind_total_target = sum(i['target'] for i in individual_targets)
+        ind_achieved = sum(i['achieved'] for i in individual_targets)
+        ind_remaining = max(0, ind_total_target - ind_achieved)
+        ind_ach_rate = f"{round((ind_achieved / ind_total_target) * 100)}%" if ind_total_target > 0 else "0%"
+
+        individual_summary = {
+            "total_target": ind_total_target,
+            "achieved": ind_achieved,
+            "remaining": ind_remaining,
+            "achievement_rate": ind_ach_rate
+        }
+
+        return {
+            "status": True,
+            "message": "Monthly target data fetched successfully",
+            "data": {
+                "team_summary": team_summary,
+                "individual_summary": individual_summary,
+                "summary": team_summary,
+                "bar_chart": bar_chart,
+                "donut_chart": donut_chart,
+                "team_targets": team_targets,
+                "individual_targets": individual_targets
+            }
+        }
+    except Exception as e:
+        raise APIException(str(e))
+
+
+def fetch_target_dropdowns_admin_service(user=None):
+    try:
+        teams_qs = Team.objects.filter(is_active=True).order_by('name')
+        users_qs = User.objects.filter(is_active=True).order_by('first_name')
+
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            teams_qs = teams_qs.filter(organization=user.organization)
+            users_qs = users_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            teams_qs = teams_qs.none()
+            users_qs = users_qs.none()
+
+        if hasattr(User, 'user_type') and User.objects.filter(user_type__icontains='telecaller').exists():
+            users_qs = users_qs.filter(
+                Q(user_type__icontains='telecaller') | 
+                Q(user_roles__role__name__icontains='telecaller')
+            ).distinct()
+
+        teams_data = [{"id": t.id, "name": t.name} for t in teams_qs]
+
+        employees_data = []
+        for u in users_qs:
+            fname = (u.first_name or "").strip()
+            lname = (u.last_name or "").strip()
+            full_name = f"{fname} {lname}".strip() or u.username
+            emp_id = u.employee_id or f"EMP{u.id:02d}"
+            employees_data.append({
+                "id": u.id,
+                "name": full_name,
+                "emp_id": emp_id
+            })
+
+        return {
+            "status": True,
+            "data": {
+                "teams": teams_data,
+                "employees": employees_data
+            }
+        }
+    except Exception as e:
+        raise APIException(str(e))
+
+
+def set_monthly_target_admin_service(data, admin_user=None):
+    try:
+        if not data:
+            data = {}
+
+        month_str = data.get('month')
+        from_date_str = data.get('from_date')
+        to_date_str = data.get('to_date')
+        target_for = str(data.get('target_for', '')).strip()
+        team_id = data.get('team_id')
+        team_name_in = data.get('team_name')
+        employee_id = data.get('employee_id')
+        lead_target = int(data.get('lead_target') or data.get('target') or 0)
+        amount_target = float(data.get('amount_target') or 0.0)
+        raw_calls = data.get('target_calls')
+        calls_target = int(raw_calls) if raw_calls is not None else 0
+        individual_allocations = data.get('individual_allocations', [])
+
+        target_month, start_date, end_date, is_custom_range = parse_month_or_dates(month_str, from_date_str, to_date_str)
+        user_name = getattr(admin_user, 'username', 'admin') if admin_user else 'admin'
+
+        saved_id = None
+        saved_name = ""
+        created_at_str = timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        if target_for.lower() == 'team' or team_id or (team_name_in and not employee_id):
+            target_team = None
+            if team_id:
+                target_team = Team.objects.filter(id=team_id).first()
+            elif team_name_in:
+                target_team = Team.objects.filter(name__iexact=str(team_name_in).strip()).first()
+
+            if not target_team:
+                return {
+                    "status": False,
+                    "message": "Team not found"
+                }
+
+            target_obj, _ = TeamTarget.objects.get_or_create(
+                team=target_team,
+                target_month=target_month,
+                defaults={'created_by': user_name}
+            )
+            target_obj.target_admissions = lead_target
+            target_obj.target_amount = amount_target
+            target_obj.target_calls = calls_target
+            target_obj.updated_by = user_name
+            target_obj.save()
+
+            # Process explicit uneven individual allocations if provided by Admin
+            if individual_allocations and isinstance(individual_allocations, list):
+                for alloc in individual_allocations:
+                    emp_id = alloc.get('employee_id') or alloc.get('id')
+                    if not emp_id:
+                        continue
+                    m_user = User.objects.filter(id=emp_id).first()
+                    if m_user:
+                        m_target_obj, _ = IndividualTarget.objects.get_or_create(
+                            telecaller=m_user,
+                            target_month=target_month,
+                            defaults={'created_by': user_name}
+                        )
+                        m_target_obj.team = target_team
+                        m_target_obj.target_admissions = int(alloc.get('lead_target') or alloc.get('target') or 0)
+                        m_target_obj.target_amount = float(alloc.get('amount_target') or 0.0)
+                        m_target_obj.target_calls = int(alloc.get('target_calls') or 0)
+                        m_target_obj.updated_by = user_name
+                        m_target_obj.save()
+
+            saved_id = target_obj.id
+            saved_name = target_team.name
+            saved_color = target_team.badge_color or "#6366F1"
+            target_for_clean = "Team"
+            created_at_str = target_obj.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if target_obj.created_at else created_at_str
+
+        else:
+            target_user = None
+            if employee_id:
+                target_user = User.objects.filter(id=employee_id).first()
+
+            if not target_user:
+                return {
+                    "status": False,
+                    "message": "Employee not found"
+                }
+
+            target_obj, _ = IndividualTarget.objects.get_or_create(
+                telecaller=target_user,
+                target_month=target_month,
+                defaults={'created_by': user_name}
+            )
+            target_obj.team = target_user.team
+            target_obj.target_admissions = lead_target
+            target_obj.target_amount = amount_target
+            target_obj.target_calls = calls_target
+            target_obj.updated_by = user_name
+            target_obj.save()
+
+            fname = (target_user.first_name or "").strip()
+            lname = (target_user.last_name or "").strip()
+            saved_name = f"{fname} {lname}".strip() or target_user.username
+            saved_id = target_obj.id
+            saved_color = target_user.team.badge_color if (target_user.team and target_user.team.badge_color) else "#6366F1"
+            target_for_clean = "Employee"
+            created_at_str = target_obj.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if target_obj.created_at else created_at_str
+
+        month_display = month_str if month_str else target_month.strftime("%B %Y")
+        from_date_display = start_date.strftime("%Y-%m-%d") if start_date else None
+        to_date_display = end_date.strftime("%Y-%m-%d") if end_date else None
+
+        return {
+            "status": True,
+            "message": "Monthly Target set successfully",
+            "data": {
+                "id": saved_id,
+                "month": month_display,
+                "from_date": from_date_display,
+                "to_date": to_date_display,
+                "target_for": target_for_clean,
+                "name": saved_name,
+                "target": lead_target,
+                "amount_target": amount_target,
+                "target_calls": calls_target,
+                "color": saved_color,
+                "created_at": created_at_str
+            }
+        }
     except Exception as e:
         raise APIException(str(e))

@@ -54,9 +54,11 @@ def dashboard_top_tile(user,**data):
 
         params = {
             "id": id,
+            "organization_id": getattr(user, 'organization_id', 0) or 0,
             "from_date": str(from_d),
             "to_date": str(to_d),
-            "filter_type": str(filter_type)
+            "filter_type": str(filter_type),
+            "pipeline_id": data.get("pipeline_id") or 0
         }
         pay=exec_raw_sql("D_FETCH_DASHBOARD_TOP_TILES",params)
         return pay
@@ -73,9 +75,11 @@ def fetch_pipeline_funnel(user,**data):
 
         params = {
             "id": id,
+            "organization_id": getattr(user, 'organization_id', 0) or 0,
             "from_date": str(from_d),
             "to_date": str(to_d),
-            "filter_type": str(filter_type)
+            "filter_type": str(filter_type),
+            "pipeline_id": data.get("pipeline_id") or 0
         }
 
         result = exec_raw_sql("D_FETCH_PIPELINE_FUNNEL", params)
@@ -93,8 +97,10 @@ def fetch_dashboard_analytics(user,**data):
 
         params = {
             "id": id,
+            "organization_id": getattr(user, 'organization_id', 0) or 0,
             "from_date": str(from_d),
             "to_date": str(to_d),
+            "pipeline_id": data.get("pipeline_id") or 0
         }
 
         performance   = exec_raw_sql("D_FETCH_TELECALLER_PERFORMANCE", params)

@@ -38,7 +38,7 @@ class FetchLossLeadApprovalRequestsAdmin(APIView):
 
     def get(self, request):
         authorize_request('api_fetch_loss_lead_approval_requests_admin', request.user)
-        result = fetch_loss_lead_approval_requests_admin(**request.query_params.dict())
+        result = fetch_loss_lead_approval_requests_admin(user=request.user, **request.query_params.dict())
         return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request):
@@ -46,7 +46,7 @@ class FetchLossLeadApprovalRequestsAdmin(APIView):
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        result = fetch_loss_lead_approval_requests_admin(**serializer.validated_data)
+        result = fetch_loss_lead_approval_requests_admin(user=request.user, **serializer.validated_data)
 
         log_data = {
             'user_id': request.user.id if request.user and request.user.id else None,
@@ -69,7 +69,7 @@ class GetLossLeadApprovalFilterDropdownsAdmin(APIView):
     """
     def get(self, request):
         authorize_request('api_get_loss_lead_approval_filter_dropdowns_admin', request.user)
-        result = get_loss_lead_approval_filter_dropdowns_admin()
+        result = get_loss_lead_approval_filter_dropdowns_admin(user=request.user)
         return Response(result, status=status.HTTP_200_OK)
 
 
@@ -89,7 +89,7 @@ class ExportLossLeadApprovalRequestsAdmin(APIView):
 
     def get(self, request):
         authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
-        result = export_loss_lead_approval_requests_admin(**request.query_params.dict())
+        result = export_loss_lead_approval_requests_admin(user=request.user, **request.query_params.dict())
         return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request):
@@ -97,7 +97,7 @@ class ExportLossLeadApprovalRequestsAdmin(APIView):
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        result = export_loss_lead_approval_requests_admin(**serializer.validated_data)
+        result = export_loss_lead_approval_requests_admin(user=request.user, **serializer.validated_data)
         return Response(result, status=status.HTTP_200_OK)
 
 

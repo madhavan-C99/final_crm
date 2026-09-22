@@ -40,7 +40,7 @@ class FetchAllLeadsAdmin(APIView):
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        result = fetch_all_leads_admin(**serializer.validated_data)
+        result = fetch_all_leads_admin(user=request.user, **serializer.validated_data)
 
 
         log_data = {
@@ -172,7 +172,7 @@ class ExportAllLeadsAdmin(APIView):
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        result = export_all_leads_admin(**serializer.validated_data)
+        result = export_all_leads_admin(user=request.user, **serializer.validated_data)
 
         log_data = {
             'user_id': request.user.id if request.user.id else None,
@@ -197,7 +197,7 @@ class GetFilterDropdownsAdmin(APIView):
 
     def get(self, request):
         authorize_request('api_get_filter_dropdowns_admin', request.user)
-        result = get_filter_dropdowns_admin()
+        result = get_filter_dropdowns_admin(user=request.user)
         return Response({"data": result}, status=status.HTTP_200_OK)
     
     

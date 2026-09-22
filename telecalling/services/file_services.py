@@ -108,7 +108,7 @@ def lead_upload_excel(**data):
             continue
  
         telecaller = assign_telecaller()
- 
+        user_org = getattr(telecaller, 'organization', None) if telecaller else None
         lead=Lead.objects.create(
             full_name=full_name,
             mobile_no=mobile_no,
@@ -117,7 +117,8 @@ def lead_upload_excel(**data):
             priority_id=None,
             assigned_to=telecaller,
             lead_source_id=lead_source_id,
-            campaign_id=campaign
+            campaign_id=campaign,
+            organization=user_org
         )
         send_lead_assigned_notification(lead.id, lead.assigned_to,assigned_by_id=None)
         success_count += 1

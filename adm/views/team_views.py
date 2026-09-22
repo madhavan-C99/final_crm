@@ -9,16 +9,13 @@ from adm.services.team_services import (
 )
 from adm.services.permission_services import authorize_request
 
-@authentication_classes([])
-@permission_classes([])
 class FetchAllTeamsAdminApi(APIView):
     def get(self, request):
-        res = fetch_all_teams_admin_service()
+        authorize_request('api_fetch_all_teams_admin', request.user)
+        res = fetch_all_teams_admin_service(user=request.user)
         return Response(res, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
 class CreateTeamAdminApi(APIView):
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(required=True)
@@ -29,20 +26,17 @@ class CreateTeamAdminApi(APIView):
         )
 
     def post(self, request):
-        if request.user and request.user.is_authenticated:
-            authorize_request('api_create_team_admin', request.user)
+        authorize_request('api_create_team_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         res = create_team_admin_service(
-            admin_user=request.user if request.user and request.user.is_authenticated else None,
+            admin_user=request.user,
             data=serializer.validated_data
         )
         status_code = status.HTTP_201_CREATED if res.get("status") else status.HTTP_400_BAD_REQUEST
         return Response(res, status=status_code)
 
 
-@authentication_classes([])
-@permission_classes([])
 class EditTeamAdminApi(APIView):
     class InputSerializer(serializers.Serializer):
         id = serializers.IntegerField(required=False, allow_null=True)
@@ -56,12 +50,11 @@ class EditTeamAdminApi(APIView):
         )
 
     def post(self, request, pk=None):
-        if request.user and request.user.is_authenticated:
-            authorize_request('api_edit_team_admin', request.user)
+        authorize_request('api_edit_team_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         res = edit_team_admin_service(
-            admin_user=request.user if request.user and request.user.is_authenticated else None,
+            admin_user=request.user,
             data=serializer.validated_data,
             team_id=pk
         )
@@ -75,20 +68,17 @@ class EditTeamAdminApi(APIView):
         return self.post(request, pk)
 
 
-@authentication_classes([])
-@permission_classes([])
 class DeleteTeamAdminApi(APIView):
     class InputSerializer(serializers.Serializer):
         id = serializers.IntegerField(required=False, allow_null=True)
         team_id = serializers.IntegerField(required=False, allow_null=True)
 
     def post(self, request, pk=None):
-        if request.user and request.user.is_authenticated:
-            authorize_request('api_delete_team_admin', request.user)
+        authorize_request('api_delete_team_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         res = delete_team_admin_service(
-            admin_user=request.user if request.user and request.user.is_authenticated else None,
+            admin_user=request.user,
             data=serializer.validated_data,
             team_id=pk
         )
@@ -99,18 +89,18 @@ class DeleteTeamAdminApi(APIView):
         return self.post(request, pk)
 
 
-@authentication_classes([])
-@permission_classes([])
 class FetchTeamDropdownsAdminApi(APIView):
     class InputSerializer(serializers.Serializer):
         team_id = serializers.IntegerField(required=False, allow_null=True)
 
     def post(self, request):
-        if request.user and request.user.is_authenticated:
-            authorize_request('api_fetch_team_dropdowns_admin', request.user)
+        authorize_request('api_fetch_team_dropdowns_admin', request.user)
         serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = fetch_team_dropdowns_admin_service(team_id=serializer.validated_data.get('team_id'))
+        res = fetch_team_dropdowns_admin_service(
+            team_id=serializer.validated_data.get('team_id'),
+            user=request.user
+        )
         return Response(res, status=status.HTTP_200_OK)
 
 

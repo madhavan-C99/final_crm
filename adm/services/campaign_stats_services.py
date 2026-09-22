@@ -7,7 +7,9 @@ from .query_services import exec_raw_sql
 
 def fetch_pipeline_stats(user, **data):
     try:
-        raw_res = exec_raw_sql("D_FETCH_PIPELINE_STATS", data)
+        org_id = user.organization_id if (user and hasattr(user, 'organization_id') and user.organization_id) else 0
+        payload = {**data, "organization_id": org_id}
+        raw_res = exec_raw_sql("D_FETCH_PIPELINE_STATS", payload)
         if raw_res and isinstance(raw_res, list) and len(raw_res) > 0:
             item = raw_res[0]
             if isinstance(item.get("total_campaign"), dict):
@@ -52,7 +54,9 @@ def fetch_pipeline_stats(user, **data):
 
 def fetch_campaign_cards(user, **data):
     try:
-        raw_cards = exec_raw_sql("D_FETCH_CAMPAIGN_CARDS", data)
+        org_id = user.organization_id if (user and hasattr(user, 'organization_id') and user.organization_id) else 0
+        payload = {**data, "organization_id": org_id}
+        raw_cards = exec_raw_sql("D_FETCH_CAMPAIGN_CARDS", payload)
         if raw_cards and isinstance(raw_cards, list):
             return raw_cards
         return []
@@ -106,12 +110,20 @@ def fetch_filter_options(user, **data):
         try:
             telecallers = []
             users_qs = User.objects.all()
+            leads_qs = Lead.objects.all()
+            if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+                users_qs = users_qs.filter(organization=user.organization)
+                leads_qs = leads_qs.filter(organization=user.organization)
+            elif user and getattr(user, 'is_authenticated', False):
+                users_qs = users_qs.none()
+                leads_qs = leads_qs.none()
+
             for u in users_qs:
                 full_name = f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username
                 if full_name and full_name not in telecallers:
                     telecallers.append(full_name)
 
-            lead_assigned = Lead.objects.exclude(assigned_to__isnull=True).select_related('assigned_to')
+            lead_assigned = leads_qs.exclude(assigned_to__isnull=True).select_related('assigned_to')
             for l in lead_assigned:
                 if l.assigned_to:
                     name = f"{l.assigned_to.first_name or ''} {l.assigned_to.last_name or ''}".strip() or l.assigned_to.username
@@ -119,7 +131,7 @@ def fetch_filter_options(user, **data):
                         telecallers.append(name)
             telecallers = sorted(telecallers)
         except Exception:
-            telecallers = ["telecaller", "poomani", "Bharath", "Prakash"]
+            telecallers = []
 
         if not telecallers:
             telecallers = ["telecaller", "poomani", "Bharath", "Prakash"]

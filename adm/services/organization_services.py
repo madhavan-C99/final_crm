@@ -17,6 +17,12 @@ def get_logo_url(org_obj, request=None):
 
 def create_organization_profile_admin_service(data, admin_user=None, request=None):
     try:
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            return {
+                "status": False,
+                "message": "You already have an organization assigned. You cannot create another organization."
+            }
+
         org_name = str(data.get('org_name', '')).strip()
         display_name = str(data.get('display_name', '')).strip()
         
@@ -26,9 +32,9 @@ def create_organization_profile_admin_service(data, admin_user=None, request=Non
                 "message": "Organization name is required"
             }
 
-        address_line_1 = data.get('address_line1') or data.get('address_lane1') or data.get('address_line_1') or ""
-        address_line_2 = data.get('address_line2') or data.get('address_lane2') or data.get('address_line_2') or ""
-        gstin = data.get('gst_in') or data.get('gstin') or ""
+        address_line_1 = data.get('address_line1') or ""
+        address_line_2 = data.get('address_line2') or ""
+        gstin = data.get('gst_in') or ""
 
         created_by_user = getattr(admin_user, 'username', 'admin') if admin_user else 'admin'
 
@@ -58,6 +64,10 @@ def create_organization_profile_admin_service(data, admin_user=None, request=Non
 
         new_org.save()
 
+        if admin_user and getattr(admin_user, 'is_authenticated', False):
+            admin_user.organization = new_org
+            admin_user.save()
+
         return {
             "status": True,
             "message": "Organization Profile created successfully",
@@ -70,9 +80,19 @@ def create_organization_profile_admin_service(data, admin_user=None, request=Non
         raise APIException(str(e))
 
 
-def get_organization_profile_admin_service(request=None):
+def get_organization_profile_admin_service(request=None, user=None):
     try:
-        org = Organization.objects.order_by('-id').first()
+        current_user = user
+        if not current_user and request:
+            if hasattr(request, 'user'):
+                current_user = request.user
+            else:
+                current_user = request
+
+        org = None
+        if current_user and getattr(current_user, 'is_authenticated', False):
+            org = getattr(current_user, 'organization', None)
+
         if not org:
             return {
                 "status": False,
@@ -114,8 +134,11 @@ def edit_organization_profile_admin_service(data, admin_user=None, org_id=None, 
     try:
         t_id = org_id or data.get('id')
         org = None
-        if t_id:
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            org = admin_user.organization
+        elif t_id:
             org = Organization.objects.filter(id=t_id).first()
+
         if not org:
             org = Organization.objects.order_by('-id').first()
 
@@ -135,12 +158,10 @@ def edit_organization_profile_admin_service(data, admin_user=None, org_id=None, 
             org.company_website = data.get('company_website') or ""
         if 'company_description' in data:
             org.company_description = data.get('company_description') or ""
-        if any(k in data for k in ('address_line1', 'address_lane1', 'address_line_1')):
-            val1 = data.get('address_line1') if 'address_line1' in data else (data.get('address_lane1') if 'address_lane1' in data else data.get('address_line_1'))
-            org.address_line_1 = str(val1).strip() if val1 is not None else ""
-        if any(k in data for k in ('address_line2', 'address_lane2', 'address_line_2')):
-            val2 = data.get('address_line2') if 'address_line2' in data else (data.get('address_lane2') if 'address_lane2' in data else data.get('address_line_2'))
-            org.address_line_2 = str(val2).strip() if val2 is not None else ""
+        if 'address_line1' in data:
+            org.address_line_1 = data.get('address_line1') or ""
+        if 'address_line2' in data:
+            org.address_line_2 = data.get('address_line2') or ""
         if 'city' in data:
             org.city = data.get('city') or ""
         if 'state' in data:
@@ -153,9 +174,8 @@ def edit_organization_profile_admin_service(data, admin_user=None, org_id=None, 
             org.official_email = data.get('official_email') or ""
         if 'official_contact' in data:
             org.official_contact = data.get('official_contact') or ""
-        if 'gst_in' in data or 'gstin' in data:
-            gst_val = data.get('gst_in') if 'gst_in' in data else data.get('gstin')
-            org.gstin = str(gst_val).strip() if gst_val is not None else ""
+        if 'gst_in' in data:
+            org.gstin = data.get('gst_in') or ""
         if 'company_pan' in data:
             org.company_pan = data.get('company_pan') or ""
         if 'date_format' in data:

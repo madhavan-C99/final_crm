@@ -91,17 +91,22 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     # 🔑 Custom RBAC Permission Engine (adm_role_perms Table Query via UserRole)
     def get_perms(self):
+        from .perms import Perm
         if self.is_superuser:
-            from .perms import Perm
-            return list(Perm.objects.values_list("name", flat=True))
+            codes = list(Perm.objects.values_list("code", flat=True))
+            names = list(Perm.objects.values_list("name", flat=True))
+            return list(set([c for c in codes if c] + [n for n in names if n]))
 
         user_role_obj = self.user_roles.select_related('role').first()
         if not user_role_obj or not user_role_obj.role:
             return []
 
         role_obj = user_role_obj.role
-        if role_obj.code == 'DEV' or role_obj.name == 'developer':
-            from .perms import Perm
-            return list(Perm.objects.values_list("name", flat=True))
+        if role_obj.code in ['DEV', 'ADM', 'ORG_ADMIN'] or role_obj.name in ['developer', 'admin', 'superadmin', 'org_admin']:
+            codes = list(Perm.objects.values_list("code", flat=True))
+            names = list(Perm.objects.values_list("name", flat=True))
+            return list(set([c for c in codes if c] + [n for n in names if n]))
 
-        return list(role_obj.perms.values_list("name", flat=True))
+        codes = list(role_obj.perms.values_list("code", flat=True))
+        names = list(role_obj.perms.values_list("name", flat=True))
+        return list(set([c for c in codes if c] + [n for n in names if n]))

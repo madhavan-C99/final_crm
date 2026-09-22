@@ -5,8 +5,9 @@ from rest_framework.exceptions import APIException, AuthenticationFailed
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import Q
-from adm.models import User, Role, UserRole, Team, CampaignAssignedAgent
-from telecalling.models import Lead, CampaignName, CallDetails, FollowUp
+from adm.models import User, Role, UserRole, Team, CampaignAssignedAgent, Organization, AdminApprovedLossLead, AdminLeadReassignHistory
+from telecalling.models import Lead, CampaignName, CallDetails, FollowUp, PipelineStage, DeletedDataLog
+from adm.services.lead_services import get_user_display_name
 import math
 
 
@@ -25,7 +26,7 @@ def create_user(user_name, **data):
         if number is not None:
             raise APIException("Mobile is Already exists")
 
-        user = User.objects.create_user(data.get('username'), data.get('email'), data.get('password'))
+        user = User.objects.create_user(data.get('email'), data.get('email'), data.get('password'))
         if data.get('role_id'):
             role_obj = Role.objects.filter(id=data.get('role_id')).first()
             if role_obj:
@@ -96,7 +97,13 @@ def create_token(**data):
         user.save()
 
         refresh_tkn = RefreshToken.for_user(user)
+        org_id = user.organization.id if user.organization else None
+        refresh_tkn['organization_id'] = org_id
+        refresh_tkn['organizationId'] = org_id
+
         access_tkn = refresh_tkn.access_token
+        access_tkn['organization_id'] = org_id
+        access_tkn['organizationId'] = org_id
     else:
         raise AuthenticationFailed(detail='Your plan has expired. Please renew your plan.')
 
@@ -108,6 +115,7 @@ def create_token(**data):
     user_role_obj = user.user_roles.select_related('role').first() if hasattr(user, 'user_roles') else None
     role_obj = user_role_obj.role if user_role_obj else None
 
+    user_org = getattr(user, 'organization', None)
     user_data = {
         "user_email": user.email,
         "user_id": user.id,
@@ -117,7 +125,12 @@ def create_token(**data):
             "id": role_obj.id if role_obj else None,
             "code": role_obj.code if role_obj else None,
             "name": role_obj.name if role_obj else None
-        }
+        },
+        "organization": {
+            "id": user_org.id,
+            "name": getattr(user_org, 'organization_name', None),
+            "logo": user_org.logo.url if (getattr(user_org, 'logo', None) and hasattr(user_org.logo, 'url')) else None
+        } if user_org else None
     }
 
     return token_data, user_data
@@ -149,10 +162,15 @@ def fetch_all_users_admin_service(user, page=1, page_size=50, search=None, sort_
         # Database Query with Relations Optimization (Excludes Admin & Developer accounts)
         qs = User.objects.filter(is_active=True).exclude(
             Q(user_roles__role__name__in=['admin', 'developer', 'Admin', 'Developer']) |
-            Q(user_roles__role__code__in=['ADM', 'DEV', 'ADMIN', 'DEVELOPER']) |
-            Q(username='admin@gmail.com') |
-            Q(username='developer@gmail.com')
+            Q(user_roles__role__code__in=['ADM', 'DEV', 'ADMIN', 'DEVELOPER']) 
+            # Q(username='admin@gmail.com') |
+            # Q(username='developer@gmail.com')
         ).distinct().select_related('team', 'reporting_to').prefetch_related('user_roles__role').order_by('-created_at')
+
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            qs = qs.filter(organization=user.organization)
+        else:
+            qs = qs.none()
 
         # 1. Search Filter (by name, phone, email, employee_id)
         if search:
@@ -221,7 +239,7 @@ def fetch_all_users_admin_service(user, page=1, page_size=50, search=None, sort_
                 "email": u.email,
                 "role": roles[0]["name"] if roles else (u.user_type or "Executive"),
                 "roles": roles,
-                "reporting_to": reporting_to_name or "Gunal Raj",
+                "reporting_to": reporting_to_name,
                 "reporting_to_id": u.reporting_to_id,
                 "status": "Active" if u.is_active else "Deactive",
                 "is_active": u.is_active,
@@ -345,6 +363,7 @@ def create_user_admin_service(admin_user, data):
                         UserRole.objects.get_or_create(user=user, role=r)
                         if not role_obj:
                             role_obj = r
+                            user.user_type = r.display_value or r.name
             else:
                 if isinstance(role_val, int) or str(role_val).isdigit():
                     role_obj = Role.objects.filter(id=int(role_val)).first()
@@ -354,12 +373,30 @@ def create_user_admin_service(admin_user, data):
                         role_obj = Role.objects.create(name=role_val.lower(), display_value=role_val, code=role_val[:3].upper())
                 if role_obj:
                     UserRole.objects.get_or_create(user=user, role=role_obj)
+                    user.user_type = role_obj.display_value or role_obj.name
+
+        org_val = data.get('organization_id') or data.get('organization')
+        org_obj = None
+        if org_val:
+            if isinstance(org_val, int) or str(org_val).isdigit():
+                org_obj = Organization.objects.filter(id=int(org_val)).first()
+            else:
+                org_obj = Organization.objects.filter(organization_name__icontains=str(org_val)).first()
+
+        if not org_obj and admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            org_obj = admin_user.organization
+
+        if not org_obj:
+            org_obj = Organization.objects.order_by('id').first()
+
+        if org_obj:
+            user.organization = org_obj
 
         user.save()
 
-        reporting_to_display = user.reporting_to.get_full_name() if user.reporting_to else (user.team.leader.get_full_name() if (user.team and user.team.leader) else "Gunal Raj")
+        reporting_to_display = user.reporting_to.get_full_name() if user.reporting_to else (user.team.leader.get_full_name() if (user.team and user.team.leader) else None)
         role_display = role_obj.display_value if role_obj else (user.user_type or "Executive")
-        team_display = user.team.name if user.team else (str(data.get('team') or 'Gamma'))
+        team_display = user.team.name if user.team else None
 
         return {
             "status": True,
@@ -374,7 +411,7 @@ def create_user_admin_service(admin_user, data):
                 "role": role_display,
                 "reporting_to": reporting_to_display,
                 "status": "Active" if user.is_active else "Deactive",
-                "joined_date": str(user.starting_date) if user.starting_date else "2026-04-08",
+                "joined_date": str(user.starting_date) if user.starting_date else None,
                 "team": team_display,
                 "is_lead_enabled": not user.disable_lead_assignment,
                 "created_at": user.created_at.isoformat() if user.created_at else None
@@ -402,6 +439,13 @@ def edit_user_admin_service(admin_user, data):
                 "status": False,
                 "message": "User not found"
             }
+
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            if user.organization_id != admin_user.organization_id:
+                return {
+                    "status": False,
+                    "message": "User not found"
+                }
 
         # Handle Full Name update
         full_name = data.get('full_name')
@@ -456,7 +500,11 @@ def edit_user_admin_service(admin_user, data):
             else:
                 team_obj = Team.objects.filter(name__icontains=team_val).first()
                 if not team_obj:
-                    team_obj = Team.objects.create(name=team_val, code=team_val[:10].upper())
+                    team_obj = Team.objects.create(
+                        name=team_val, 
+                        code=team_val[:10].upper(),
+                        organization=admin_user.organization if (admin_user and getattr(admin_user, 'organization', None)) else None
+                    )
             if team_obj:
                 user.team = team_obj
 
@@ -482,12 +530,25 @@ def edit_user_admin_service(admin_user, data):
                 if role_obj:
                     UserRole.objects.get_or_create(user=user, role=role_obj)
 
+        org_val = data.get('organization_id') or data.get('organization')
+        if org_val:
+            org_obj = None
+            if isinstance(org_val, int) or str(org_val).isdigit():
+                org_obj = Organization.objects.filter(id=int(org_val)).first()
+            else:
+                org_obj = Organization.objects.filter(organization_name__icontains=str(org_val)).first()
+            if org_obj:
+                user.organization = org_obj
+        elif not user.organization:
+            if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+                user.organization = admin_user.organization
+
         user.save()
 
-        reporting_to_display = user.reporting_to.get_full_name() if user.reporting_to else (user.team.leader.get_full_name() if (user.team and user.team.leader) else "Gunal Raj")
+        reporting_to_display = user.reporting_to.get_full_name() if user.reporting_to else (user.team.leader.get_full_name() if (user.team and user.team.leader) else None)
         user_role_item = user.user_roles.select_related('role').first()
         role_display = user_role_item.role.display_value if (user_role_item and user_role_item.role) else (user.user_type or "Executive")
-        team_display = user.team.name if user.team else (str(data.get('team') or 'Gamma'))
+        team_display = user.team.name if user.team else None
 
         return {
             "status": True,
@@ -502,7 +563,7 @@ def edit_user_admin_service(admin_user, data):
                 "role": role_display,
                 "reporting_to": reporting_to_display,
                 "status": "Active" if user.is_active else "Deactive",
-                "joined_date": str(user.starting_date) if user.starting_date else "2026-04-08",
+                "joined_date": str(user.starting_date) if user.starting_date else None,
                 "team": team_display,
                 "updated_at": user.updated_at.isoformat() if user.updated_at else None
             }
@@ -533,6 +594,13 @@ def toggle_user_status_admin_service(admin_user, data):
                 "status": False,
                 "message": "User not found or invalid status"
             }
+
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            if user.organization_id != admin_user.organization_id:
+                return {
+                    "status": False,
+                    "message": "User not found or invalid status"
+                }
 
         status_str = str(status_input).strip().lower()
         if status_str in ['active', 'true', '1']:
@@ -590,6 +658,13 @@ def change_user_password_admin_service(admin_user, data):
                 "message": "User not found"
             }
 
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            if user.organization_id != admin_user.organization_id:
+                return {
+                    "status": False,
+                    "message": "User not found"
+                }
+
         if not new_password or not confirm_password:
             return {
                 "status": False,
@@ -641,6 +716,13 @@ def enable_disable_lead_assignment_admin_service(admin_user, data):
                 "status": False,
                 "message": "User not found"
             }
+
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            if user.organization_id != admin_user.organization_id:
+                return {
+                    "status": False,
+                    "message": "User not found"
+                }
 
         if 'disable_lead_assignment' in data:
             val = data['disable_lead_assignment']
@@ -697,10 +779,107 @@ def transfer_leads_admin_service(admin_user, data):
 
 # ----------------------------- delete_user_admin_service -----------------------------
 
-def delete_user_admin_service(admin_user, data):
+# ----------------------------- delete_user_admin_service & summary -----------------------------
+
+def fetch_user_delete_summary_admin_service(data, admin_user=None):
+    """
+    1. Fetch User Assigned Leads & Stats API (For Pre-Delete Review Modal)
+    POST /adm/fetch_user_delete_summary_admin
+    """
     try:
+        if not isinstance(data, dict):
+            data = {}
+
+        user_id = data.get('user_id') or data.get('id')
+        emp_id = data.get('emp_id') or data.get('employee_id')
+
+        target_user = None
+        if user_id:
+            target_user = User.objects.filter(id=user_id).first()
+        elif emp_id:
+            target_user = User.objects.filter(employee_id=emp_id).first()
+
+        if not target_user:
+            return {
+                "status": False,
+                "message": "User not found"
+            }
+
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            if target_user.organization_id != admin_user.organization_id:
+                return {
+                    "status": False,
+                    "message": "User not found"
+                }
+
+        fname = (target_user.first_name or "").strip()
+        lname = (target_user.last_name or "").strip()
+        user_name = f"{fname} {lname}".strip() or target_user.username
+
+        user_role_item = target_user.user_roles.select_related('role').first() if hasattr(target_user, 'user_roles') else None
+        role_display = user_role_item.role.display_value if (user_role_item and user_role_item.role) else (target_user.user_type or "Telecaller")
+
+        location_str = target_user.address if target_user.address else ""
+
+        assigned_leads_qs = Lead.objects.filter(assigned_to=target_user)
+        total_assigned_leads = assigned_leads_qs.count()
+        has_assigned_leads = (total_assigned_leads > 0)
+
+        new_leads_cnt = assigned_leads_qs.filter(
+            Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")
+        ).count()
+
+        closed_won_lost_filter = (
+            Q(pipeline_stage_id__in=[3, 4]) |
+            Q(pipeline_stage__name__icontains="won") |
+            Q(pipeline_stage__name__icontains="converted") |
+            Q(pipeline_stage__name__icontains="closed") |
+            Q(pipeline_stage__name__icontains="complete") |
+            Q(pipeline_stage__name__icontains="loss") |
+            Q(pipeline_stage__name__icontains="lost")
+        )
+
+        active_leads_cnt = max(0, total_assigned_leads - assigned_leads_qs.filter(closed_won_lost_filter).count())
+
+        followups_cnt = FollowUp.objects.filter(telecaller=target_user, is_attended=False).values('lead_id').distinct().count()
+        if followups_cnt == 0:
+            followups_cnt = assigned_leads_qs.filter(
+                Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")
+            ).count()
+
+        campaigns_count = assigned_leads_qs.filter(campaign__isnull=False).values('campaign_id').distinct().count()
+
+        return {
+            "status": True,
+            "message": "User summary fetched successfully",
+            "data": {
+                "user_id": target_user.id,
+                "user_name": user_name,
+                "role": role_display,
+                "location": location_str,
+                "has_assigned_leads": has_assigned_leads,
+                "total_assigned_leads": total_assigned_leads,
+                "active_leads": active_leads_cnt,
+                "new_leads": new_leads_cnt,
+                "follow_ups": followups_cnt,
+                "campaigns_count": campaigns_count
+            }
+        }
+    except Exception as e:
+        raise APIException(str(e))
+
+
+def delete_user_admin_service(admin_user, data):
+    """
+    2. Delete User API (Final Permanent Delete with Guard & Audit History Logging)
+    POST /adm/delete_user_admin
+    """
+    try:
+        if not isinstance(data, dict):
+            data = {}
+
         user_id = data.get('id') or data.get('user_id')
-        emp_id_input = data.get('emp_id')
+        emp_id_input = data.get('emp_id') or data.get('employee_id')
 
         user = None
         if user_id:
@@ -714,31 +893,64 @@ def delete_user_admin_service(admin_user, data):
                 "message": "User not found"
             }
 
-        # Prevent admin from deleting themselves
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            if user.organization_id != admin_user.organization_id:
+                return {
+                    "status": False,
+                    "message": "User not found"
+                }
+
         if user == admin_user:
             return {
                 "status": False,
                 "message": "Cannot delete currently logged in admin user"
             }
 
-        user_id_val = user.id
-        emp_id_val = user.employee_id
+        assigned_leads_count = Lead.objects.filter(assigned_to=user).count()
+        if assigned_leads_count > 0:
+            return {
+                "status": False,
+                "message": "You can't delete this user until their assigned leads are transferred to another user."
+            }
+
+        fname = (user.first_name or "").strip()
+        lname = (user.last_name or "").strip()
+        user_name = f"{fname} {lname}".strip() or user.username
+        user_role_item = user.user_roles.select_related('role').first() if hasattr(user, 'user_roles') else None
+        role_display = user_role_item.role.display_value if (user_role_item and user_role_item.role) else (user.user_type or "Telecaller")
+
+        user_json_snapshot = {
+            "id": user.id,
+            "employee_id": user.employee_id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user_name,
+            "mobile": user.mobile,
+            "role": role_display,
+            "team_id": user.team_id,
+            "organization_id": user.organization_id,
+            "created_at": user.created_at.isoformat() if user.created_at else None
+        }
+
+        deleter = admin_user if (admin_user and getattr(admin_user, 'is_authenticated', False)) else None
+        DeletedDataLog.objects.create(
+            table_name="adm_user",
+            row_id=user.id,
+            data=user_json_snapshot,
+            deleted_by=deleter
+        )
+
         user.delete()
 
         return {
             "status": True,
-            "message": "User deleted successfully",
-            "data": {
-                "id": user_id_val,
-                "emp_id": emp_id_val
-            }
+            "message": "User deleted successfully!"
         }
     except Exception as e:
         raise APIException(str(e))
 
 
-def fetch_user_dropdowns_admin_service():
-   
+def fetch_user_dropdowns_admin_service(user=None):
     try:
         roles_qs = Role.objects.exclude(
             Q(name__iexact='developer') | Q(code__iexact='DEV')
@@ -752,12 +964,16 @@ def fetch_user_dropdowns_admin_service():
             for r in roles_qs
         ]
 
-        # 2. Fetch Managers / Users for Reporting To dropdown (STRICTLY Telecallers)
         users_qs = User.objects.filter(is_active=True).filter(
             Q(user_roles__role__name__iexact='telecaller') |
             Q(user_roles__role__code__iexact='TEL') |
             Q(user_type__iexact='telecaller')
         ).distinct().order_by("id")
+
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            users_qs = users_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            users_qs = users_qs.none()
         managers = []
         for u in users_qs:
             fname = (u.first_name or "").strip()
@@ -771,6 +987,10 @@ def fetch_user_dropdowns_admin_service():
 
         # 3. Fetch Active Teams
         teams_qs = Team.objects.filter(is_active=True).order_by("id")
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            teams_qs = teams_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            teams_qs = teams_qs.none()
         teams = [
             {
                 "id": t.id,
@@ -793,89 +1013,98 @@ def fetch_user_dropdowns_admin_service():
         raise APIException(str(e))
 
 
-def fetch_user_campaigns_admin_service(user_id=None, id=None, emp_id=None, employee_id=None):
+def fetch_user_campaigns_admin_service(data, admin_user=None):
     """
-    User Management -> View Campaign Modal API.
-    Fetches assigned campaigns and lead statistics for a user.
+    1. Fetch User Campaigns List API
+    POST /adm/fetch_user_campaigns_admin
+    Returns user campaigns summary and breakdown matching frontend expected format.
     """
     try:
-        uid = user_id or id
-        eid = emp_id or employee_id
+        if not isinstance(data, dict):
+            data = {}
 
-        # 1. Locate Target User
+        user_id = data.get('user_id') or data.get('id')
+        emp_id = data.get('emp_id') or data.get('employee_id')
+
         target_user = None
-        if uid:
-            target_user = User.objects.filter(id=uid).first()
-        elif eid:
-            target_user = User.objects.filter(employee_id=eid).first()
+        if user_id:
+            target_user = User.objects.filter(id=user_id).first()
+        elif emp_id:
+            target_user = User.objects.filter(employee_id=emp_id).first()
 
         if not target_user:
             return {
-                "status": "error",
+                "status": False,
                 "message": "User not found"
             }
 
-        # 2. Query Assigned Campaigns
-        ca_qs = CampaignAssignedAgent.objects.select_related('campaign').filter(agent_user=target_user).order_by('-assigned_at')
-        
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            if target_user.organization_id != admin_user.organization_id:
+                return {
+                    "status": False,
+                    "message": "User not found"
+                }
+
         fname = (target_user.first_name or "").strip()
         lname = (target_user.last_name or "").strip()
         user_name = f"{fname} {lname}".strip() or target_user.username
-        user_emp_id = target_user.employee_id or f"EMP{target_user.id:03d}"
 
+        ca_qs = CampaignAssignedAgent.objects.select_related('campaign', 'campaign__pipeline_category').filter(agent_user=target_user).order_by('campaign_id')
+
+        seen_campaigns = set()
         campaigns_list = []
         idx = 1
-        if ca_qs.exists():
-            for ca in ca_qs:
-                camp = ca.campaign
-                
-                assigned_cnt = Lead.objects.filter(assigned_to=target_user, campaign=camp).count()
-                unassigned_cnt = Lead.objects.filter(assigned_to__isnull=True, campaign=camp).count()
-                called_cnt = CallDetails.objects.filter(telecaller=target_user, lead__campaign=camp).values('lead_id').distinct().count()
-                rescheduled_cnt = FollowUp.objects.filter(telecaller=target_user, lead__campaign=camp, is_attended=False).values('lead_id').distinct().count()
-                closed_cnt = Lead.objects.filter(
-                    assigned_to=target_user,
-                    campaign=camp
-                ).filter(
-                    Q(pipeline_stage__name__icontains="closed") |
-                    Q(pipeline_stage__name__icontains="won") |
-                    Q(pipeline_stage__name__icontains="complete") |
-                    Q(pipeline_stage__name__icontains="converted")
-                ).count()
+        total_leads_sum = 0
 
-                active_cnt = max(0, assigned_cnt - closed_cnt)
-                assigned_date_str = ca.assigned_at.strftime("%Y-%m-%d") if ca.assigned_at else ""
+        for ca in ca_qs:
+            camp = ca.campaign
+            if not camp or camp.id in seen_campaigns:
+                continue
+            seen_campaigns.add(camp.id)
 
-                campaigns_list.append({
-                    "s_no": idx,
-                    "campaign_id": camp.id,
-                    "campaign_name": camp.name,
-                    "name": camp.name,
-                    "assigned_leads_count": assigned_cnt,
-                    "assigned_leads": assigned_cnt,
-                    "unassigned_leads_count": unassigned_cnt,
-                    "unassigned_leads": unassigned_cnt,
-                    "called_leads_count": called_cnt,
-                    "called_leads": called_cnt,
-                    "rescheduled_leads_count": rescheduled_cnt,
-                    "rescheduled_leads": rescheduled_cnt,
-                    "closed_leads_count": closed_cnt,
-                    "closed_leads": closed_cnt,
-                    "active_leads_count": active_cnt,
-                    "completed_leads_count": closed_cnt,
-                    "status": "Active" if ca.is_active else "Paused",
-                    "assigned_date": assigned_date_str
-                })
-                idx += 1
+            leads_cnt = Lead.objects.filter(assigned_to=target_user, campaign=camp).count()
+            pipeline_name = camp.pipeline_category.display_name or camp.pipeline_category.category_name if (hasattr(camp, 'pipeline_category') and camp.pipeline_category) else "Education"
+
+            campaigns_list.append({
+                "id": camp.id,
+                "s_no": idx,
+                "campaign_name": camp.name,
+                "pipeline_name": pipeline_name,
+                "total_leads": leads_cnt
+            })
+            total_leads_sum += leads_cnt
+            idx += 1
+
+        leads_campaign_ids = Lead.objects.filter(assigned_to=target_user, campaign__isnull=False).values_list('campaign_id', flat=True).distinct()
+        for c_id in leads_campaign_ids:
+            if c_id not in seen_campaigns:
+                seen_campaigns.add(c_id)
+                camp = CampaignName.objects.filter(id=c_id).first()
+                if camp:
+                    leads_cnt = Lead.objects.filter(assigned_to=target_user, campaign=camp).count()
+                    pipeline_name = camp.pipeline_category.display_name or camp.pipeline_category.category_name if (hasattr(camp, 'pipeline_category') and camp.pipeline_category) else "Education"
+                    campaigns_list.append({
+                        "id": camp.id,
+                        "s_no": idx,
+                        "campaign_name": camp.name,
+                        "pipeline_name": pipeline_name,
+                        "total_leads": leads_cnt
+                    })
+                    total_leads_sum += leads_cnt
+                    idx += 1
+
+        null_campaign_leads = Lead.objects.filter(assigned_to=target_user, campaign__isnull=True).count()
+        if null_campaign_leads > 0:
+            total_leads_sum += null_campaign_leads
 
         return {
-            "status": "success",
+            "status": True,
             "message": "User campaigns fetched successfully",
             "data": {
                 "user_id": target_user.id,
                 "user_name": user_name,
-                "emp_id": user_emp_id,
                 "total_campaigns": len(campaigns_list),
+                "total_leads": total_leads_sum,
                 "campaigns": campaigns_list
             }
         }
@@ -883,68 +1112,230 @@ def fetch_user_campaigns_admin_service(user_id=None, id=None, emp_id=None, emplo
         raise APIException(str(e))
 
 
-def fetch_user_transfer_campaigns_admin_service(from_user_id=None, emp_id=None):
-    """
-    User Management -> Action Column -> Transfer Button Modal API.
-    Fetches campaign list and lead counts for a source user.
-    """
+def fetch_user_transfer_campaigns_admin_service(from_user_id=None, emp_id=None, admin_user=None):
+    return fetch_user_campaigns_admin_service({"user_id": from_user_id, "emp_id": emp_id}, admin_user=admin_user)
+
+
+def fetch_transfer_telecallers_admin_service(data=None, user=None):
+    
     try:
-        from_user = None
+        if not isinstance(data, dict):
+            data = {}
+
+        from_user_id = data.get('from_user_id') or data.get('from_id')
+
+        users_qs = User.objects.filter(is_active=True).order_by('id')
+
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            users_qs = users_qs.filter(organization=user.organization)
+
         if from_user_id:
-            from_user = User.objects.filter(id=from_user_id).first()
-        elif emp_id:
-            from_user = User.objects.filter(employee_id=emp_id).first()
+            users_qs = users_qs.exclude(id=from_user_id)
 
-        if not from_user:
-            return {
-                "status": "error",
-                "message": "Source user not found"
-            }
+        users_qs = users_qs.exclude(
+            Q(user_roles__role__code__in=['ADM', 'DEV', 'ADMIN', 'DEVELOPER']) |
+            Q(user_type__icontains='admin') |
+            Q(user_type__icontains='developer')
+        ).distinct()
 
-        ca_qs = CampaignAssignedAgent.objects.select_related('campaign', 'campaign__pipeline_category').filter(agent_user=from_user).order_by('campaign_id')
-        
-        seen_campaigns = set()
-        data_list = []
-        idx = 1
+        result_list = []
+        for idx, u in enumerate(users_qs):
+            fname = (u.first_name or "").strip()
+            lname = (u.last_name or "").strip()
+            u_name = f"{fname} {lname}".strip() or u.username
 
-        for ca in ca_qs:
-            camp = ca.campaign
-            if camp.id in seen_campaigns:
-                continue
-            seen_campaigns.add(camp.id)
+            current_leads = Lead.objects.filter(assigned_to=u).count()
+            team_color = u.team.badge_color if (u.team and u.team.badge_color) else "#505AF2"
+            seg_colors = [team_color, team_color, team_color]
 
-            leads_cnt = Lead.objects.filter(assigned_to=from_user, campaign=camp).count()
-            pipeline_name = camp.pipeline_category.display_name or camp.pipeline_category.category_name if camp.pipeline_category else "Education"
-
-            data_list.append({
-                "s_no": idx,
-                "campaign_id": camp.id,
-                "campaign_name": camp.name,
-                "pipeline_name": pipeline_name,
-                "total_leads": leads_cnt
+            result_list.append({
+                "id": u.id,
+                "name": u_name,
+                "email": u.email or f"user{u.id}@gmail.com",
+                "current_leads": current_leads,
+                "segments": seg_colors
             })
-            idx += 1
-
-        leads_campaign_ids = Lead.objects.filter(assigned_to=from_user, campaign__isnull=False).values_list('campaign_id', flat=True).distinct()
-        for c_id in leads_campaign_ids:
-            if c_id not in seen_campaigns:
-                seen_campaigns.add(c_id)
-                camp = CampaignName.objects.filter(id=c_id).first()
-                if camp:
-                    leads_cnt = Lead.objects.filter(assigned_to=from_user, campaign=camp).count()
-                    pipeline_name = camp.pipeline_category.display_name or camp.pipeline_category.category_name if camp.pipeline_category else "Education"
-                    data_list.append({
-                        "s_no": idx,
-                        "campaign_id": camp.id,
-                        "campaign_name": camp.name,
-                        "pipeline_name": pipeline_name,
-                        "total_leads": leads_cnt
-                    })
-                    idx += 1
 
         return {
-            "status": "success",
-            "data": data_list
+            "status": True,
+            "message": "Telecallers list fetched successfully",
+            "data": result_list
+        }
+    except Exception as e:
+        raise APIException(str(e))
+
+
+def transfer_single_campaign_leads_admin_service(admin_user, data):
+  
+    try:
+        if not isinstance(data, dict):
+            data = {}
+
+        from_user_id = data.get('from_user_id')
+        campaign_id = data.get('campaign_id')
+        distributions = data.get('distributions') or []
+
+        if not from_user_id:
+            return {"status": False, "message": "from_user_id is required"}
+        if not campaign_id:
+            return {"status": False, "message": "campaign_id is required"}
+        if not distributions or not isinstance(distributions, list):
+            return {"status": False, "message": "distributions array is required"}
+
+        from_user = User.objects.filter(id=from_user_id).first()
+        if not from_user:
+            return {"status": False, "message": "Source user not found"}
+
+        from_fname = (from_user.first_name or "").strip()
+        from_lname = (from_user.last_name or "").strip()
+        from_user_name = f"{from_fname} {from_lname}".strip() or from_user.username
+
+        leads_qs = Lead.objects.filter(assigned_to=from_user, campaign_id=campaign_id).order_by('id')
+        available_leads = list(leads_qs)
+
+        if not available_leads:
+            return {"status": False, "message": "No leads found for this user in the specified campaign"}
+
+        reassigned_by_name = get_user_display_name(admin_user) if admin_user else "Admin"
+        followup_stage = PipelineStage.objects.filter(id=2).first() or PipelineStage.objects.filter(name__icontains="follow").first()
+
+        total_transferred = 0
+        current_index = 0
+
+        for dist in distributions:
+            dest_id = dist.get('telecaller_id')
+            l_count = int(dist.get('lead_count') or 0)
+            if not dest_id or l_count <= 0:
+                continue
+
+            dest_user = User.objects.filter(id=dest_id, is_active=True).first()
+            if not dest_user:
+                continue
+
+            batch_leads = available_leads[current_index : current_index + l_count]
+            current_index += len(batch_leads)
+
+            history_records = []
+            for lead in batch_leads:
+                lead.assigned_to = dest_user
+                if lead.pipeline_stage_id in [4] or (lead.pipeline_stage and "loss" in lead.pipeline_stage.name.lower()):
+                    if followup_stage:
+                        lead.pipeline_stage = followup_stage
+                    lead.current_status = "working"
+
+                lead.save()
+                AdminApprovedLossLead.objects.filter(lead=lead).delete()
+
+                history_rec = AdminLeadReassignHistory(
+                    lead=lead,
+                    previous_telecaller=from_user,
+                    new_telecaller=dest_user,
+                    reassigned_by=admin_user if (admin_user and getattr(admin_user, 'is_authenticated', False)) else None,
+                    attended_calls_count=0,
+                    reassigned_reason=f"Single Campaign #{campaign_id} Reassignment",
+                    created_by=reassigned_by_name
+                )
+                history_records.append(history_rec)
+                total_transferred += 1
+
+            if history_records:
+                AdminLeadReassignHistory.objects.bulk_create(history_records)
+
+        return {
+            "status": True,
+            "message": f"{total_transferred} Leads Reassigned Successfully!",
+            "data": {
+                "transferred_leads": total_transferred,
+                "from_user": from_user_name,
+                "campaign_id": campaign_id
+            }
+        }
+    except Exception as e:
+        raise APIException(str(e))
+
+
+def transfer_all_campaigns_leads_admin_service(admin_user, data):
+  
+    try:
+        if not isinstance(data, dict):
+            data = {}
+
+        from_user_id = data.get('from_user_id')
+        to_telecaller_id = data.get('to_telecaller_id') or data.get('to_user_id')
+
+        if not from_user_id:
+            return {"status": False, "message": "from_user_id is required"}
+        if not to_telecaller_id:
+            return {"status": False, "message": "to_telecaller_id is required"}
+        if from_user_id == to_telecaller_id:
+            return {"status": False, "message": "Source and Destination telecallers cannot be the same"}
+
+        from_user = User.objects.filter(id=from_user_id).first()
+        if not from_user:
+            return {"status": False, "message": "Source user not found"}
+
+        to_telecaller = User.objects.filter(id=to_telecaller_id, is_active=True).first()
+        if not to_telecaller:
+            return {"status": False, "message": "Destination telecaller not found or inactive"}
+
+        from_fname = (from_user.first_name or "").strip()
+        from_lname = (from_user.last_name or "").strip()
+        from_user_name = f"{from_fname} {from_lname}".strip() or from_user.username
+
+        to_fname = (to_telecaller.first_name or "").strip()
+        to_lname = (to_telecaller.last_name or "").strip()
+        to_telecaller_name = f"{to_fname} {to_lname}".strip() or to_telecaller.username
+
+        leads_qs = Lead.objects.filter(assigned_to=from_user)
+        all_leads = list(leads_qs)
+
+        if not all_leads:
+            return {"status": False, "message": "No leads found for source user to transfer"}
+
+        distinct_campaigns_count = Lead.objects.filter(assigned_to=from_user, campaign__isnull=False).values('campaign_id').distinct().count()
+        if distinct_campaigns_count == 0:
+            distinct_campaigns_count = int(data.get('total_campaigns') or 1)
+
+        reassigned_by_name = get_user_display_name(admin_user) if admin_user else "Admin"
+        followup_stage = PipelineStage.objects.filter(id=2).first() or PipelineStage.objects.filter(name__icontains="follow").first()
+
+        history_records = []
+        transferred_count = 0
+
+        for lead in all_leads:
+            lead.assigned_to = to_telecaller
+            if lead.pipeline_stage_id in [4] or (lead.pipeline_stage and "loss" in lead.pipeline_stage.name.lower()):
+                if followup_stage:
+                    lead.pipeline_stage = followup_stage
+                lead.current_status = "working"
+
+            lead.save()
+            AdminApprovedLossLead.objects.filter(lead=lead).delete()
+
+            history_rec = AdminLeadReassignHistory(
+                lead=lead,
+                previous_telecaller=from_user,
+                new_telecaller=to_telecaller,
+                reassigned_by=admin_user if (admin_user and getattr(admin_user, 'is_authenticated', False)) else None,
+                attended_calls_count=0,
+                reassigned_reason="Transfer All Campaigns Bulk Transfer",
+                created_by=reassigned_by_name
+            )
+            history_records.append(history_rec)
+            transferred_count += 1
+
+        if history_records:
+            AdminLeadReassignHistory.objects.bulk_create(history_records)
+
+        return {
+            "status": True,
+            "message": f"{transferred_count} Leads Reassigned Successfully!",
+            "data": {
+                "transferred_leads": transferred_count,
+                "transferred_campaigns": distinct_campaigns_count,
+                "from_user": from_user_name,
+                "to_telecaller": to_telecaller_name
+            }
         }
     except Exception as e:
         raise APIException(str(e))

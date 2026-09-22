@@ -6,7 +6,13 @@ class Perm(models.Model):
     name = models.CharField(max_length=100, unique=True)
     display_value = models.CharField(max_length=150)
     code = models.CharField(max_length=50, unique=True)
-    perm_group = models.CharField(max_length=50, default="perm_apis")
+    perm_group = models.ForeignKey(
+        'adm.PermGroup', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='permissions'
+    )
     
     # Audit & Timestamp Fields
     created_by = models.CharField(max_length=100, null=True, blank=True)

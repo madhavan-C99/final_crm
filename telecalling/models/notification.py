@@ -6,6 +6,7 @@ from .delete_base_model import SafeDeleteModel
 from django.conf import settings
 
 class Notification(SafeDeleteModel):
+    organization = models.ForeignKey('adm.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
 
     title = models.CharField(max_length=100)
 

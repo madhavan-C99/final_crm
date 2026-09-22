@@ -8,13 +8,14 @@ from adm.services.permission_services import (
     assign_permission_to_role,
     fetch_perms_list,
     fetch_roles_list,
+    get_roles_and_permissions_service,
+    create_role_matrix_service,
+    update_role_permission_service,
 )
 
 
 class AddPermAPIView(APIView):
-    """
-    Registers a new API permission into adm_perm and auto-assigns it to Developer role!
-    """
+
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(required=True)
         display_value = serializers.CharField(required=True)
@@ -37,9 +38,7 @@ class AddPermAPIView(APIView):
 
 
 class FetchPermsListAPIView(APIView):
-    """
-    Returns all registered API permissions (perm_group = perm_apis).
-    """
+  
     def post(self, request):
         authorize_request('api_fetch_perms_list', request.user)
         perms_list = fetch_perms_list()
@@ -50,9 +49,7 @@ class FetchPermsListAPIView(APIView):
 
 
 class FetchRolesListAPIView(APIView):
-    """
-    Returns all 3 system roles (developer, admin, telecaller).
-    """
+  
     def post(self, request):
         authorize_request('api_fetch_roles_list', request.user)
         roles_list = fetch_roles_list()
@@ -63,9 +60,7 @@ class FetchRolesListAPIView(APIView):
 
 
 class AssignRolePermAPIView(APIView):
-    """
-    Assigns an existing permission code to a role in adm_role_perms.
-    """
+    
     class InputSerializer(serializers.Serializer):
         role_id = serializers.IntegerField(required=True)
         perm_id = serializers.IntegerField(required=True)
@@ -82,3 +77,60 @@ class AssignRolePermAPIView(APIView):
             "status": "success",
             "message": result_msg
         }, status=status.HTTP_200_OK)
+
+
+class GetRolesAndPermissionsApi(APIView):
+   
+    def get(self, request):
+        authorize_request('api_get_roles_and_permissions', request.user)
+        result = get_roles_and_permissions_service(user=request.user)
+        return Response({
+            "status": True,
+            "message": "Roles and permissions fetched successfully",
+            "data": result
+        }, status=status.HTTP_200_OK)
+
+
+class CreateRoleApi(APIView):
+    
+    class InputSerializer(serializers.Serializer):
+        name = serializers.CharField(required=True)
+        duplicate_from = serializers.CharField(required=True)
+
+    def post(self, request):
+        authorize_request('api_create_role', request.user)
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        res = create_role_matrix_service(
+            admin_user=request.user,
+            data=serializer.validated_data
+        )
+
+        status_code = status.HTTP_201_CREATED if res.get('status') else status.HTTP_400_BAD_REQUEST
+        return Response(res, status=status_code)
+
+
+class UpdateRolePermissionApi(APIView):
+    
+    class InputSerializer(serializers.Serializer):
+        role_id = serializers.CharField(required=True)
+        category_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
+        permission_id = serializers.CharField(required=True)
+        has_permission = serializers.BooleanField(required=True)
+
+    def post(self, request):
+        authorize_request('api_update_role_permission', request.user)
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        res = update_role_permission_service(
+            admin_user=request.user,
+            data=serializer.validated_data
+        )
+
+        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
+        return Response(res, status=status_code)
+
+
+

@@ -1,8 +1,10 @@
 from .loss_lead_approval import AdminLossActionLog, AdminApprovedLossLead
 from .reassign_lead_history import AdminLeadReassignHistory
 from .team import Team
-from .user_target import UserTarget
+from .team_target import TeamTarget
+from .individual_target import IndividualTarget
 from .perms import Perm
+from .perm_group import PermGroup
 from .role import Role
 from .user_role import UserRole
 from .user import User
@@ -16,12 +18,14 @@ __all__ = [
     'AdminApprovedLossLead',
     'AdminLeadReassignHistory',
     'Team',
-    'UserTarget',
+    'TeamTarget',
+    'IndividualTarget',
     'Perm',
+    'PermGroup',
     'Role',
     'UserRole',
     'User',
-     'CollectionQuery',
+    'CollectionQuery',
     'PipelineCategory',
     'CampaignAssignedAgent',
     'Organization',

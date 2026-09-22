@@ -14,7 +14,7 @@ class FetchAllLeads(APIView):
         from_date = serializers.DateField(required=False)
         to_date = serializers.DateField(required=False)
         date_filter_type = serializers.CharField(required=False, default="year") 
-        
+        pipeline_id = serializers.IntegerField(required=False, allow_null=True, default=0)
         pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True,default=0)
         lead_source_id = serializers.IntegerField(required=False, allow_null=True,default=0)
         course_name_id = serializers.IntegerField(required=False, allow_null=True,default=0)

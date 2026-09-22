@@ -1,8 +1,9 @@
 from django.db import models
+from telecalling.models.delete_base_model import SafeDeleteModel
 from .role import Role
 
 
-class UserRole(models.Model):
+class UserRole(SafeDeleteModel):
    
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name="user_roles")
     role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="role_users")

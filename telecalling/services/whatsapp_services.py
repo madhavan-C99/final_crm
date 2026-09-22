@@ -60,6 +60,7 @@ def whatsapp_lead_create(**data):
         return "Already exists"
 
     telecaller = assign_telecaller()
+    user_org = getattr(telecaller, 'organization', None) if telecaller else None
 
     # ✅ Create Lead
     new_lead = Lead.objects.create(
@@ -69,7 +70,8 @@ def whatsapp_lead_create(**data):
         current_status="New Enquiry",
         pipeline_stage="Working",
         priority="Warm",
-        assigned_to=telecaller
+        assigned_to=telecaller,
+        organization=user_org
     )
 
     # ✅ Send message via Meta API

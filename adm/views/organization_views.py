@@ -18,8 +18,6 @@ class HybridLogoField(serializers.Field):
             return serializers.ImageField().to_internal_value(data)
         return data
 
-@authentication_classes([])
-@permission_classes([])
 class CreateOrganizationProfileAdminApi(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
@@ -57,8 +55,6 @@ class CreateOrganizationProfileAdminApi(APIView):
         return Response(res, status=status_code)
 
 
-@authentication_classes([])
-@permission_classes([])
 class GetOrganizationProfileAdminApi(APIView):
     def get(self, request):
         if request.user and request.user.is_authenticated:
@@ -67,8 +63,6 @@ class GetOrganizationProfileAdminApi(APIView):
         return Response(res, status=status.HTTP_200_OK)
 
 
-@authentication_classes([])
-@permission_classes([])
 class EditOrganizationProfileAdminApi(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
@@ -81,11 +75,7 @@ class EditOrganizationProfileAdminApi(APIView):
         company_website = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         company_description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         address_line1 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        address_lane1 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        address_line_1 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         address_line2 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        address_lane2 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        address_line_2 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         city = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         state = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         country = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -93,7 +83,6 @@ class EditOrganizationProfileAdminApi(APIView):
         official_email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
         official_contact = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         gst_in = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        gstin = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         company_pan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_format = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         time_format = serializers.CharField(required=False, allow_blank=True, allow_null=True)

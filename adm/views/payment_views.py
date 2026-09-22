@@ -27,8 +27,8 @@ class GetPendingPaymentFilterDropdownsAdmin(APIView):
 # @permission_classes([])
 class FetchAllPendingPaymentsAdmin(APIView):
     """
-    Pending Payments Page -> 1st API: Fetch All Pending Payments & Summary Cards API.
-    Supports both GET & POST requests.
+    Pending Payments Page -> Fetch All Pending Payments & Summary Cards API.
+    POST request only.
     """
     class InputSerializers(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -46,32 +46,12 @@ class FetchAllPendingPaymentsAdmin(APIView):
         page = serializers.IntegerField(required=False, default=1)
         limit = serializers.IntegerField(required=False, default=1000)
 
-    def get(self, request):
-        authorize_request('api_fetch_all_pending_payments_admin', request.user)
-        query_params = {
-            "search": request.query_params.get("search"),
-            "date_filter": request.query_params.get("date_filter") or request.query_params.get("date_filter_type"),
-            "from_date": request.query_params.get("from_date"),
-            "to_date": request.query_params.get("to_date"),
-            "sort_by": request.query_params.get("sort_by"),
-            "pipeline_id": request.query_params.get("pipeline_id"),
-            "course_name_id": request.query_params.get("course_name_id"),
-            "course_plan_id": request.query_params.get("course_plan_id"),
-            "course_timing_id": request.query_params.get("course_timing_id"),
-            "payment_stage_id": request.query_params.get("payment_stage_id"),
-            "pending_amount_range": request.query_params.get("pending_amount_range"),
-            "page": int(request.query_params.get("page", 1)),
-            "limit": int(request.query_params.get("limit", 1000))
-        }
-        result = fetch_all_pending_payments_admin(**query_params)
-        return Response({"data": result}, status=status.HTTP_200_OK)
-
     def post(self, request):
         authorize_request('api_fetch_all_pending_payments_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        result = fetch_all_pending_payments_admin(**serializer.validated_data)
+        result = fetch_all_pending_payments_admin(user=request.user, **serializer.validated_data)
 
         log_data = {
             'user_id': request.user.id if request.user.id else None,
@@ -89,10 +69,7 @@ class FetchAllPendingPaymentsAdmin(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class ExportPendingPaymentsAdmin(APIView):
-    """
-    Pending Payments Page -> Export Pending Payments Excel API.
-    Lime Green Header (#84C225), Bold White Font, Center Alignment, Auto Widths.
-    """
+  
     class InputSerializers(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -107,26 +84,9 @@ class ExportPendingPaymentsAdmin(APIView):
         payment_stage_id = serializers.IntegerField(required=False, allow_null=True)
         pending_amount_range = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
-    def get(self, request):
-        authorize_request('api_export_pending_payments_admin', request.user)
-        query_params = {
-            "search": request.query_params.get("search"),
-            "date_filter": request.query_params.get("date_filter") or request.query_params.get("date_filter_type"),
-            "from_date": request.query_params.get("from_date"),
-            "to_date": request.query_params.get("to_date"),
-            "sort_by": request.query_params.get("sort_by"),
-            "pipeline_id": request.query_params.get("pipeline_id"),
-            "course_name_id": request.query_params.get("course_name_id"),
-            "course_plan_id": request.query_params.get("course_plan_id"),
-            "course_timing_id": request.query_params.get("course_timing_id"),
-            "payment_stage_id": request.query_params.get("payment_stage_id"),
-            "pending_amount_range": request.query_params.get("pending_amount_range")
-        }
-        return export_pending_payments_admin(**query_params)
-
     def post(self, request):
         authorize_request('api_export_pending_payments_admin', request.user)
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        return export_pending_payments_admin(**serializer.validated_data)
+        return export_pending_payments_admin(user=request.user, **serializer.validated_data)

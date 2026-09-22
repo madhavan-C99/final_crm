@@ -8,6 +8,7 @@ from .delete_base_model import SafeDeleteModel
 
 
 class CallDetails(SafeDeleteModel):
+    organization = models.ForeignKey('adm.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='call_details')
     # --- Identifiers ---
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='calls')
     telecaller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='made_calls')

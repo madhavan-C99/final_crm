@@ -3,18 +3,22 @@ from adm.models.user import User
 from telecalling.models.leads import CampaignName
 from adm.models.pipeline_category import PipelineCategory
 from adm.models.CampaignAssignedAgent import CampaignAssignedAgent
+from django.db.models import Q
 
 def fetch_pipeline_categories(user, **data):
     try:
-        categories = PipelineCategory.objects.filter(is_active=True).values(
+        categories_qs = PipelineCategory.objects.filter(is_active=True)
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            categories_qs = categories_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            categories_qs = categories_qs.none()
+        categories = categories_qs.values(
             "id", "category_name", "display_name"
         ).order_by("id")
         return list(categories)
     except Exception as e:
         raise APIException(str(e))
 
-
-from django.db.models import Q
 
 def fetch_campaign_managers(user, **data):
     try:
@@ -25,7 +29,11 @@ def fetch_campaign_managers(user, **data):
             Q(user_type__icontains="team leader") |
             Q(is_superuser=True)
         ).distinct()
-        if not managers_qs.exists():
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            managers_qs = managers_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            managers_qs = managers_qs.none()
+        elif not managers_qs.exists():
             managers_qs = User.objects.filter(is_active=True)
 
         managers = managers_qs.values("id", "username", "first_name", "last_name", "email").order_by("id")
@@ -49,7 +57,11 @@ def fetch_campaign_agents(user, **data):
         agents_qs = User.objects.filter(is_active=True).filter(
             Q(user_roles__role__name__iexact="telecaller") | Q(user_type__icontains="telecaller")
         ).distinct()
-        if not agents_qs.exists():
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            agents_qs = agents_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            agents_qs = agents_qs.none()
+        elif not agents_qs.exists():
             agents_qs = User.objects.filter(is_active=True)
 
         agents = agents_qs.values("id", "username", "first_name", "last_name", "email").order_by("id")
@@ -80,6 +92,7 @@ def create_campaign(user, **data):
             raise APIException("Campaign Name is required")
 
         creator_name = (getattr(user, "username", None) if user and hasattr(user, "username") else None) or "admin"
+        user_org = getattr(user, 'organization', None) if (user and getattr(user, 'is_authenticated', False)) else None
 
         # 1. Create CampaignName Record
         campaign = CampaignName.objects.create(
@@ -87,7 +100,8 @@ def create_campaign(user, **data):
             pipeline_category_id=pipeline_category_id,
             manager_id=manager_id,
             lead_distribution_type=distribution_type,
-            created_by=creator_name
+            created_by=creator_name,
+            organization=user_org
         )
 
         # 2. Assign Agents
@@ -113,7 +127,10 @@ def toggle_campaign_status(user, **data):
         campaign_id = data.get("campaign_id")
         is_active = data.get("is_active")
         
-        campaign = CampaignName.objects.filter(id=campaign_id).first()
+        qs = CampaignName.objects.filter(id=campaign_id)
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            qs = qs.filter(organization=user.organization)
+        campaign = qs.first()
         if not campaign:
             raise APIException("Campaign Not Found")
             
@@ -135,11 +152,15 @@ def fetch_campaign_detail(user, **data):
         campaign_id = data.get("campaign_id")
         campaign_name = data.get("campaign_name")
 
+        qs = CampaignName.objects.all()
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            qs = qs.filter(organization=user.organization)
+
         campaign = None
         if campaign_id:
-            campaign = CampaignName.objects.filter(id=campaign_id).first()
+            campaign = qs.filter(id=campaign_id).first()
         elif campaign_name:
-            campaign = CampaignName.objects.filter(name__iexact=campaign_name).first()
+            campaign = qs.filter(name__iexact=campaign_name).first()
 
         if not campaign:
             raise APIException("Campaign Not Found")
@@ -159,7 +180,12 @@ def fetch_campaign_detail(user, **data):
                 pipeline_category_name = cat.display_name or cat.category_name
 
         # All Telecallers with their assignment status & is_active toggle for this campaign
-        telecallers = User.objects.filter(role__name__iexact='telecaller').distinct()
+        telecallers = User.objects.filter(
+            Q(user_roles__role__name__iexact='telecaller') | Q(user_type__icontains='telecaller')
+        ).distinct()
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            telecallers = telecallers.filter(organization=user.organization)
+
         assigned_map = {
             ca.agent_user_id: ca.is_active
             for ca in CampaignAssignedAgent.objects.filter(campaign=campaign)
@@ -183,9 +209,9 @@ def fetch_campaign_detail(user, **data):
             "campaign_id": campaign.id,
             "name": campaign.name,
             "pipeline_category_id": campaign.pipeline_category_id,
-            "pipeline_category_name": pipeline_category_name or "EDUCATION",
+            "pipeline_category_name": pipeline_category_name or "Education",
             "manager_id": campaign.manager_id,
-            "manager_name": manager_name or "Gunalraj k",
+            "manager_name": manager_name or None,
             "lead_distribution_type": campaign.lead_distribution_type or "on_demand",
             "is_active": campaign.is_active,
             "agents": agents_list,
@@ -199,11 +225,15 @@ def update_campaign_detail(user, **data):
         campaign_id = data.get("campaign_id")
         campaign_name = data.get("campaign_name")
 
+        qs = CampaignName.objects.all()
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            qs = qs.filter(organization=user.organization)
+
         campaign = None
         if campaign_id:
-            campaign = CampaignName.objects.filter(id=campaign_id).first()
+            campaign = qs.filter(id=campaign_id).first()
         elif campaign_name:
-            campaign = CampaignName.objects.filter(name__iexact=campaign_name.strip()).first()
+            campaign = qs.filter(name__iexact=campaign_name.strip()).first()
 
         if not campaign:
             raise APIException("Campaign Not Found")

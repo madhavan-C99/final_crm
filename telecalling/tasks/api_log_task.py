@@ -1,6 +1,6 @@
 
 from huey.contrib.djhuey import task
-from ..models.api_log import Api_Log
+from ..models.api_log import ApiLog
 import json
 from decimal import Decimal
 
@@ -26,7 +26,7 @@ def api_history_log(data):
         if isinstance(res_payload, dict):
             res_payload = json.loads(json.dumps(res_payload, cls=DecimalEncoder))
 
-        Api_Log.objects.create(
+        ApiLog.objects.create(
             user_id=data.get('user_id'),
             api_name=data.get('api_name'),
             method=data.get('method'),

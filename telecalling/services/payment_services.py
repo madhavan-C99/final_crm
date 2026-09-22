@@ -40,9 +40,11 @@ def fetch_all_payment(user,**data):
    
         params = {
             "id": id,
+            "organization_id": getattr(user, 'organization_id', 0) or 0,
             "from_date": str(from_date) if from_date else "",
             "to_date": str(to_date) if to_date else "",
             "filter_type": str(date_filter_type) if date_filter_type else "",
+            "pipeline_id": data.get("pipeline_id") or 0,
             "amount_stage_id": data.get("pending_amount_id") or 0,
             "course_name_id": data.get("course_name_id") or 0,
             "course_time_id": data.get("course_time_id") or 0,
@@ -62,7 +64,7 @@ def fetch_all_payment(user,**data):
 def pending_payment_tile(user):
     try:
         id=user.id
-        tile=exec_raw_sql("D_FETCH_PAYMENT_TILES",{"id":id})
+        tile=exec_raw_sql("D_FETCH_PAYMENT_TILES",{"id":id, "pipeline_id": 0})
         return tile   
     
     except Exception as e:

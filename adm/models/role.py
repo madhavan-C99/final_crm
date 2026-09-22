@@ -1,12 +1,13 @@
 from django.db import models
+from telecalling.models.delete_base_model import SafeDeleteModel
 from .perms import Perm
 
 
-class Role(models.Model):
+class Role(SafeDeleteModel):
     
     name = models.CharField(max_length=50, unique=True)
     display_value = models.CharField(max_length=100)
-    code = models.CharField(max_length=10, unique=True)
+    code = models.CharField(max_length=50, unique=True)
     description = models.TextField(null=True, blank=True)
     
     # ManyToMany to Perm mapped to db_table='adm_role_perms'

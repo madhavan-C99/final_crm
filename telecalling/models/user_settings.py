@@ -7,7 +7,7 @@ from .delete_base_model import SafeDeleteModel
 # User = get_user_model()
 
 class UserSettings(SafeDeleteModel):
-
+    organization = models.ForeignKey('adm.Organization', on_delete=models.CASCADE, null=True, blank=True, related_name='user_settings')
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='settings')
 
     # ── Notifications (முன்னாடியே இருக்கு) ──────────────────

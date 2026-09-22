@@ -3,13 +3,18 @@ from adm.models import Team, User, Organization
 from django.db.models import Prefetch
 from django.utils import timezone
 
-def fetch_all_teams_admin_service():
+def fetch_all_teams_admin_service(user=None):
     try:
         teams_qs = Team.objects.select_related('leader', 'organization').prefetch_related(
             Prefetch('adm_members', queryset=User.objects.filter(is_active=True).order_by('id'))
         ).filter(is_active=True).order_by('id')
 
-        if not teams_qs.exists():
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            teams_qs = teams_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            teams_qs = teams_qs.none()
+
+        if not teams_qs.exists() and not (user and getattr(user, 'is_authenticated', False)):
             teams_qs = Team.objects.select_related('leader', 'organization').prefetch_related(
                 Prefetch('adm_members', queryset=User.objects.all().order_by('id'))
             ).all().order_by('id')
@@ -69,7 +74,11 @@ def create_team_admin_service(admin_user, data):
                 "message": "Team name is required"
             }
 
-        if Team.objects.filter(name__iexact=name).exists():
+        org = getattr(admin_user, 'organization', None) if admin_user else None
+        check_qs = Team.objects.filter(name__iexact=name)
+        if org:
+            check_qs = check_qs.filter(organization=org)
+        if check_qs.exists():
             return {
                 "status": False,
                 "message": f"Team with name '{name}' already exists"
@@ -96,6 +105,7 @@ def create_team_admin_service(admin_user, data):
             leader=lead_user,
             badge_color=color,
             is_active=True,
+            organization=org,
             created_by=getattr(admin_user, 'username', 'admin') if admin_user else 'admin'
         )
 
@@ -131,6 +141,7 @@ def create_team_admin_service(admin_user, data):
                 "name": new_team.name,
                 "region": region_str,
                 "lead": lead_name,
+                "color": new_team.badge_color,
                 "membersCount": assigned_members_count,
                 "created_at": created_at_str
             }
@@ -148,7 +159,11 @@ def edit_team_admin_service(admin_user, data, team_id=None):
                 "message": "Team ID is required"
             }
 
-        team = Team.objects.filter(id=t_id).first()
+        team_qs = Team.objects.filter(id=t_id)
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            team_qs = team_qs.filter(organization=admin_user.organization)
+
+        team = team_qs.first()
         if not team:
             return {
                 "status": False,
@@ -158,7 +173,10 @@ def edit_team_admin_service(admin_user, data, team_id=None):
         name = data.get('name')
         if name and str(name).strip():
             name_str = str(name).strip()
-            if Team.objects.filter(name__iexact=name_str).exclude(id=team.id).exists():
+            check_qs = Team.objects.filter(name__iexact=name_str).exclude(id=team.id)
+            if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+                check_qs = check_qs.filter(organization=admin_user.organization)
+            if check_qs.exists():
                 return {
                     "status": False,
                     "message": f"Team with name '{name_str}' already exists"
@@ -203,6 +221,7 @@ def edit_team_admin_service(admin_user, data, team_id=None):
                 "id": team.id,
                 "name": team.name,
                 "region": region_str,
+                "color": team.badge_color,
                 "updated_at": updated_at_str
             }
         }
@@ -219,7 +238,11 @@ def delete_team_admin_service(admin_user, data, team_id=None):
                 "message": "Team ID is required"
             }
 
-        team = Team.objects.filter(id=t_id).first()
+        team_qs = Team.objects.filter(id=t_id)
+        if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
+            team_qs = team_qs.filter(organization=admin_user.organization)
+
+        team = team_qs.first()
         if not team:
             return {
                 "status": False,
@@ -227,7 +250,8 @@ def delete_team_admin_service(admin_user, data, team_id=None):
             }
 
         User.objects.filter(team=team).update(team=None)
-        team.delete()
+        deleter_id = admin_user.id if (admin_user and getattr(admin_user, 'is_authenticated', False)) else None
+        team.save_delete(user_id=deleter_id)
 
         return {
             "status": True,
@@ -237,7 +261,7 @@ def delete_team_admin_service(admin_user, data, team_id=None):
         raise APIException(str(e))
 
 
-def fetch_team_dropdowns_admin_service(team_id=None):
+def fetch_team_dropdowns_admin_service(team_id=None, user=None):
     try:
         from django.db.models import Q
         base_filter = Q(is_active=True) & ~Q(
@@ -247,26 +271,28 @@ def fetch_team_dropdowns_admin_service(team_id=None):
             Q(username='developer@gmail.com')
         )
 
-        other_teams = Team.objects.all()
-        if team_id:
-            try:
-                team_id_int = int(team_id)
-                other_teams = other_teams.exclude(id=team_id_int)
-            except (ValueError, TypeError):
-                pass
-
-        other_leader_ids = list(other_teams.filter(leader__isnull=False).values_list('leader_id', flat=True))
-
+        t_id = None
         if team_id:
             try:
                 t_id = int(team_id)
-                team_filter = (Q(team__isnull=True) | Q(team_id=t_id)) & ~Q(id__in=other_leader_ids)
             except (ValueError, TypeError):
-                team_filter = Q(team__isnull=True) & ~Q(id__in=other_leader_ids)
-        else:
-            team_filter = Q(team__isnull=True) & ~Q(id__in=other_leader_ids)
+                t_id = None
 
-        users_qs = User.objects.filter(base_filter & team_filter).distinct().order_by("first_name")
+        if t_id:
+            team_filter = Q(team__isnull=True) | Q(team_id=t_id)
+        else:
+            team_filter = Q(team__isnull=True)
+
+        other_teams = Team.objects.all()
+        if t_id:
+            other_teams = other_teams.exclude(id=t_id)
+        other_leader_ids = list(other_teams.filter(leader__isnull=False).values_list('leader_id', flat=True))
+
+        users_qs = User.objects.select_related('team').filter(base_filter & team_filter & ~Q(id__in=other_leader_ids)).distinct().order_by("first_name")
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            users_qs = users_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            users_qs = users_qs.none()
         
         leads_list = []
         users_list = []
@@ -274,9 +300,19 @@ def fetch_team_dropdowns_admin_service(team_id=None):
             fname = (u.first_name or "").strip()
             lname = (u.last_name or "").strip()
             u_name = f"{fname} {lname}".strip() or u.username
-            item = {"id": u.id, "name": u_name}
-            leads_list.append(item)
-            users_list.append(item)
+            is_sel = bool(t_id and u.team_id == t_id)
+            is_ass = u.team_id is not None
+            
+            user_item = {
+                "id": u.id,
+                "name": u_name,
+                "team_id": u.team_id,
+                "team_name": u.team.name if u.team else None,
+                "is_selected": is_sel,
+                "is_assigned": is_ass
+            }
+            leads_list.append({"id": u.id, "name": u_name})
+            users_list.append(user_item)
 
         branches_list = [
             {"id": 1, "name": "North Region"},
