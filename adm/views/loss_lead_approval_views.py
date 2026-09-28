@@ -128,7 +128,8 @@ class ActionLossLeadApprovalAdmin(APIView):
         serializer.is_valid(raise_exception=True)
 
         payload = {**serializer.validated_data, **request.data}
-        result = action_loss_lead_approval_admin(**payload)
+        payload.pop('user', None)
+        result = action_loss_lead_approval_admin(user=request.user, **payload)
 
         log_data = {
             'user_id': request.user.id if request.user and request.user.id else None,

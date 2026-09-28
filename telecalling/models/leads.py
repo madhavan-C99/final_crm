@@ -211,19 +211,7 @@ class Education(SafeDeleteModel):
         
         
         
-class SelectTag(SafeDeleteModel):
-    # stages=models.ForeignKey(Stages,on_delete=models.SET_NULL,null=True,related_name="stages")
-    name=models.CharField(max_length=100)
-    is_active=models.BooleanField(default=False)
-    created_at=models.DateTimeField(auto_now_add=True,null=True)
-    created_by=models.CharField(max_length=50,null=True)
-    updated_at=models.DateTimeField(auto_now=True,null=True)
-    updated_by=models.CharField(max_length=50,null=True)
-
-    def __str__(self):
-        return str(self.name)
-    class Meta:
-        db_table = 'telecalling_select_tag'
+# class SelectTag removed as requested
         
         
 class FilterLeads(SafeDeleteModel):

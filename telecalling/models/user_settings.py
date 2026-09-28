@@ -37,12 +37,7 @@ class UserSettings(SafeDeleteModel):
     enable_message_templates = models.BooleanField(default=False)
     allow_custom_templates   = models.BooleanField(default=False)
     auto_send_messages       = models.BooleanField(default=False)
-    default_template         = models.ForeignKey(
-        'MessageTemplate',
-        null=True, blank=True,
-        on_delete=models.SET_NULL,
-        related_name='default_for_users'
-    )
+    default_template_id      = models.IntegerField(null=True, blank=True)
 
 
     default_lead_view = models.CharField(max_length=20)
@@ -62,25 +57,7 @@ class UserSettings(SafeDeleteModel):
     class Meta:
         db_table="telecalling_user_settings"
 
-# Messaging templates-க்கு தனி model
-class MessageTemplate(SafeDeleteModel):
-    user    = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='message_templates')
-    name    = models.CharField(max_length=100)
-    content = models.TextField()
-    is_custom = models.BooleanField(default=False)
-    created_at=models.DateTimeField(auto_now_add=True,null=True)
-    created_by=models.CharField(max_length=50,null=True)
-    updated_at=models.DateTimeField(auto_now=True,null=True)
-    updated_by=models.CharField(max_length=50,null=True)
 
-    def __str__(self):
-        return f"{self.name} ({self.user.email})"
-    
-    class Meta:
-        db_table="telecalling_message_tmp"
-        
-        
-        
 class UserSecurity(SafeDeleteModel):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     two_factor_enabled = models.BooleanField(default=False)

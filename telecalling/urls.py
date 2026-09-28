@@ -19,7 +19,7 @@ urlpatterns = [
     path('lead_upload_excel', ExcelUpload.as_view()),
     path('lead_preview_excel', PreviewLeadExcel.as_view()),
     path('daily_report_api', DailyReportApi.as_view()),
-    path('add_new_lead', AddNewLead.as_view()),
+    # path('add_new_lead', AddNewLead.as_view()), # 🔄 Replaced by /adm/create_lead_api
     path('fetch_pipeline_lead', FetchPipelineLead.as_view()),
     path('fetch_all_leads', FetchAllLeads.as_view()),
     path('fetch_one_lead', FetchOneLead.as_view()),
@@ -50,14 +50,14 @@ urlpatterns = [
     path('lead_preference_api', LeadPreferenceSettingApi.as_view()),
     path('tw_fa_api', SecuritySettingApi.as_view()),
     
-    path('dropdown_cate_create', CreateDropdownCate.as_view()),
-    path('create_dropdown', CreateDropdownSub.as_view()),
+    # path('dropdown_cate_create', CreateDropdownCate.as_view()),
+    # path('create_dropdown', CreateDropdownSub.as_view()),
     # path('get_selected_option', GetSelectedOption.as_view()), # 🔄 Replaced by /adm/get_select_options
     path('disconnect_select_tag', CallDisconnectSelectTag.as_view()),
     path('mark_notification_read', MarkNotificationRead.as_view()),
-    path('get_export_column', ExportColumnsView.as_view()),
-    path('export_json_data', ExportData.as_view()),
-    path('dashboard/pdf-data/', GetDashboardPDFData.as_view(), name='dashboard-pdf-data'),
+    # path('get_export_column', ExportColumnsView.as_view()), # 🔄 Replaced by /adm/export_data_api
+    # path('export_json_data', ExportData.as_view()), # 🔄 Replaced by /adm/export_data_api
+    # path('dashboard/pdf-data/', GetDashboardPDFData.as_view(), name='dashboard-pdf-data'), # 🔄 Replaced by /adm/export_data_api
     path('daily-report/submit', SubmitDailyReportView.as_view(), name='daily-report-submit'),
     path('daily-report/download', DownloadDailyReportView.as_view(), name='daily-report-download'),
     # path('add', Coursename.as_view()) # 🔄 Replaced by /adm/get_select_options

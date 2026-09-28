@@ -22,11 +22,7 @@ class LossLeadDetail(SafeDeleteModel):
 
     follow_up_days = models.PositiveIntegerField(default=0)
 
-    main_reason = models.ForeignKey(
-        SelectTag,
-        on_delete=models.SET_NULL,
-        null=True
-    )
+    main_reason_id = models.IntegerField(null=True, blank=True)
 
     detailed_reason = models.TextField(null=True)
 
@@ -39,4 +35,4 @@ class LossLeadDetail(SafeDeleteModel):
         db_table = "telecalling_loss_lead_detail"
 
     def __str__(self):
-        return f"Loss - Lead {self.lead_id} | {self.main_reason}"
+        return f"Loss - Lead {self.lead_id} | {self.main_reason_id}"

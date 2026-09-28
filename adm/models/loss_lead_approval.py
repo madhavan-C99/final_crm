@@ -1,5 +1,5 @@
 from django.db import models
-from telecalling.models.leads import Lead, SelectTag
+from telecalling.models.leads import Lead
 from .user import User
 
 
@@ -57,12 +57,7 @@ class AdminApprovedLossLead(models.Model):
         null=True, 
         related_name='approved_loss_leads'
     )
-    main_reason = models.ForeignKey(
-        SelectTag, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True
-    )
+    main_reason_id = models.IntegerField(null=True, blank=True)
     final_remarks = models.TextField(null=True, blank=True)
     can_retarget = models.BooleanField(default=True)
     approved_at = models.DateTimeField(auto_now_add=True, null=True)

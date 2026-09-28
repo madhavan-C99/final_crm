@@ -1,6 +1,5 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from .dropdown import Dropdown
 from django.core.validators import MinValueValidator
 from .delete_base_model import SafeDeleteModel
 

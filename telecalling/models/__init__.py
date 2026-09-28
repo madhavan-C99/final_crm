@@ -1,18 +1,17 @@
 from .call_details import CallDetails
 from .collection_query import CollectionQuery
 from .courses import Course,CoursePlan,CourseName,CourseTiming
-from .disconnectdetails import DisconnectStage,DisconnectedDetails
+from .disconnectdetails import DisconnectedDetails
 from .leads import *
 from .paymentinfo import PaymentInfo,PaymentFollowUp,PaymentHistory
 # from .perm import Perm
 # from .role import Role
 from adm.models import User
 from .follow_up import FollowUp
-from .user_settings import UserSettings,MessageTemplate
+from .user_settings import UserSettings
 from .notification import Notification,MissedFollowUpHistory
 from .lose_lead import LossLeadDetail
 from .api_log import ApiLog
 from .delete_base_model import SafeDeleteModel
 from .deleted_data_log import DeletedDataLog
-from .dropdown import DropdownCategory,Dropdown
 from .daily_report_history import DailyReport

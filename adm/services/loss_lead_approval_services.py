@@ -10,7 +10,7 @@ from rest_framework.exceptions import APIException
 
 from telecalling.models import (
     Lead, LossLeadDetail, CallDetails, FollowUp, PipelineStage,
-    SelectTag, LeadSource, CampaignName, CoursePlan, CourseName, User
+    LeadSource, CampaignName, CoursePlan, CourseName, User
 )
 from ..models import AdminLossActionLog, AdminApprovedLossLead
 from .lead_services import get_user_display_name
@@ -157,17 +157,19 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
             calls = CallDetails.objects.filter(lead=lead).order_by("-created_at")
             total_calls = calls.count()
             latest_call = calls.first()
-            loss_detail = LossLeadDetail.objects.filter(lead=lead).select_related("main_reason").first()
+            loss_detail = LossLeadDetail.objects.filter(lead=lead).first()
 
             # Effort Summary (e.g. "12 Calls Done")
             effort_summary = f"{total_calls} Calls Done" if total_calls > 0 else "0 Calls Done"
 
             # Loss Reason
             loss_reason_str = "-"
-            if loss_detail and loss_detail.main_reason:
-                loss_reason_str = getattr(loss_detail.main_reason, 'display_value', None) or getattr(loss_detail.main_reason, 'name', "-")
-            elif loss_detail and loss_detail.detailed_reason:
-                loss_reason_str = loss_detail.detailed_reason
+            if loss_detail:
+                reason_obj = Priority.objects.filter(id=loss_detail.main_reason_id).first() if loss_detail.main_reason_id else None
+                if reason_obj:
+                    loss_reason_str = getattr(reason_obj, 'display_value', None) or getattr(reason_obj, 'name', "-")
+                elif loss_detail.detailed_reason:
+                    loss_reason_str = loss_detail.detailed_reason
 
             # Last Conversation Outcome (actual call disposition / outcome / summary)
             last_conversation_outcome = "-"
@@ -434,7 +436,7 @@ def export_loss_lead_approval_requests_admin(**data):
 
 
 
-def action_loss_lead_approval_admin(**data):
+def action_loss_lead_approval_admin(user=None, **data):
     """
     Loss Lead Approval Page -> Action Buttons API (Approve, Reject, Reassign).
     Handles 3 Figma Actions:
@@ -453,8 +455,16 @@ def action_loss_lead_approval_admin(**data):
 
         raw_action = data.get("action") or data.get("action_type") or "approve"
         action_type = str(raw_action).lower().strip()
-        admin_user_id = data.get("user_id") or data.get("admin_user_id")
-        admin_user = User.objects.filter(id=admin_user_id).first() if admin_user_id else None
+
+        # 100% Pure Logged-in User Enforcement
+        admin_user = user if user and getattr(user, 'is_authenticated', False) else None
+        if not admin_user:
+            admin_user_id = data.get("user_id") or data.get("admin_user_id")
+            if admin_user_id:
+                admin_user = User.objects.filter(id=admin_user_id).first()
+        
+        if not admin_user:
+            raise PermissionDenied("Authentication required. Please login to perform this action.")
         raw_remarks = (
             data.get("remarks") or 
             data.get("remark") or
@@ -494,8 +504,8 @@ def action_loss_lead_approval_admin(**data):
             lead.save()
 
             # 1. Create or Update Permanent Approved Loss Record
-            loss_detail = LossLeadDetail.objects.filter(lead=lead).select_related("main_reason").first()
-            main_reason_obj = loss_detail.main_reason if loss_detail else None
+            loss_detail = LossLeadDetail.objects.filter(lead=lead).first()
+            main_reason_id_val = loss_detail.main_reason_id if loss_detail else None
 
             can_retarget_val = bool(data.get("can_retarget", True))
 
@@ -505,7 +515,7 @@ def action_loss_lead_approval_admin(**data):
                 lead=lead,
                 defaults={
                     'approved_by': admin_user,
-                    'main_reason': main_reason_obj,
+                    'main_reason_id': main_reason_id_val,
                     'final_remarks': remarks or (loss_detail.detailed_reason if loss_detail else "Loss Approved"),
                     'can_retarget': can_retarget_val,
                     'created_by': created_by_user,

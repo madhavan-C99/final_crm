@@ -1,7 +1,6 @@
 import logging
 from rest_framework.exceptions import APIException
 from ..models.collection_query import CollectionQuery
-from ..models.dropdown import DropdownCategory, Dropdown
 from ..services.query_services import exec_raw_sql
 
 logger = logging.getLogger('django')
@@ -31,30 +30,3 @@ def get_select_options(**data):
     except Exception as e:
         raise APIException(str(e))
 
-
-def drop_cate(user, **data):
-    try:
-        drop = DropdownCategory.objects.filter(category_name=data.get("category")).first()
-        if drop is not None:
-            raise APIException(f"{drop.category_name} Category is already existing")
-
-        drop_category = DropdownCategory.objects.create(
-            category_name=data.get("category"),
-            created_by=user
-        )
-        return f"{drop_category.category_name} category is created successfully"
-    except Exception as e:
-        raise APIException(str(e))
-
-
-def drop_sub(user, **data):
-    try:
-        drop_sub = Dropdown.objects.create(
-            name=data.get("name"),
-            category_id=data.get("category_id"),
-            sub_name=data.get("sub_name"),
-            created_by=user
-        )
-        return f"{drop_sub.name} sub-category is created successfully"
-    except Exception as e:
-        raise APIException(str(e))

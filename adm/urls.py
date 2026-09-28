@@ -31,7 +31,7 @@ from .views.permission_views import (
     GetRolesAndPermissionsApi, UpdateRolePermissionApi,
     AddPermAPIView, FetchPermsListAPIView, FetchRolesListAPIView, AssignRolePermAPIView,
 )
-from .views.query_views import GetSelectOptions
+from .views.query_views import GetSelectOptions, GetGenericList
 
 from .views.user_views import (
     CreateToken,
@@ -81,15 +81,17 @@ from .views.campaign_management_views import (
 )
 
 from .views.add_new_lead_views import AddNewLeadView, AddLeadDropdownsView
-from .views.generic_engine_views import FetchLeadsApi, ExportDataApi, ActionLeadManagementApi
+from .views.generic_engine_views import FetchLeadsApi, ExportDataApi, ActionLeadManagementApi, CreateLeadApi
 
 urlpatterns = [
     
     # 🚀 Generic Engines (get_select_options enabled for testing)
     # path('fetch_leads_api', FetchLeadsApi.as_view()),
-    # path('export_data_api', ExportDataApi.as_view()),
+    path('export_data_api', ExportDataApi.as_view()),
     # path('action_lead_management', ActionLeadManagementApi.as_view()),
     path('get_select_options', GetSelectOptions.as_view()),
+    path('create_lead_api', CreateLeadApi.as_view()),
+    # path('get_generic_list', GetGenericList.as_view()),
     # path('get_roles_and_permissions', GetRolesAndPermissionsApi.as_view()),
     
     # 📌 User Management Settings APIs
@@ -111,9 +113,9 @@ urlpatterns = [
 
     # 📌 Lead Management APIs
     path('fetch_all_leads_admin', FetchAllLeadsAdmin.as_view()),
-    path('add_new_lead_admin', AddNewLeadAdmin.as_view()),  
+    # path('add_new_lead_admin', AddNewLeadAdmin.as_view()), # 🔄 Replaced by /adm/create_lead_api
     path('upload_lead_excel_admin', UploadLeadExcelAdmin.as_view()),
-    path('export_all_leads_admin', ExportAllLeadsAdmin.as_view()),
+    # path('export_all_leads_admin', ExportAllLeadsAdmin.as_view()), # 🔄 Replaced by /adm/export_data_api
     # path('get_filter_dropdowns_admin', GetFilterDropdownsAdmin.as_view()), # 🔄 Replaced by get_select_options
     path('fetch_pipeline_leads_admin', FetchPipelineLeadsAdmin.as_view()),
     path('fetch_lead_details_admin', FetchLeadDetailsAdmin.as_view()),
@@ -127,13 +129,13 @@ urlpatterns = [
     
     # 📌 Pending Payments APIs
     path('fetch_all_pending_payments_admin', FetchAllPendingPaymentsAdmin.as_view()),
-    path('export_pending_payments_admin', ExportPendingPaymentsAdmin.as_view()),
+    # path('export_pending_payments_admin', ExportPendingPaymentsAdmin.as_view()), # 🔄 Replaced by /adm/export_data_api
     # path('get_pending_payment_filter_dropdowns_admin', GetPendingPaymentFilterDropdownsAdmin.as_view()), # 🔄 Replaced by get_select_options
 
     # 📌 Loss Lead Approval Request APIs
     path('fetch_loss_lead_approval_requests_admin', FetchLossLeadApprovalRequestsAdmin.as_view()),
     # path('get_loss_lead_approval_filter_dropdowns_admin', GetLossLeadApprovalFilterDropdownsAdmin.as_view()), # 🔄 Replaced by get_select_options
-    path('export_loss_lead_approval_requests_admin', ExportLossLeadApprovalRequestsAdmin.as_view()),
+    # path('export_loss_lead_approval_requests_admin', ExportLossLeadApprovalRequestsAdmin.as_view()), # 🔄 Replaced by /adm/export_data_api
     path('action_loss_lead_approval_admin', ActionLossLeadApprovalAdmin.as_view()),
 
     # 📌 Performance Overview APIs
@@ -144,7 +146,7 @@ urlpatterns = [
     path('assign_users_to_team_admin', AssignUsersToTeamAdmin.as_view()),
     path('update_telecaller_target_admin', UpdateTelecallerTargetAdmin.as_view()),
     # path('get_performance_filter_dropdowns_admin', GetPerformanceFilterDropdownsAdmin.as_view()), # 🔄 Replaced by get_select_options
-    path('export_performance_overview_admin', ExportPerformanceOverviewAdmin.as_view()),
+    # path('export_performance_overview_admin', ExportPerformanceOverviewAdmin.as_view()), # 🔄 Replaced by /adm/export_data_api
     
     # 📌 Role & Permission Management APIs
     path('perm_add', AddPermAPIView.as_view()),
@@ -179,7 +181,7 @@ urlpatterns = [
     path('get_campaign_detail', FetchCampaignDetailView.as_view()),
     path('update_campaign_detail', UpdateCampaignDetailView.as_view()),
     # path('get_add_lead_options', AddLeadDropdownsView.as_view()), # 🔄 Replaced by get_select_options
-    path('add_new_lead', AddNewLeadView.as_view()),
+    # path('add_new_lead', AddNewLeadView.as_view()), # 🔄 Replaced by /adm/create_lead_api
 
     # 📌 Team Management APIs
     path('fetch_all_teams_admin', FetchAllTeamsAdminApi.as_view()),

@@ -8,7 +8,9 @@ from telecalling.models.courses import Course, CourseName, CoursePlan
 from telecalling.models.call_details import CallDetails
 from telecalling.models.follow_up import FollowUp
 from adm.models.user import User
+from adm.models.reassign_lead_history import AdminLeadReassignHistory
 from telecalling.models.delete_base_model import SafeDeleteModel
+
 from .query_services import exec_raw_sql
 
 # 🌟 HELPER FUNCTION: FLEXIBLE TEXT MATCHING (Handles spaces, hyphens, and case differences)
@@ -131,13 +133,19 @@ def fetch_lead_summary_report(user, campaign_id=None, campaign_name=None, search
                 from_date = parts[0].strip()
                 to_date = parts[1].strip()
 
+        def clean_date_val(val):
+            s = str(val or '').strip()
+            if s in ["0", "null", "None", "All", "all", ""]:
+                return ""
+            return s
+
         org_id = user.organization_id if (user and hasattr(user, 'organization_id') and user.organization_id) else 0
         qry_vars = {
             "campaign_id": c_id,
             "campaign_name": c_name,
             "organization_id": org_id,
-            "from_date": str(from_date) if from_date else "",
-            "to_date": str(to_date) if to_date else "",
+            "from_date": clean_date_val(from_date),
+            "to_date": clean_date_val(to_date),
             "assigned_to": str(kwargs.get("assigned_to") or ""),
             "stages": str(kwargs.get("stages") or kwargs.get("stage") or ""),
             "search": str(search or kwargs.get("search") or ""),
@@ -504,7 +512,38 @@ def assign_lead_telecaller(lead_ids, telecaller, note=None):
         if not user_obj:
             return {"status": "error", "message": f"Telecaller '{telecaller}' not found"}
 
-        updated_count = Lead.objects.filter(id__in=lead_ids).update(assigned_to=user_obj)
+        updated_count = 0
+        leads = Lead.objects.filter(id__in=lead_ids)
+        for lead in leads:
+            previous_telecaller = lead.assigned_to
+            if previous_telecaller != user_obj:
+                calls_qs = CallDetails.objects.filter(lead=lead)
+                if previous_telecaller:
+                    calls_qs = calls_qs.filter(telecaller=previous_telecaller)
+
+                call_history_json = []
+                for c in calls_qs.order_by('-created_at')[:20]:
+                    call_history_json.append({
+                        "call_id": c.id,
+                        "telecaller_id": c.telecaller_id,
+                        "connection_status": c.connection_status,
+                        "duration_seconds": c.duration_seconds,
+                        "created_at": c.created_at.isoformat() if c.created_at else None,
+                    })
+
+                AdminLeadReassignHistory.objects.create(
+                    lead=lead,
+                    previous_telecaller=previous_telecaller,
+                    new_telecaller=user_obj,
+                    attended_calls_count=len(call_history_json),
+                    previous_call_history=call_history_json,
+                    reassigned_reason=note or "Bulk Reassign via Enquiry Sheet"
+                )
+                lead.assigned_to = user_obj
+                lead.save()
+                updated_count += 1
+            else:
+                updated_count += 1
 
         display_name = f"{user_obj.first_name or ''} {user_obj.last_name or ''}".strip() or user_obj.username
 

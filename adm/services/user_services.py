@@ -159,12 +159,10 @@ def fetch_all_users_admin_service(user, page=1, page_size=50, search=None, sort_
         page = int(page or 1)
         page_size_val = str(page_size or "50").lower()
 
-        # Database Query with Relations Optimization (Excludes Admin & Developer accounts)
-        qs = User.objects.filter(is_active=True).exclude(
-            Q(user_roles__role__name__in=['admin', 'developer', 'Admin', 'Developer']) |
-            Q(user_roles__role__code__in=['ADM', 'DEV', 'ADMIN', 'DEVELOPER']) 
-            # Q(username='admin@gmail.com') |
-            # Q(username='developer@gmail.com')
+        # Database Query with Relations Optimization (Excludes Developer accounts ONLY, shows Admins & all other users)
+        qs = User.objects.exclude(
+            Q(user_roles__role__name__icontains='developer') |
+            Q(user_roles__role__code__in=['DEV', 'DEVELOPER'])
         ).distinct().select_related('team', 'reporting_to').prefetch_related('user_roles__role').order_by('-created_at')
 
         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
@@ -217,7 +215,10 @@ def fetch_all_users_admin_service(user, page=1, page_size=50, search=None, sort_
             if hasattr(u, 'user_roles'):
                 for ur in u.user_roles.all():
                     if ur.role:
-                        roles.append({"id": ur.role.id, "name": ur.role.display_value or ur.role.name, "code": ur.role.code})
+                        role_disp_name = ur.role.display_value or ur.role.name or ""
+                        if role_disp_name.strip().lower() in ['telecaller', 'tele caller', 'telecallers', 'tc']:
+                            role_disp_name = "Executive"
+                        roles.append({"id": ur.role.id, "name": role_disp_name, "code": ur.role.code})
 
             reporting_to_name = None
             if u.reporting_to:
@@ -226,6 +227,12 @@ def fetch_all_users_admin_service(user, page=1, page_size=50, search=None, sort_
                 reporting_to_name = u.team.leader.get_full_name()
 
             emp_id = u.employee_id or f"EMP-{u.id:04d}"
+
+            raw_role_str = roles[0]["name"] if roles else (u.user_type or "Executive")
+            if str(raw_role_str).strip().lower() in ['telecaller', 'tele caller', 'telecallers', 'tc']:
+                final_role = "Executive"
+            else:
+                final_role = raw_role_str
 
             users_data.append({
                 "id": u.id,
@@ -237,7 +244,7 @@ def fetch_all_users_admin_service(user, page=1, page_size=50, search=None, sort_
                 "mobile_no": u.mobile or "",
                 "location": u.address or "",
                 "email": u.email,
-                "role": roles[0]["name"] if roles else (u.user_type or "Executive"),
+                "role": final_role,
                 "roles": roles,
                 "reporting_to": reporting_to_name,
                 "reporting_to_id": u.reporting_to_id,

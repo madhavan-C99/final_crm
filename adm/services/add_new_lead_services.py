@@ -1,10 +1,9 @@
 from django.db.models import Q
 from rest_framework.exceptions import APIException
 from django.utils import timezone
-from adm.models.pipeline_category import PipelineCategory
-from adm.models.user import User
+from datetime import datetime, date
+from adm.models import CampaignAssignedAgent, PipelineCategory, User
 from telecalling.models.leads import Lead, CampaignName, LeadSource, PipelineStage
-from ..models import CampaignAssignedAgent, PipelineCategory
 
 
 def fetch_add_lead_dropdowns(user, **data):
@@ -75,7 +74,6 @@ def fetch_add_lead_dropdowns(user, **data):
 
 def create_new_lead(user, **data):
     try:
-        from datetime import datetime, date
         first_name = data.get("first_name", "").strip()
         last_name = data.get("last_name", "").strip()
         full_name = f"{first_name} {last_name}".strip()

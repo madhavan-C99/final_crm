@@ -12,7 +12,6 @@ from django.db.models import F
 from django.db.models.functions import Coalesce
 from  ..tasks.course_task import *
 from ..models.leads import PipelineStage, Priority
-from ..models.disconnectdetails import DisconnectStage
 
 def validate_and_sanitize_lead_priority(lead):
     """
@@ -201,7 +200,6 @@ DROPDOWN_MODEL_MAP = {
     "payment_status":PaymentStage,
     "pending_amount":AmountStage,
     "call_stage":PipelineStage,
-    "call_select_tag":SelectTag,
     "payment_filter":FilterPayment,
     "pipeline_filter":FilterPipeline
 }   

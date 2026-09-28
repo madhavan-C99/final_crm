@@ -12,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from telecalling.models import (
     Lead, PaymentInfo, PaymentHistory, LossLeadDetail, FollowUp,
     CallDetails, CampaignName, LeadSource, PipelineStage,
-    User, CoursePlan, CourseName, SelectTag, Priority
+    User, CoursePlan, CourseName, Priority
 )
 from ..models import AdminLossActionLog, AdminApprovedLossLead, AdminLeadReassignHistory
 
@@ -1039,9 +1039,10 @@ def fetch_lead_details_admin(**data):
             })
 
         # B. Loss Details (if lead was lost)
-        loss_detail = LossLeadDetail.objects.filter(lead=lead).select_related("main_reason").first()
+        loss_detail = LossLeadDetail.objects.filter(lead=lead).first()
         if loss_detail:
-            reason_name = loss_detail.main_reason.name if loss_detail.main_reason else "Closed"
+            reason_obj = Priority.objects.filter(id=loss_detail.main_reason_id).first() if loss_detail.main_reason_id else None
+            reason_name = reason_obj.name if reason_obj else (loss_detail.detailed_reason or "Closed")
             formatted_date = loss_detail.created_at.strftime("%d %b %Y") if loss_detail.created_at else ""
             formatted_time = loss_detail.created_at.strftime("%I:%M %p") if loss_detail.created_at else ""
             timeline.append({
@@ -1348,26 +1349,33 @@ def mark_as_lost_admin(**data):
             loss_obj.detailed_reason = detailed_reason
             loss_obj.save()
 
+        # Resolve acting user safely
+        acting_user = data.get("user") or data.get("admin_user") or lead.assigned_to or User.objects.filter(is_superuser=True).first() or User.objects.first()
+        created_by_name = get_user_display_name(acting_user) or "Admin"
+
         # 4. Record Action Log in AdminLossActionLog & Auto-Approve for Admin View
         try:
             AdminLossActionLog.objects.create(
                 lead=lead,
-                admin_user=lead.assigned_to,
+                admin_user=acting_user,
                 action_type='submitted',
                 previous_assigned_to=lead.assigned_to,
-                remarks=f"Marked as Lost: {main_reason_obj.name if main_reason_obj else detailed_reason}"
+                remarks=f"Marked as Lost: {main_reason_obj.name if main_reason_obj else detailed_reason}",
+                created_by=created_by_name,
+                updated_by=created_by_name
             )
         except Exception:
             pass
 
         try:
-            AdminApprovedLossLead.objects.get_or_create(
+            AdminApprovedLossLead.objects.update_or_create(
                 lead=lead,
                 defaults={
-                    'approved_by': lead.assigned_to,
+                    'approved_by': acting_user,
                     'main_reason': main_reason_obj,
                     'final_remarks': detailed_reason or "Marked as Lost by Admin",
-                    'created_by': "Admin"
+                    'created_by': created_by_name,
+                    'updated_by': created_by_name
                 }
             )
         except Exception:

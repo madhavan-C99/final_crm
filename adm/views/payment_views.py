@@ -26,10 +26,7 @@ class GetPendingPaymentFilterDropdownsAdmin(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class FetchAllPendingPaymentsAdmin(APIView):
-    """
-    Pending Payments Page -> Fetch All Pending Payments & Summary Cards API.
-    POST request only.
-    """
+    
     class InputSerializers(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)

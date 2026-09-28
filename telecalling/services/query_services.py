@@ -53,28 +53,8 @@ def delete_exec_raw_sql(qry_key, qry_vars=dict()):
 
 import re
 
-def replace_query(qry, qry_vars):
-    replquery = qry
-    for key in qry_vars:
-        raw_val = qry_vars[key]
-        if raw_val is None:
-            val = ""
-        elif isinstance(raw_val, (int, float)):
-            val = str(raw_val)
-        else:
-            # Sanitize string input to prevent SQL injection
-            val = str(raw_val).replace("'", "''")
-        replquery = replquery.replace("@_" + key, val)
-    
-    # Safely replace any unsupplied @_placeholder variables (e.g. @_pipeline_id) with 0
-    replquery = re.sub(r'@_[a_zA-Z0-9_]+', '0', replquery)
-    return replquery   
-        
-        #select * from adm_roles where id = @_id ;
-        #select * from adm_roles where id = 1 
-        #replquery = replquery + str(" ") + str("where") + str(" ")+ str(key) + str(" " )+str("=") +str(" ") + str(qry_vars[key])
-    # print(replquery)
-    return replquery 
+from adm.services.query_services import replace_query
+
 
 
 def make_serializable(obj):

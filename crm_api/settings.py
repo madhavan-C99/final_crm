@@ -85,6 +85,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'utils.api_log_middleware.APIAuditLogMiddleware',
 ]
 
 ROOT_URLCONF = 'crm_api.urls'

@@ -47,6 +47,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(max_length=100, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
     mobile = models.CharField(max_length=25, null=True, blank=True)
+    
+    
+    
     user_type = models.CharField(max_length=25, null=True, blank=True)
     address = models.CharField(max_length=500, null=True, blank=True)
     wrong_pwd_counts = models.IntegerField(default=0)
@@ -110,3 +113,5 @@ class User(AbstractBaseUser, PermissionsMixin):
         codes = list(role_obj.perms.values_list("code", flat=True))
         names = list(role_obj.perms.values_list("name", flat=True))
         return list(set([c for c in codes if c] + [n for n in names if n]))
+    
+    

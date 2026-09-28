@@ -406,7 +406,8 @@ class MarkAsLostAdmin(APIView):
         serializer = self.InputSerializers(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        result = mark_as_lost_admin(**serializer.validated_data)
+        payload = {**serializer.validated_data, **request.data}
+        result = mark_as_lost_admin(user=request.user, admin_user=request.user, **payload)
 
         log_data = {
             'user_id': request.user.id if request.user.id else None,
