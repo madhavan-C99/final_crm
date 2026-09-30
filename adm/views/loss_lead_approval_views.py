@@ -16,10 +16,8 @@ from ..services.loss_lead_approval_services import (
 # @authentication_classes([])
 # @permission_classes([])
 class FetchLossLeadApprovalRequestsAdmin(APIView):
-    """
-    POST & GET -> Loss Lead Approval Request Page Table Data & Summary API.
-    """
-    class InputSerializers(serializers.Serializer):
+    
+    class InputSerializer(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -36,14 +34,14 @@ class FetchLossLeadApprovalRequestsAdmin(APIView):
         page = serializers.IntegerField(required=False, default=1)
         page_size = serializers.IntegerField(required=False, allow_null=True, default=250)
 
-    def get(self, request):
-        authorize_request('api_fetch_loss_lead_approval_requests_admin', request.user)
-        result = fetch_loss_lead_approval_requests_admin(user=request.user, **request.query_params.dict())
-        return Response(result, status=status.HTTP_200_OK)
+    # def get(self, request):
+    #     authorize_request('api_fetch_loss_lead_approval_requests_admin', request.user)
+    #     result = fetch_loss_lead_approval_requests_admin(user=request.user, **request.query_params.dict())
+    #     return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request):
         authorize_request('api_fetch_loss_lead_approval_requests_admin', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         result = fetch_loss_lead_approval_requests_admin(user=request.user, **serializer.validated_data)
@@ -79,7 +77,7 @@ class ExportLossLeadApprovalRequestsAdmin(APIView):
     """
     POST & GET -> Lime Green Excel Export API for Loss Lead Approval Requests Page.
     """
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -87,14 +85,14 @@ class ExportLossLeadApprovalRequestsAdmin(APIView):
         loss_reason_id = serializers.IntegerField(required=False, allow_null=True)
         assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
 
-    def get(self, request):
-        authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
-        result = export_loss_lead_approval_requests_admin(user=request.user, **request.query_params.dict())
-        return Response(result, status=status.HTTP_200_OK)
+    # def get(self, request):
+    #     authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
+    #     result = export_loss_lead_approval_requests_admin(user=request.user, **request.query_params.dict())
+    #     return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request):
         authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         result = export_loss_lead_approval_requests_admin(user=request.user, **serializer.validated_data)
@@ -104,11 +102,8 @@ class ExportLossLeadApprovalRequestsAdmin(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class ActionLossLeadApprovalAdmin(APIView):
-    """
-    POST -> Action Buttons API for Loss Lead Approval Requests Page.
-    Handles 3 Figma Actions: 'approve' (Green Tick), 'reject' (Red Cross), 'reassign' (Blue Refresh).
-    """
-    class InputSerializers(serializers.Serializer):
+   
+    class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=False, allow_null=True)
         id = serializers.IntegerField(required=False, allow_null=True)
         action_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -124,7 +119,7 @@ class ActionLossLeadApprovalAdmin(APIView):
 
     def post(self, request):
         authorize_request('api_action_loss_lead_approval_admin', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         payload = {**serializer.validated_data, **request.data}

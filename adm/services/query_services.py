@@ -20,24 +20,29 @@ ALIAS_MAP = {
     'campaign_manager_list': 'L_CAMPAIGN_MANAGERS',
     'lead_source_list': 'L_LEAD_SOURCES',
     'team_list': 'L_TEAMS',
+    'team_lead_list': 'L_UNASSIGNED_TEAM_LEADS',
+    'team_lead': 'L_UNASSIGNED_TEAM_LEADS',
+    'team_leads': 'L_UNASSIGNED_TEAM_LEADS',
+    'unassigned_team_leads': 'L_UNASSIGNED_TEAM_LEADS',
+    'unassigned_team_lead': 'L_UNASSIGNED_TEAM_LEADS',
+    'unassigned_leads': 'L_UNASSIGNED_TEAM_LEADS',
     'category_list': 'L_CATEGORIES',
-    'pipeline_list': 'L_PIPELINES',
-    'stage_list': 'L_STAGES',
-    'loss_reason_list': 'L_LOSS_REASONS',
-    'priority_list': 'L_PRIORITIES',
-    'priority': 'L_PRIORITIES',
-    'priorities': 'L_PRIORITIES',
-    'tag_list': 'L_PRIORITIES',
-    'tags': 'L_PRIORITIES',
-    'tag': 'L_PRIORITIES',
-    'disconnect_tags': 'L_PRIORITIES',
-    'roles_list': 'L_ROLES',
+    'unassigned_tl': 'L_UNASSIGNED_TEAM_LEADS',
+    'unassigned_team_members': 'L_UNASSIGNED_TELECALLERS',
+    'unassigned_telecallers': 'L_UNASSIGNED_TELECALLERS',
+    'unassigned_users': 'L_UNASSIGNED_TELECALLERS',
+    'unassigned_members': 'L_UNASSIGNED_TELECALLERS',
 }
 
 
 def exec_raw_sql(qry_key, qry_vars=dict()):
     try:
         real_key = ALIAS_MAP.get(qry_key, qry_key)
+        if real_key == 'L_TELECALLERS':
+            qry_vars = dict(qry_vars) if qry_vars else {}
+            if qry_vars.get('campaign_id') in (None, ''):
+                qry_vars['campaign_id'] = 0
+
         coll_qry = CollectionQuery.objects.filter(key=real_key).first()
         if coll_qry is not None:
             # print(f"Executing SQL Query for key: {real_key} with variables: {qry_vars}")  # Debugging line to log the query key and variables
@@ -48,7 +53,8 @@ def exec_raw_sql(qry_key, qry_vars=dict()):
             cursor.execute(replaced_query)
             res_vals = dict_fetch_all(cursor)
             cursor.close()
-            # print(f"Query Result: {res_vals}")  # Debugging line to log the query result
+            if real_key in ['L_TELECALLERS', 'L_UNASSIGNED_TELECALLERS']:
+                res_vals = enrich_telecallers_data(res_vals)
             return make_serializable(res_vals)
         else:
             # Fallback for dynamic dependent options (e.g. get_selected_option, course_time)
@@ -173,3 +179,58 @@ def exec_paginated_raw_sql(qry_key, qry_vars=dict(), page=1, page_size=50):
         }
     except Exception as e:
         raise APIException(str(e))
+
+
+def enrich_telecallers_data(res_vals):
+    try:
+        if not isinstance(res_vals, list) or not res_vals:
+            return res_vals
+
+        from telecalling.models import Lead, User
+        from django.db.models import Count
+
+        user_ids = [r['value'] for r in res_vals if isinstance(r, dict) and 'value' in r and r['value']]
+        if not user_ids:
+            return res_vals
+
+        users_map = {u.id: u for u in User.objects.filter(id__in=user_ids).select_related('team')}
+
+        lead_counts = Lead.objects.filter(assigned_to_id__in=user_ids).values('assigned_to_id', 'pipeline_stage_id').annotate(cnt=Count('id'))
+
+        stats = {u_id: {'total': 0, 'new': 0, 'followup': 0, 'won': 0, 'lost': 0} for u_id in user_ids}
+        for item in lead_counts:
+            uid = item['assigned_to_id']
+            stg = item['pipeline_stage_id']
+            cnt = item['cnt']
+            stats[uid]['total'] += cnt
+            if stg == 1:
+                stats[uid]['new'] += cnt
+            elif stg == 2:
+                stats[uid]['followup'] += cnt
+            elif stg == 3:
+                stats[uid]['won'] += cnt
+            elif stg == 4:
+                stats[uid]['lost'] += cnt
+
+        for r in res_vals:
+            if isinstance(r, dict) and 'value' in r:
+                uid = r['value']
+                st = stats.get(uid, {'total': 0, 'new': 0, 'followup': 0, 'won': 0, 'lost': 0})
+                u_obj = users_map.get(uid)
+                t_color = u_obj.team.badge_color if (u_obj and u_obj.team and u_obj.team.badge_color) else "#505AF2"
+
+                r['total_leads'] = st['total']
+                r['current_leads'] = st['total']
+                r['total_lead_count'] = st['total']
+                r['leads_count'] = st['total']
+                r['new_leads'] = st['new']
+                r['followup_leads'] = st['followup']
+                r['won_leads'] = st['won']
+                r['lost_leads'] = st['lost']
+                r['stage_counts'] = st
+                r['segments'] = [t_color, t_color, t_color]
+                r['team_name'] = u_obj.team.name if (u_obj and u_obj.team) else None
+                r['badge_color'] = t_color
+        return res_vals
+    except Exception:
+        return res_vals

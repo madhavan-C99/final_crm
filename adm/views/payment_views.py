@@ -27,7 +27,7 @@ class GetPendingPaymentFilterDropdownsAdmin(APIView):
 # @permission_classes([])
 class FetchAllPendingPaymentsAdmin(APIView):
     
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -45,7 +45,7 @@ class FetchAllPendingPaymentsAdmin(APIView):
 
     def post(self, request):
         authorize_request('api_fetch_all_pending_payments_admin', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         result = fetch_all_pending_payments_admin(user=request.user, **serializer.validated_data)
@@ -67,7 +67,7 @@ class FetchAllPendingPaymentsAdmin(APIView):
 # @permission_classes([])
 class ExportPendingPaymentsAdmin(APIView):
   
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -83,7 +83,7 @@ class ExportPendingPaymentsAdmin(APIView):
 
     def post(self, request):
         authorize_request('api_export_pending_payments_admin', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         return export_pending_payments_admin(user=request.user, **serializer.validated_data)

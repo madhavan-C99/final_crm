@@ -78,7 +78,7 @@ def create_token(**data):
     )
 
     if expired.exists():
-        raise AuthenticationFailed(detail='Your plan has expired. Please renew your plan.')
+        raise AuthenticationFailed(detail='Your account is disabled.')
 
     user_obj = User.objects.filter(
         Q(mobile=username) | Q(username=username) | Q(email=username)
@@ -1346,7 +1346,6 @@ def transfer_all_campaigns_leads_admin_service(admin_user, data):
         }
     except Exception as e:
         raise APIException(str(e))
-
 
 
 

@@ -11,6 +11,7 @@ from .follow_up import FollowUp
 from .user_settings import UserSettings
 from .notification import Notification,MissedFollowUpHistory
 from .lose_lead import LossLeadDetail
+from .loss_reason import LossReason
 from .api_log import ApiLog
 from .delete_base_model import SafeDeleteModel
 from .deleted_data_log import DeletedDataLog

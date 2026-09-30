@@ -35,7 +35,7 @@ class DailyReportApi(APIView):
 
 class SubmitDailyReportView(APIView):
     """API 1: Submit report - Store in DB"""
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         id = serializers.IntegerField(required=True)
         data = serializers.JSONField(required=False, default={})
         tomorrow_conversation = serializers.IntegerField(required=False, default=0)
@@ -44,7 +44,7 @@ class SubmitDailyReportView(APIView):
     
     def post(self, request):
         authorize_request('api_submit_daily_report_view', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         response_data = submit_daily_report(

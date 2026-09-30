@@ -90,7 +90,7 @@ class GetDashboardPDFData(APIView):
     API to get dashboard data for PDF creation
     Returns only the data structure needed for PDF
     """
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         from_date = serializers.DateField(required=False)
         to_date = serializers.DateField(required=False)
         filter_type = serializers.CharField(required=False, default="year") 
@@ -98,7 +98,7 @@ class GetDashboardPDFData(APIView):
     def post(self, request):
         authorize_request('api_get_dashboard_p_d_f_data', request.user)
         try:
-            serializer = self.InputSerializers(data=request.data)
+            serializer = self.InputSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             
             # Get dashboard data for PDF

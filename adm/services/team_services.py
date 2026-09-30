@@ -22,13 +22,16 @@ def fetch_all_teams_admin_service(user=None):
         teams_data = []
         for team in teams_qs:
             lead_obj = None
+            lead_name_str = None
+            lead_id_val = None
             if team.leader:
                 fname = (team.leader.first_name or "").strip()
                 lname = (team.leader.last_name or "").strip()
-                lead_name = f"{fname} {lname}".strip() or team.leader.username
+                lead_name_str = f"{fname} {lname}".strip() or team.leader.username
+                lead_id_val = team.leader.id
                 lead_obj = {
                     "id": team.leader.id,
-                    "name": lead_name
+                    "name": lead_name_str
                 }
 
             members_list = []
@@ -50,7 +53,10 @@ def fetch_all_teams_admin_service(user=None):
                 "id": team.id,
                 "name": team.name,
                 "region": region_str,
-                "lead": lead_obj,
+                "lead": lead_name_str,
+                "lead_name": lead_name_str,
+                "lead_id": lead_id_val,
+                "lead_obj": lead_obj,
                 "color": team.badge_color or "#6366F1",
                 "membersCount": len(members_list),
                 "members": members_list
@@ -267,8 +273,11 @@ def fetch_team_dropdowns_admin_service(team_id=None, user=None):
         base_filter = Q(is_active=True) & ~Q(
             Q(user_roles__role__name__in=['admin', 'developer', 'Admin', 'Developer']) |
             Q(user_roles__role__code__in=['ADM', 'DEV', 'ADMIN', 'DEVELOPER']) |
+            Q(user_type__icontains='admin') |
+            Q(user_type__icontains='developer') |
             Q(username='admin@gmail.com') |
-            Q(username='developer@gmail.com')
+            Q(username='developer@gmail.com') |
+            Q(is_superuser=True)
         )
 
         t_id = None
@@ -278,22 +287,27 @@ def fetch_team_dropdowns_admin_service(team_id=None, user=None):
             except (ValueError, TypeError):
                 t_id = None
 
+        # 1. Team Filter: Unassigned users OR current team members (if editing an existing team)
         if t_id:
             team_filter = Q(team__isnull=True) | Q(team_id=t_id)
+            other_teams = Team.objects.filter(is_active=True).exclude(id=t_id)
         else:
             team_filter = Q(team__isnull=True)
+            other_teams = Team.objects.filter(is_active=True)
 
-        other_teams = Team.objects.all()
-        if t_id:
-            other_teams = other_teams.exclude(id=t_id)
+        # 2. Exclude Leaders assigned to OTHER active teams
         other_leader_ids = list(other_teams.filter(leader__isnull=False).values_list('leader_id', flat=True))
 
-        users_qs = User.objects.select_related('team').filter(base_filter & team_filter & ~Q(id__in=other_leader_ids)).distinct().order_by("first_name")
+        # Query users who are unassigned (or in current team) AND not leaders of other teams
+        users_qs = User.objects.select_related('team').filter(
+            base_filter & team_filter & ~Q(id__in=other_leader_ids)
+        ).distinct().order_by("first_name")
+
         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
             users_qs = users_qs.filter(organization=user.organization)
         elif user and getattr(user, 'is_authenticated', False):
             users_qs = users_qs.none()
-        
+
         leads_list = []
         users_list = []
         for u in users_qs:
@@ -302,7 +316,7 @@ def fetch_team_dropdowns_admin_service(team_id=None, user=None):
             u_name = f"{fname} {lname}".strip() or u.username
             is_sel = bool(t_id and u.team_id == t_id)
             is_ass = u.team_id is not None
-            
+
             user_item = {
                 "id": u.id,
                 "name": u_name,

@@ -82,6 +82,15 @@ class PaymentHistory(models.Model):
         blank=True
     )
 
+    payment_mode = models.ForeignKey(
+        'adm.PaymentMode',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payment_histories',
+        db_column='payment_mode_id'
+    )
+
     transaction_id = models.CharField(
         max_length=100,
         null=True,

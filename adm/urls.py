@@ -55,6 +55,11 @@ from .views.user_views import (
     FetchUserDeleteSummaryAdminApi,
     FetchUserDropdownsAdminApi,
 )
+from .views.loss_reason_views import (
+    FetchLossReasonsAdminApi,
+    CreateLossReasonAdminApi,
+    UpdateLossReasonAdminApi,
+)
 
 # Poomani
 from .views.campaign_stats_views import EducationPipelineStats, CampaignCardsList, FilterOptionsView
@@ -92,7 +97,7 @@ urlpatterns = [
     path('get_select_options', GetSelectOptions.as_view()),
     path('create_lead_api', CreateLeadApi.as_view()),
     # path('get_generic_list', GetGenericList.as_view()),
-    # path('get_roles_and_permissions', GetRolesAndPermissionsApi.as_view()),
+    path('get_roles_and_permissions', GetRolesAndPermissionsApi.as_view()),
     
     # 📌 User Management Settings APIs
     path('fetch_users_admin', FetchAllUsersAdminApi.as_view()),
@@ -188,7 +193,7 @@ urlpatterns = [
     path('create_team_admin', CreateTeamAdminApi.as_view()),
     path('edit_team_admin', EditTeamAdminApi.as_view()),
     path('delete_team_admin', DeleteTeamAdminApi.as_view()),
-    # path('fetch_team_dropdowns_admin', FetchTeamDropdownsAdminApi.as_view()), # 🔄 Replaced by get_select_options
+    path('fetch_team_dropdowns_admin', FetchTeamDropdownsAdminApi.as_view()),
 
     # 📌 Organization APIs
     path('create_organization_profile_admin', CreateOrganizationProfileAdminApi.as_view()),
@@ -197,4 +202,9 @@ urlpatterns = [
 
     # 📌 Roles & Permissions Matrix APIs
     path('update_role_permission', UpdateRolePermissionApi.as_view()),
+
+    # 📌 Loss Reasons Management APIs
+    path('fetch_loss_reasons_admin', FetchLossReasonsAdminApi.as_view()),
+    path('create_loss_reason_admin', CreateLossReasonAdminApi.as_view()),
+    path('update_loss_reason_admin', UpdateLossReasonAdminApi.as_view()),
 ]

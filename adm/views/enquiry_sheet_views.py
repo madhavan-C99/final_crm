@@ -16,13 +16,13 @@ from ..services.enquiry_sheet_services import (
 )
 
 class CampaignEnquirySheetView(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         campaign_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
         campaign_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     def post(self, request):
         authorize_request('api_campaign_enquiry_sheet_admin', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = fetch_campaign_enquiry_sheet(
             user=request.user, 
@@ -157,7 +157,7 @@ class ChangeLeadStatusView(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class CallLogReportView(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         campaign_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
         campaign_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
         filter_campaign = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -173,7 +173,7 @@ class CallLogReportView(APIView):
 
     def post(self, request):
         authorize_request('api_call_log_report_admin', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = fetch_call_log_report(
             request.user,
@@ -185,7 +185,7 @@ class CallLogReportView(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class DispositionLogView(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         campaign_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
         campaign_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
         filter_campaign = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -195,7 +195,7 @@ class DispositionLogView(APIView):
         stages = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     # def post(self, request):
-    #     serializer = self.InputSerializers(data=request.data)
+    #     serializer = self.InputSerializer(data=request.data)
     #     serializer.is_valid(raise_exception=True)
     #     data = fetch_disposition_log(
     #         request.user,

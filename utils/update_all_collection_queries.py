@@ -10,11 +10,7 @@ django.setup()
 from adm.models import CollectionQuery
 
 def update_collection_queries():
-    """
-    Scans all CollectionQuery records in DB and dynamically updates their SQL query text
-    to include organization_id filtering if the query targets an organization-scoped table.
-    No hardcoding required!
-    """
+    
     org_tables = [
         'adm_pipeline_category', 'telecalling_lead', 'adm_team',
         'telecalling_campaign', 'telecalling_lead_source',

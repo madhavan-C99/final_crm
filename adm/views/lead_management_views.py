@@ -13,12 +13,12 @@ from ..services.lead_management_services import (
 # @authentication_classes([])
 # @permission_classes([])
 class AddLeadDropdownsView(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         pass
 
     def post(self, request):
         authorize_request('api_lead_mgmt_add_dropdowns_admin', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = fetch_add_lead_dropdowns(user=request.user, **serializer.validated_data)
         return Response({"data": data}, status=status.HTTP_200_OK)
@@ -27,7 +27,7 @@ class AddLeadDropdownsView(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class AddNewLeadView(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         first_name = serializers.CharField(required=False, allow_blank=True, default="")
         last_name = serializers.CharField(required=False, allow_blank=True, default="")
         mobile_no = serializers.CharField(required=True)
@@ -40,7 +40,7 @@ class AddNewLeadView(APIView):
 
     def post(self, request):
         authorize_request('api_lead_mgmt_add_new_lead_admin', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = create_new_lead(user=request.user, **serializer.validated_data)
         return Response({"data": result}, status=status.HTTP_201_CREATED)

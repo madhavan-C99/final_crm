@@ -24,6 +24,14 @@ class LossLeadDetail(SafeDeleteModel):
 
     main_reason_id = models.IntegerField(null=True, blank=True)
 
+    loss_reason = models.ForeignKey(
+        'telecalling.LossReason',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='loss_details'
+    )
+
     detailed_reason = models.TextField(null=True)
 
     created_at = models.DateTimeField(auto_now_add=True, null=True)

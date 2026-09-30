@@ -10,26 +10,24 @@ from rest_framework.exceptions import APIException
 
 from telecalling.models import (
     Lead, LossLeadDetail, CallDetails, FollowUp, PipelineStage,
-    LeadSource, CampaignName, CoursePlan, CourseName, User
+    LeadSource, CampaignName, CoursePlan, CourseName, User, LossReason
 )
 from ..models import AdminLossActionLog, AdminApprovedLossLead
 from .lead_services import get_user_display_name
 
 
 def fetch_loss_lead_approval_requests_admin(user=None, **data):
-    """
-    Loss Lead Approval Request Page -> Table Data & Summary API.
-    Fetches leads in Loss stage (Stage 4) or Loss approval queue.
-    Calculates exact 11 table columns from Figma design.
-    """
+    
     try:
         today = timezone.now().date()
         
-        loss_stage = PipelineStage.objects.filter(id=4).first() or PipelineStage.objects.filter(Q(name__icontains="loss") | Q(name__icontains="lost")).first()
         approved_lead_ids = AdminApprovedLossLead.objects.values_list("lead_id", flat=True)
         
         base_qs = Lead.objects.filter(
-            Q(pipeline_stage=loss_stage) | Q(current_status__iexact="loss")
+            Q(pipeline_stage__name__icontains="loss") |
+            Q(pipeline_stage__name__icontains="lost") |
+            Q(current_status__iexact="loss") |
+            Q(current_status__iexact="lost")
         ).exclude(
             id__in=approved_lead_ids
         ).select_related(
@@ -109,7 +107,7 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
         # 4. Additional DB-Driven Dropdown Filters
         loss_reason_val = data.get("loss_reason_id") or data.get("reason_id")
         if loss_reason_val and str(loss_reason_val).isdigit():
-            base_qs = base_qs.filter(loss_detail__main_reason_id=int(loss_reason_val))
+            base_qs = base_qs.filter(loss_detail__loss_reason_id=int(loss_reason_val))
 
         telecaller_val = data.get("assigned_to_id") or data.get("telecaller_id")
         if telecaller_val and str(telecaller_val).isdigit():
@@ -165,9 +163,9 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
             # Loss Reason
             loss_reason_str = "-"
             if loss_detail:
-                reason_obj = Priority.objects.filter(id=loss_detail.main_reason_id).first() if loss_detail.main_reason_id else None
+                reason_obj = loss_detail.loss_reason
                 if reason_obj:
-                    loss_reason_str = getattr(reason_obj, 'display_value', None) or getattr(reason_obj, 'name', "-")
+                    loss_reason_str = reason_obj.name
                 elif loss_detail.detailed_reason:
                     loss_reason_str = loss_detail.detailed_reason
 
@@ -212,8 +210,10 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
                 "name": lead.full_name or "",
                 "contact": lead.mobile_no or "",
                 "email": lead.email or "",
-                "assigned_to": get_user_display_name(lead.assigned_to) or "Prakash Raj",
+                "assigned_to": get_user_display_name(lead.assigned_to),
                 "assigned_to_id": lead.assigned_to_id,
+                "campaign_id": lead.campaign_id,
+                "campaign_name": lead.campaign.name if lead.campaign else None,
                 "effort_summary": effort_summary,
                 "total_calls": total_calls,
                 "loss_reason": loss_reason_str,
@@ -256,11 +256,17 @@ def get_loss_lead_approval_filter_dropdowns_admin(user=None):
         pipeline_stages_qs = PipelineStage.objects.all().order_by("id")
         pipeline_stages = [{"id": p.id, "name": getattr(p, 'display_value', None) or p.name} for p in pipeline_stages_qs]
 
-        loss_reasons_qs = SelectTag.objects.filter(is_active=True).order_by("id")
-        if not loss_reasons_qs.exists():
-            loss_reasons_qs = SelectTag.objects.all().order_by("id")
+        loss_reasons_qs = LossReason.objects.filter(is_active=True)
+        if user and getattr(user, 'is_authenticated', False):
+            if getattr(user, 'organization_id', None):
+                loss_reasons_qs = loss_reasons_qs.filter(
+                    Q(organization_id=user.organization_id) | Q(organization__isnull=True)
+                )
+            else:
+                loss_reasons_qs = loss_reasons_qs.filter(organization__isnull=True)
+        loss_reasons_qs = loss_reasons_qs.order_by("id")
 
-        loss_reasons = [{"id": r.id, "name": getattr(r, 'display_value', None) or r.name} for r in loss_reasons_qs]
+        loss_reasons = [{"id": r.id, "name": r.name} for r in loss_reasons_qs]
 
         users_qs = User.objects.filter(is_active=True).order_by("first_name")
         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
@@ -504,8 +510,11 @@ def action_loss_lead_approval_admin(user=None, **data):
             lead.save()
 
             # 1. Create or Update Permanent Approved Loss Record
-            loss_detail = LossLeadDetail.objects.filter(lead=lead).first()
-            main_reason_id_val = loss_detail.main_reason_id if loss_detail else None
+            loss_detail = LossLeadDetail.objects.select_related("loss_reason").filter(lead=lead).first()
+            main_reason_id_val = (
+                loss_detail.loss_reason_id or loss_detail.main_reason_id
+                if loss_detail else None
+            )
 
             can_retarget_val = bool(data.get("can_retarget", True))
 

@@ -361,15 +361,7 @@ def export_pending_payments_admin(
     sort_by=None, pipeline_id=None, course_name_id=None, course_plan_id=None,
     course_timing_id=None, payment_stage_id=None, pending_amount_range=None, **kwargs
 ):
-    """
-    Pending Payments Page -> Export Pending Payments Excel API.
-    Features:
-      - Header Fill: Lime Green (#84C225)
-      - Header Font: Bold White (#FFFFFF)
-      - Alignment: Center & Middle for all columns
-      - Column Widths: Auto-calculated with +6 padding
-      - Returns: Binary Excel File download response (.xlsx)
-    """
+ 
     try:
         today = timezone.now().date()
 

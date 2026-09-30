@@ -12,9 +12,10 @@ from openpyxl.utils import get_column_letter
 from telecalling.models import (
     Lead, PaymentInfo, PaymentHistory, LossLeadDetail, FollowUp,
     CallDetails, CampaignName, LeadSource, PipelineStage,
-    User, CoursePlan, CourseName, Priority
+    User, Course, CoursePlan, CourseName, Priority, LossReason, Notification
 )
-from ..models import AdminLossActionLog, AdminApprovedLossLead, AdminLeadReassignHistory
+from ..models import AdminLossActionLog, AdminApprovedLossLead, AdminLeadReassignHistory, PaymentMode
+from .query_services import exec_raw_sql
 
 def get_user_display_name(user_obj):
     
@@ -51,9 +52,9 @@ def fetch_all_leads_admin(user=None, **data):
         )
 
         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            base_qs = base_qs.filter(organization=user.organization)
-        elif user and getattr(user, 'is_authenticated', False):
-            base_qs = base_qs.none()
+            base_qs = base_qs.filter(Q(organization__isnull=True) | Q(organization=user.organization))
+        elif user and getattr(user, 'is_authenticated', False) and not getattr(user, 'is_superuser', False):
+            base_qs = base_qs.filter(organization__isnull=True)
 
         # 1. Search Filter
         search = data.get("search")
@@ -68,7 +69,21 @@ def fetch_all_leads_admin(user=None, **data):
         if data.get("tele_id"):
             base_qs = base_qs.filter(assigned_to_id=data.get("tele_id"))
 
-        # 3. Dropdown Filters
+        # 3. Dropdown & Pipeline Filters
+        pipeline_id = data.get("pipeline_id")
+        pipeline_name = data.get("pipeline_name")
+        if pipeline_id:
+            base_qs = base_qs.filter(
+                Q(campaign__pipeline_category_id=pipeline_id) | Q(campaign_id=pipeline_id)
+            ).distinct()
+        elif pipeline_name and str(pipeline_name).strip():
+            p_name = str(pipeline_name).strip()
+            if p_name.lower() not in ["all", "all leads", "none", "null"]:
+                base_qs = base_qs.filter(
+                    Q(campaign__pipeline_category__category_name__icontains=p_name) |
+                    Q(campaign__name__icontains=p_name)
+                ).distinct()
+
         if data.get("pipeline_stage_id"):
             base_qs = base_qs.filter(pipeline_stage_id=data.get("pipeline_stage_id"))
         if data.get("lead_source_id"):
@@ -104,7 +119,7 @@ def fetch_all_leads_admin(user=None, **data):
         # Approved loss leads (in AdminApprovedLossLead) remain in main leads list under 'lost' tab!
         approved_loss_lead_ids = AdminApprovedLossLead.objects.values_list("lead_id", flat=True)
         unapproved_loss_ids = Lead.objects.filter(
-            Q(pipeline_stage_id=4) | Q(pipeline_stage__name__icontains="loss")
+            Q(pipeline_stage_id=5) | Q(pipeline_stage__name__icontains="loss") | Q(pipeline_stage__name__icontains="lost")
         ).exclude(
             id__in=approved_loss_lead_ids
         ).values_list("id", flat=True)
@@ -113,7 +128,7 @@ def fetch_all_leads_admin(user=None, **data):
 
         new_lead_qs = base_qs.filter(Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")).distinct()
         follow_up_qs = base_qs.filter(Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")).distinct()
-        won_qs = base_qs.filter(Q(pipeline_stage_id=3) | Q(pipeline_stage__name__icontains="won")).distinct()
+        won_qs = base_qs.filter(Q(pipeline_stage_id=4) | Q(pipeline_stage__name__icontains="won")).distinct()
         lost_qs = base_qs.filter(id__in=approved_loss_lead_ids).distinct()
 
         # Missed / Pending followups: unattended past followups
@@ -219,6 +234,7 @@ def fetch_all_leads_admin(user=None, **data):
                 "mobile_no": lead.mobile_no or "",
                 "assigned_to_id": lead.assigned_to_id,
                 "assigned_to": get_user_display_name(lead.assigned_to),
+                "stage_id": lead.pipeline_stage_id,
                 "stage": lead.pipeline_stage.name if lead.pipeline_stage else "New",
                 "tag": tag_name,
                 "tag_id": tag_id_val,
@@ -762,10 +778,16 @@ def get_filter_dropdowns_admin(user=None):
                 "assigned_leads_count": total_assigned
             })
 
-        # 1. Lost Reasons (from SelectTag)
-        loss_reasons_qs = SelectTag.objects.filter(is_active=True).order_by("id")
-        if not loss_reasons_qs.exists():
-            loss_reasons_qs = SelectTag.objects.all().order_by("id")
+        # 1. Lost Reasons
+        loss_reasons_qs = LossReason.objects.filter(is_active=True)
+        if user and getattr(user, 'is_authenticated', False):
+            if getattr(user, 'organization_id', None):
+                loss_reasons_qs = loss_reasons_qs.filter(
+                    Q(organization_id=user.organization_id) | Q(organization__isnull=True)
+                )
+            else:
+                loss_reasons_qs = loss_reasons_qs.filter(organization__isnull=True)
+        loss_reasons_qs = loss_reasons_qs.order_by("id")
 
         lost_reasons = [{"id": r.id, "name": getattr(r, 'display_value', None) or r.name} for r in loss_reasons_qs]
 
@@ -944,12 +966,7 @@ def fetch_pipeline_leads_admin(**data):
 # ---------------------------- fetch lead and timeline details for admin ------------------------------------------
 
 def fetch_lead_details_admin(**data):
-    """
-    Admin Lead Details Modal & Activity Timeline History API.
-    Returns:
-    1. lead_info: Summary details for left card
-    2. timeline: Complete chronological activity history for right timeline
-    """
+    
     try:
         lead_id = data.get("lead_id")
         if not lead_id:
@@ -1039,9 +1056,9 @@ def fetch_lead_details_admin(**data):
             })
 
         # B. Loss Details (if lead was lost)
-        loss_detail = LossLeadDetail.objects.filter(lead=lead).first()
+        loss_detail = LossLeadDetail.objects.select_related("loss_reason").filter(lead=lead).first()
         if loss_detail:
-            reason_obj = Priority.objects.filter(id=loss_detail.main_reason_id).first() if loss_detail.main_reason_id else None
+            reason_obj = loss_detail.loss_reason
             reason_name = reason_obj.name if reason_obj else (loss_detail.detailed_reason or "Closed")
             formatted_date = loss_detail.created_at.strftime("%d %b %Y") if loss_detail.created_at else ""
             formatted_time = loss_detail.created_at.strftime("%I:%M %p") if loss_detail.created_at else ""
@@ -1089,47 +1106,56 @@ def fetch_lead_details_admin(**data):
     
 # ----------------------------get_mark_as_won_info_admin--------------------------
 
+def get_lead_course_fee(lead):
+    if lead.course and lead.course.course_fees is not None:
+        return float(lead.course.course_fees)
+
+    if lead.course_name_id and lead.course_plan_id:
+        course = Course.objects.filter(
+            name_id=lead.course_name_id,
+            plan_id=lead.course_plan_id
+        ).first()
+        if course and course.course_fees is not None:
+            return float(course.course_fees)
+
+    return None
+
+
 def get_mark_as_won_info_admin(lead_id):
-    """
-    Mark as Won Modal Open -> Fetch lead summary & payment info.
-    Safe handling when lead.course is None.
-    """
+   
     try:
         lead = Lead.objects.select_related("assigned_to", "pipeline_stage", "course", "course_name").filter(id=lead_id).first()
         if not lead:
             raise APIException("Lead not found")
 
         payment_info = PaymentInfo.objects.filter(lead=lead).first()
-        
-        # 🛡️ Safe Course Fee Check (Prevents NoneType error if lead.course is None)
-        course_fee = 16000
-        if lead.course and getattr(lead.course, 'course_fees', None):
-            course_fee = lead.course.course_fees
+        course_fee = get_lead_course_fee(lead)
 
         paid_amount = payment_info.amount_paid if payment_info else 0
-        pending_amount = max(course_fee - paid_amount, 0)
+        pending_amount = max(course_fee - paid_amount, 0) if course_fee is not None else None
+
+        current_payment_status = "Full Paid" if (pending_amount == 0 and paid_amount > 0) else ("Pending" if paid_amount > 0 else "Unpaid")
 
         lead_info = {
             "lead_id": lead.id,
             "full_name": lead.full_name or "",
             "mobile_no": lead.mobile_no or "",
             "assigned_to": get_user_display_name(lead.assigned_to) or "Unassigned",
-            "current_stage": lead.pipeline_stage.name if lead.pipeline_stage else "Prospective",
+            "current_stage": lead.pipeline_stage.name if lead.pipeline_stage else None,
             "course_fee": course_fee,
             "amount_paid": paid_amount,
-            "pending_amount": pending_amount
+            "pending_amount": pending_amount,
+            "payment_status": current_payment_status
         }
 
-        payment_modes = ["Online", "Cash", "UPI", "Bank Transfer", "Cheque"]
-        priority_tags = ["Prospective", "Interested", "Just Follow Up"]
+        # Restrict lead_stages ONLY to ["Won"]
+        lead_stages = ["Won"]
 
         return {
             "status": "success",
             "data": {
                 "lead_info": lead_info,
-                "payment_modes": payment_modes,
-                "lead_stages": priority_tags,
-                "priority_tags": priority_tags
+                "lead_stages": lead_stages
             }
         }
     except Exception as e:
@@ -1137,10 +1163,7 @@ def get_mark_as_won_info_admin(lead_id):
 
 
 def mark_as_won_admin(**data):
-    """
-    Submit Mark as Won Modal -> Update Lead to WON & Record Payment Details.
-    100% Safe course fee calculation preventing NoneType AttributeError.
-    """
+  
     try:
         lead_id = data.get("lead_id")
         if not lead_id:
@@ -1150,7 +1173,11 @@ def mark_as_won_admin(**data):
         if not lead:
             raise APIException("Lead not found")
 
-        paid_through = data.get("paid_through") or "Online"
+        course_fee = get_lead_course_fee(lead)
+        if course_fee is None:
+            raise APIException("Course fee is not configured for this lead.")
+
+        paid_through = data.get("paid_through") or ""
         amount_paid = float(data.get("amount_paid") or 0)
         is_full_payment = bool(data.get("is_full_payment", False))
         due_date = data.get("due_date")
@@ -1161,22 +1188,21 @@ def mark_as_won_admin(**data):
         if amount_paid <= 0 and not is_full_payment:
             raise APIException("Amount Paid or Full Payment selection is required to mark a lead as WON. Please enter valid amount_paid or select Full Payment.")
 
-        # 2. Update Lead Pipeline Stage to WON (Stage ID 3) & Clear any Loss Approvals
-        won_stage = PipelineStage.objects.filter(id=3).first() or PipelineStage.objects.filter(name__icontains="won").first()
-        if won_stage:
-            lead.pipeline_stage = won_stage
-            lead.current_status = "won"
-            lead.save()
-            try:
-                AdminApprovedLossLead.objects.filter(lead=lead).delete()
-            except Exception:
-                pass
+        won_stage = PipelineStage.objects.filter(name__iexact="won").first()
+        if not won_stage:
+            won_stage = PipelineStage.objects.filter(name__icontains="won").first()
+        if not won_stage:
+            raise APIException("Won pipeline stage is not configured.")
+
+        lead.pipeline_stage = won_stage
+        lead.current_status = "won"
+        lead.save()
+        try:
+            AdminApprovedLossLead.objects.filter(lead=lead).delete()
+        except Exception:
+            pass
 
         # 🛡️ 3. Safe Course Fee Calculation (Prevents NoneType error if lead.course is None)
-        course_fee = 16000.0
-        if lead.course and getattr(lead.course, 'course_fees', None):
-            course_fee = float(lead.course.course_fees)
-
         if is_full_payment:
             amount_paid = course_fee
             pending_amount = 0.0
@@ -1203,16 +1229,35 @@ def mark_as_won_admin(**data):
         # 5. Create PaymentHistory Record safely parsing due_date
         clean_due_date = None
         if due_date and str(due_date).strip() not in ["", "null", "None"]:
+            
             try:
                 clean_due_date = str(due_date).split('T')[0]
             except Exception:
                 clean_due_date = None
 
+        payment_notes = " ".join(
+            part for part in (
+                f"Paid via {paid_through}" if paid_through else "",
+                summary
+            ) if part
+        )
+
+        payment_mode_val = data.get("payment_mode_id") or data.get("payment_mode") or paid_through
+        payment_mode_obj = None
+        if payment_mode_val:
+            if str(payment_mode_val).isdigit():
+                payment_mode_obj = PaymentMode.objects.filter(id=int(payment_mode_val)).first()
+            else:
+                payment_mode_obj = PaymentMode.objects.filter(
+                    Q(name__icontains=str(payment_mode_val)) | Q(code__iexact=str(payment_mode_val))
+                ).first()
+
         PaymentHistory.objects.create(
             payment=payment_obj,
             paid_amount=amount_paid,
             pending_amount=pending_amount,
-            notes=f"Paid via {paid_through}. {summary}",
+            payment_mode=payment_mode_obj,
+            notes=payment_notes,
             due_date=clean_due_date
         )
 
@@ -1230,7 +1275,7 @@ def mark_as_won_admin(**data):
             "status": "success",
             "message": f"Lead '{lead.full_name}' marked as WON successfully!",
             "lead_id": lead.id,
-            "stage": "Won",
+            "stage": won_stage.name,
             "amount_paid": payment_obj.amount_paid,
             "pending_amount": payment_obj.pending_amount
         }
@@ -1282,9 +1327,16 @@ def get_mark_as_lost_info_admin(lead_id):
             "current_stage": lead.pipeline_stage.name if lead.pipeline_stage else "Just Follow Up"
         }
 
-        # Loss Reasons from SelectTag model
-        tags = SelectTag.objects.all()
-        main_reasons = [{"id": t.id, "name": t.name} for t in tags]
+        # Use the collection query configured for organization-scoped loss reasons.
+        reason_rows = exec_raw_sql(
+            "L_LOSS_REASONS",
+            {"organization_id": lead.organization_id or 0}
+        ) or []
+        main_reasons = [
+            {"id": row.get("value"), "name": row.get("label")}
+            for row in reason_rows
+            if row.get("value") is not None and row.get("label") is not None
+        ]
 
         return {
             "status": "success",
@@ -1319,35 +1371,55 @@ def mark_as_lost_admin(**data):
         if not main_reason_val or str(main_reason_val).strip() in ["", "None", "null", "0"]:
             raise APIException("Reason is required to mark a lead as LOST. Please select a valid reason.")
 
-        # 1. Update Lead Pipeline Stage to LOST (Stage ID 4)
-        lost_stage = PipelineStage.objects.filter(id=4).first() or PipelineStage.objects.filter(Q(name__icontains="loss") | Q(name__icontains="lost")).first()
-        if lost_stage:
-            lead.pipeline_stage = lost_stage
-            lead.save()
-
-        # 2. Resolve Main Reason Tag (Handles both integer IDs and string reason names)
+        # 2. Resolve the selected loss reason.
         main_reason_obj = None
         if main_reason_val:
             if str(main_reason_val).isdigit():
-                main_reason_obj = SelectTag.objects.filter(id=int(main_reason_val)).first()
+                reason_qs = LossReason.objects.filter(
+                    id=int(main_reason_val),
+                    is_active=True
+                )
             else:
-                main_reason_obj = SelectTag.objects.filter(Q(name__icontains=str(main_reason_val))).first()
+                reason_qs = LossReason.objects.filter(
+                    name__iexact=str(main_reason_val).strip(),
+                    is_active=True
+                )
+            if lead.organization_id:
+                reason_qs = reason_qs.filter(
+                    Q(organization_id=lead.organization_id) | Q(organization__isnull=True)
+                )
+            else:
+                reason_qs = reason_qs.filter(organization__isnull=True)
+            main_reason_obj = reason_qs.first()
+        if not main_reason_obj:
+            raise APIException("Selected loss reason was not found for this organization.")
+
+        # 1. Update Lead Pipeline Stage to LOST.
+        lost_stage = PipelineStage.objects.filter(id=4).first() or PipelineStage.objects.filter(
+            Q(name__icontains="loss") | Q(name__icontains="lost")
+        ).first()
+        if lost_stage:
+            lead.pipeline_stage = lost_stage
+            lead.save()
 
         # 3. Create or Update LossLeadDetail
         loss_obj, created = LossLeadDetail.objects.get_or_create(
             lead=lead,
             defaults={
-                "main_reason": main_reason_obj,
+                "loss_reason": main_reason_obj,
+                "main_reason_id": main_reason_obj.id,
                 "detailed_reason": detailed_reason,
                 "reported_by": lead.assigned_to,
                 "created_by": "Admin"
             }
         )
         if not created:
-            if main_reason_obj:
-                loss_obj.main_reason = main_reason_obj
+            loss_obj.loss_reason = main_reason_obj
+            loss_obj.main_reason_id = main_reason_obj.id
             loss_obj.detailed_reason = detailed_reason
             loss_obj.save()
+        lead.loss_reason = main_reason_obj
+        lead.save(update_fields=["loss_reason", "updated_at"])
 
         # Resolve acting user safely
         acting_user = data.get("user") or data.get("admin_user") or lead.assigned_to or User.objects.filter(is_superuser=True).first() or User.objects.first()
@@ -1367,19 +1439,16 @@ def mark_as_lost_admin(**data):
         except Exception:
             pass
 
-        try:
-            AdminApprovedLossLead.objects.update_or_create(
-                lead=lead,
-                defaults={
-                    'approved_by': acting_user,
-                    'main_reason': main_reason_obj,
-                    'final_remarks': detailed_reason or "Marked as Lost by Admin",
-                    'created_by': created_by_name,
-                    'updated_by': created_by_name
-                }
-            )
-        except Exception:
-            pass
+        AdminApprovedLossLead.objects.update_or_create(
+            lead=lead,
+            defaults={
+                'approved_by': acting_user,
+                'main_reason_id': main_reason_obj.id,
+                'final_remarks': detailed_reason or "Marked as Lost by Admin",
+                'created_by': created_by_name,
+                'updated_by': created_by_name
+            }
+        )
 
         return {
             "status": "success",
@@ -1552,6 +1621,9 @@ def delete_lead_admin(user, lead_id):
 
         lead_name = lead.full_name
         user_id = user.id if (user and getattr(user, 'is_authenticated', False)) else None
+
+        # Clean up referencing notifications before deleting lead to prevent Foreign Key constraint error
+        Notification.objects.filter(lead=lead).delete()
 
         # Execute safe delete (Audit Log + CASCADE Delete)
         lead.save_delete(user_id=user_id)
@@ -1826,4 +1898,3 @@ def get_leads_by_user_id(user_id):
         return base_qs.all()
 
     return base_qs.filter(assigned_to_id=user_id)
-

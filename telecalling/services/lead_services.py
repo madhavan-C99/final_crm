@@ -8,10 +8,11 @@ from django.utils import timezone
 from ..services.query_services import exec_raw_sql
 from ..tasks import *
 from django.utils.dateparse import parse_datetime
-from django.db.models import F
+from django.db.models import F, Q
 from django.db.models.functions import Coalesce
 from  ..tasks.course_task import *
 from ..models.leads import PipelineStage, Priority
+from ..models.loss_reason import LossReason
 
 def validate_and_sanitize_lead_priority(lead):
     """
@@ -670,8 +671,11 @@ def call_connect_api(user,**data):
         conn_stat = data.get("connection_status") or "Connected"
         call_dir = data.get("call_direction") or ("Incoming" if str(conn_stat).strip().lower() == "incoming" else "Outgoing")
 
-        # 🟢 Safe Priority / Select Tag assignment (prevents FK error if tag_id is from adm_priority):
-        tag_exists = SelectTag.objects.filter(id=parsed_tag_id).exists()
+        # CallDetails.select_tag stores a stage-linked Priority.
+        tag_exists = Priority.objects.filter(
+            id=parsed_tag_id,
+            pipeline_stage_id=parsed_stage_id
+        ).exists()
         select_tag_val = parsed_tag_id if tag_exists else None
 
         # 🟢 Safe Stage assignment for CallDetails (prevents FK error if stage_id is not in adm_stages):
@@ -986,17 +990,34 @@ def loss_detail_update(user,**data):
 
         if lead is None:
             raise APIException("Lead Not Found")
+        reason_id = data.get("main_reason_id")
+        reason = None
+        if reason_id:
+            reason_qs = LossReason.objects.filter(id=reason_id, is_active=True)
+            if lead.organization_id:
+                reason_qs = reason_qs.filter(
+                    Q(organization_id=lead.organization_id) | Q(organization__isnull=True)
+                )
+            else:
+                reason_qs = reason_qs.filter(organization__isnull=True)
+            reason = reason_qs.first()
+            if not reason:
+                raise APIException("Selected loss reason was not found for this organization.")
+
         print(lead)
         loss, created = LossLeadDetail.objects.update_or_create(
             lead=lead,
             defaults={
                 "reported_by": user,
                 "follow_up_days": data.get("follow_up_days") or 0,
-                "main_reason_id": data.get("main_reason_id"),
+                "loss_reason": reason,
+                "main_reason_id": reason.id if reason else None,
                 "detailed_reason": data.get("loss_reason") or data.get("notes") or "",
                 "updated_by": str(user),
             }
         )
+        lead.loss_reason = reason
+        lead.save(update_fields=["loss_reason", "updated_at"])
         
         stage_id = data.get("pipeline_stage_id") or 4
         lead.pipeline_stage_id = int(stage_id)

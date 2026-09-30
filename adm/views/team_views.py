@@ -103,4 +103,14 @@ class FetchTeamDropdownsAdminApi(APIView):
         )
         return Response(res, status=status.HTTP_200_OK)
 
+    def get(self, request):
+        authorize_request('api_fetch_team_dropdowns_admin', request.user)
+        team_id = request.query_params.get('team_id')
+        res = fetch_team_dropdowns_admin_service(
+            team_id=team_id,
+            user=request.user
+        )
+        return Response(res, status=status.HTTP_200_OK)
+
+
 

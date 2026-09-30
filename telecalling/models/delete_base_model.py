@@ -51,4 +51,8 @@ class SafeDeleteModel(models.Model):
             deleted_by_id=user_id
         )
 
+        if self._meta.db_table == 'telecalling_lead':
+            Notification = apps.get_model('telecalling', 'Notification')
+            Notification.objects.filter(lead_id=self.id).delete()
+
         return super(SafeDeleteModel, self).delete()

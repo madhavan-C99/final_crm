@@ -8,7 +8,7 @@ from rest_framework.decorators import authentication_classes, permission_classes
 
 
 class FetchAllLeads(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         # tele_id=serializers.IntegerField(required=True)
         lead_filter_type=serializers.CharField(required=False)
         from_date = serializers.DateField(required=False)
@@ -25,7 +25,7 @@ class FetchAllLeads(APIView):
         
     def post(self,request):
         authorize_request('api_fetch_all_leads', request.user)
-        serializer=self.InputSerializers(data=request.data)
+        serializer=self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=fetch_leads(user=request.user,**serializer.validated_data)
         log_data = {
@@ -46,19 +46,19 @@ class FetchAllLeads(APIView):
 # @authentication_classes([])
 # @permission_classes([])   
 class UpdateCourse(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         id=serializers.IntegerField(required=True)
         count=serializers.IntegerField(required=True)
         
     def post(self,request):
         authorize_request('api_update_course', request.user)
-        serializer=self.InputSerializers(data=request.data)
+        serializer=self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=course_count(**serializer.validated_data)
         return Response({"data":lead},status=status.HTTP_201_CREATED)        
  
 class AddNewLead(APIView):   
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         full_name=serializers.CharField(required=False,allow_null=True,allow_blank=True)
         mobile=serializers.CharField(required=True)
         campaign_id=serializers.IntegerField(required=False)
@@ -67,7 +67,7 @@ class AddNewLead(APIView):
         
     def post(self,request):
         authorize_request('api_add_new_lead', request.user)
-        serializer=self.InputSerializers(data=request.data)
+        serializer=self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=add_new_lead(user=request.user,**serializer.validated_data)
         log_data = {
@@ -84,7 +84,7 @@ class AddNewLead(APIView):
    
     
 class FetchPipelineLead(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         from_date = serializers.DateField(required=False)
         to_date = serializers.DateField(required=False)
         date_filter_type = serializers.CharField(required=False, default="year")
@@ -99,7 +99,7 @@ class FetchPipelineLead(APIView):
 
     def post(self, request):
         authorize_request('api_fetch_pipeline_lead', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead = fetch_pipeline_leads(user=request.user, **serializer.validated_data)
         log_data = {
@@ -117,14 +117,14 @@ class FetchPipelineLead(APIView):
 # @authentication_classes([])
 # @permission_classes([])   
 class GetSelectedOption(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         dropdown_category=serializers.CharField(required=True)
         filter_id=serializers.CharField(required=False,allow_null=True,allow_blank=True)
         course_name_id=serializers.CharField(required=False,allow_null=True,allow_blank=True)        
         
     def post(self,request):
         authorize_request('api_get_selected_option', request.user)
-        serializer=self.InputSerializers(data=request.data)
+        serializer=self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=get_selected_option(user=request.user,**serializer.validated_data)
         log_data = {
@@ -145,7 +145,7 @@ class GetSelectedOption(APIView):
 
 
 class LeadFormDetail(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         # basic
         lead_id=serializers.IntegerField(required=True)
         fullname=serializers.CharField(required=False,allow_null=True)
@@ -187,7 +187,7 @@ class LeadFormDetail(APIView):
 
     def post(self,request):
         authorize_request('api_lead_form_detail', request.user)
-        serializer=self.InputSerializers(data=request.data)
+        serializer=self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=lead_form_details(user=request.user,**serializer.validated_data)
         log_data = {
@@ -203,12 +203,12 @@ class LeadFormDetail(APIView):
     
     
 class FetchOneLead(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         lead_id=serializers.IntegerField(required=True)
         
     def post(self,request):
         authorize_request('api_fetch_one_lead', request.user)
-        serializer=self.InputSerializers(data=request.data)
+        serializer=self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=fetch_one_lead(user=request.user,**serializer.validated_data)
         log_data = {
@@ -227,12 +227,12 @@ class FetchOneLead(APIView):
 
      
 class FetchCallHistoryApi(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         lead_id=serializers.IntegerField(required=True)
         
     def post(self,request):
         authorize_request('api_fetch_call_history_api', request.user)
-        serializer=self.InputSerializers(data=request.data)
+        serializer=self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         lead=fetch_call_history(user=request.user,**serializer.validated_data)
         log_data = {
@@ -250,7 +250,7 @@ class FetchCallHistoryApi(APIView):
 
     
 class CallConnectForm(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)
         connection_status = serializers.CharField(required=True)
         call_duration = serializers.CharField(required=False)
@@ -262,7 +262,7 @@ class CallConnectForm(APIView):
 
     def post(self, request):
         authorize_request('api_call_connect_form', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = call_connect_api(user=request.user, **serializer.validated_data)
         log_data = {
@@ -279,11 +279,11 @@ class CallConnectForm(APIView):
 
 
 class CallDisconnectSelectTag(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)  
     def post(self, request):
         authorize_request('api_call_disconnect_select_tag', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = call_disconnect_select_api(user=request.user, **serializer.validated_data) 
         log_data = {
@@ -298,7 +298,7 @@ class CallDisconnectSelectTag(APIView):
         return Response({"data": result}, status=status.HTTP_201_CREATED)
 
 class CallDisconnectForm(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)      
         select_tag_id = serializers.CharField(required=False)
         next_followup = serializers.DateTimeField(required=False,allow_null=True)
@@ -307,7 +307,7 @@ class CallDisconnectForm(APIView):
 
     def post(self, request):
         authorize_request('api_call_disconnect_form', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = call_disconnect_api(user=request.user, **serializer.validated_data) 
         log_data = {
@@ -325,11 +325,11 @@ class CallDisconnectForm(APIView):
  
 
 class FetchOneLossLeadDetail(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)    
     def post(self,request):
         authorize_request('api_fetch_one_loss_lead_detail', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = fetch_one_loss_detail(user=request.user, **serializer.validated_data)  
         log_data = {
@@ -346,7 +346,7 @@ class FetchOneLossLeadDetail(APIView):
      
 
 class LossLeadUpdateApi(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)    
         pipeline_stage_id = serializers.IntegerField(required=False, default=4)
         priority_id = serializers.IntegerField(required=False, allow_null=True)
@@ -357,7 +357,7 @@ class LossLeadUpdateApi(APIView):
         
     def post(self,request):
         authorize_request('api_loss_lead_update_api', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = loss_detail_update(user=request.user, **serializer.validated_data)  
         log_data = {
@@ -374,11 +374,11 @@ class LossLeadUpdateApi(APIView):
 
 
 class FetchOneWonLeadDetail(APIView):
-    class InputSerializers(serializers.Serializer):
+    class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)    
     def post(self,request):
         authorize_request('api_fetch_one_won_lead_detail', request.user)
-        serializer = self.InputSerializers(data=request.data)
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = fetch_one_won_detail(user=request.user, **serializer.validated_data)
         log_data = {

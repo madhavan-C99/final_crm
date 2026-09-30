@@ -597,10 +597,19 @@ def fetch_monthly_target_admin_service(data, user=None):
         elif user and getattr(user, 'is_authenticated', False):
             teams_qs = teams_qs.none()
 
-        ind_target_objs = IndividualTarget.objects.filter(telecaller__in=users_qs, target_month=target_month)
-        ind_target_map = {it.telecaller_id: it.target_admissions for it in ind_target_objs}
+        # Team member targets (where team_id IS NOT NULL)
+        team_ind_target_objs = IndividualTarget.objects.filter(
+            telecaller__in=users_qs, target_month=target_month, team__isnull=False
+        ).order_by('created_at', 'id')
+        team_member_target_map = {(it.telecaller_id, it.team_id): it.target_admissions for it in team_ind_target_objs}
 
-        team_target_objs = TeamTarget.objects.filter(team__in=teams_qs, target_month=target_month)
+        # Standalone individual targets (where team_id IS NULL)
+        standalone_ind_target_objs = IndividualTarget.objects.filter(
+            telecaller__in=users_qs, target_month=target_month, team__isnull=True
+        ).order_by('created_at', 'id')
+        standalone_ind_target_map = {it.telecaller_id: it.target_admissions for it in standalone_ind_target_objs}
+
+        team_target_objs = TeamTarget.objects.filter(team__in=teams_qs, target_month=target_month).order_by('created_at', 'id')
         team_target_map = {tt.team_id: tt.target_admissions for tt in team_target_objs}
 
         _, total_days_in_month = calendar.monthrange(start_date.year, start_date.month)
@@ -642,7 +651,7 @@ def fetch_monthly_target_admin_service(data, user=None):
 
             members_list = []
             for u in t_members:
-                raw_u_target = ind_target_map.get(u.id, 0)
+                raw_u_target = team_member_target_map.get((u.id, t.id), 0)
                 u_target = round(raw_u_target * proportional_ratio) if is_custom_range else raw_u_target
                 u_achieved = user_achieved_map.get(u.id, 0)
                 u_balance = max(0, u_target - u_achieved)
@@ -660,10 +669,17 @@ def fetch_monthly_target_admin_service(data, user=None):
                     "status": u_status
                 })
 
+            members_target_sum = sum(m['target'] for m in members_list)
+            allocation_diff = members_target_sum - t_target
+            extra_allocated = max(0, allocation_diff)
+
             team_targets.append({
                 "id": t.id,
                 "team": t.name,
                 "target": t_target,
+                "members_target_sum": members_target_sum,
+                "extra_allocated_target": extra_allocated,
+                "allocation_diff": allocation_diff,
                 "achieved": t_achieved,
                 "balance": t_balance,
                 "status": t_status,
@@ -690,7 +706,7 @@ def fetch_monthly_target_admin_service(data, user=None):
 
         individual_targets = []
         for u in all_users:
-            raw_u_target = ind_target_map.get(u.id, 0)
+            raw_u_target = standalone_ind_target_map.get(u.id, 0)
             u_target = round(raw_u_target * proportional_ratio) if is_custom_range else raw_u_target
             u_achieved = user_achieved_map.get(u.id, 0)
             u_balance = max(0, u_target - u_achieved)
@@ -819,7 +835,9 @@ def set_monthly_target_admin_service(data, admin_user=None):
         saved_name = ""
         created_at_str = timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        if target_for.lower() == 'team' or team_id or (team_name_in and not employee_id):
+        is_employee_target = (target_for.lower() in ['employee', 'individual']) or (employee_id and target_for.lower() != 'team')
+
+        if not is_employee_target and (target_for.lower() == 'team' or (team_id and not employee_id) or team_name_in):
             target_team = None
             if team_id:
                 target_team = Team.objects.filter(id=team_id).first()
@@ -832,16 +850,16 @@ def set_monthly_target_admin_service(data, admin_user=None):
                     "message": "Team not found"
                 }
 
-            target_obj, _ = TeamTarget.objects.get_or_create(
+            target_org = getattr(target_team, 'organization', None) or getattr(admin_user, 'organization', None)
+            target_obj = TeamTarget.objects.create(
                 team=target_team,
                 target_month=target_month,
-                defaults={'created_by': user_name}
+                target_admissions=lead_target,
+                target_amount=amount_target,
+                target_calls=calls_target,
+                created_by=user_name,
+                organization=target_org
             )
-            target_obj.target_admissions = lead_target
-            target_obj.target_amount = amount_target
-            target_obj.target_calls = calls_target
-            target_obj.updated_by = user_name
-            target_obj.save()
 
             # Process explicit uneven individual allocations if provided by Admin
             if individual_allocations and isinstance(individual_allocations, list):
@@ -851,17 +869,17 @@ def set_monthly_target_admin_service(data, admin_user=None):
                         continue
                     m_user = User.objects.filter(id=emp_id).first()
                     if m_user:
-                        m_target_obj, _ = IndividualTarget.objects.get_or_create(
+                        m_target_org = getattr(m_user, 'organization', None) or target_org
+                        IndividualTarget.objects.create(
                             telecaller=m_user,
+                            team=target_team,
                             target_month=target_month,
-                            defaults={'created_by': user_name}
+                            target_admissions=int(alloc.get('lead_target') or alloc.get('target') or 0),
+                            target_amount=float(alloc.get('amount_target') or 0.0),
+                            target_calls=int(alloc.get('target_calls') or 0),
+                            created_by=user_name,
+                            organization=m_target_org
                         )
-                        m_target_obj.team = target_team
-                        m_target_obj.target_admissions = int(alloc.get('lead_target') or alloc.get('target') or 0)
-                        m_target_obj.target_amount = float(alloc.get('amount_target') or 0.0)
-                        m_target_obj.target_calls = int(alloc.get('target_calls') or 0)
-                        m_target_obj.updated_by = user_name
-                        m_target_obj.save()
 
             saved_id = target_obj.id
             saved_name = target_team.name
@@ -880,17 +898,17 @@ def set_monthly_target_admin_service(data, admin_user=None):
                     "message": "Employee not found"
                 }
 
-            target_obj, _ = IndividualTarget.objects.get_or_create(
+            user_target_org = getattr(target_user, 'organization', None) or getattr(admin_user, 'organization', None)
+            target_obj = IndividualTarget.objects.create(
                 telecaller=target_user,
+                team=None,
                 target_month=target_month,
-                defaults={'created_by': user_name}
+                target_admissions=lead_target,
+                target_amount=amount_target,
+                target_calls=calls_target,
+                created_by=user_name,
+                organization=user_target_org
             )
-            target_obj.team = target_user.team
-            target_obj.target_admissions = lead_target
-            target_obj.target_amount = amount_target
-            target_obj.target_calls = calls_target
-            target_obj.updated_by = user_name
-            target_obj.save()
 
             fname = (target_user.first_name or "").strip()
             lname = (target_user.last_name or "").strip()
