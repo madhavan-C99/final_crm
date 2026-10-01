@@ -12,15 +12,11 @@ class FetchLossReasonsAdminApi(APIView):
 
     def post(self, request):
         authorize_request('api_fetch_loss_reasons_admin', request.user)
-        serializer = self.InputSerializer(data=request.data or {})
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         res = fetch_loss_reasons_admin_service(user=request.user, data=serializer.validated_data)
         return Response(res, status=status.HTTP_200_OK)
 
-    def get(self, request):
-        authorize_request('api_fetch_loss_reasons_admin', request.user)
-        res = fetch_loss_reasons_admin_service(user=request.user, data=request.query_params)
-        return Response(res, status=status.HTTP_200_OK)
 
 
 class CreateLossReasonAdminApi(APIView):
@@ -32,8 +28,7 @@ class CreateLossReasonAdminApi(APIView):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         res = create_loss_reason_admin_service(admin_user=request.user, data=serializer.validated_data)
-        st_code = status.HTTP_201_CREATED if res.get("status") else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=st_code)
+        return Response(res, status=status.HTTP_201_CREATED)
 
 
 class UpdateLossReasonAdminApi(APIView):
@@ -48,5 +43,4 @@ class UpdateLossReasonAdminApi(APIView):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         res = update_loss_reason_admin_service(admin_user=request.user, data=serializer.validated_data)
-        st_code = status.HTTP_200_OK if res.get("status") else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=st_code)
+        return Response(res, status=status.HTTP_200_OK)

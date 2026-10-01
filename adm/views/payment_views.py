@@ -1,32 +1,31 @@
-from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
-from rest_framework.decorators import authentication_classes, permission_classes
 from rest_framework import serializers, status
 from rest_framework.response import Response
-
+from adm.services.permission_services import authorize_request
 from ..services.payment_services import (
-    fetch_all_pending_payments_admin, export_pending_payments_admin,
+    fetch_all_pending_payments_admin,
+    export_pending_payments_admin,
     get_pending_payment_filter_dropdowns_admin
 )
 from telecalling.tasks.api_log_task import api_history_log
 
 
-# @authentication_classes([])
-# @permission_classes([])
 class GetPendingPaymentFilterDropdownsAdmin(APIView):
     """
-    Pending Payments Page -> Filter Modal Dropdowns API (No inputs required).
+    GET /adm/get_pending_payment_filter_dropdowns_admin
+    Pending Payments Page -> Filter Modal Dropdowns API.
     """
     def get(self, request):
         authorize_request('api_get_pending_payment_filter_dropdowns_admin', request.user)
-        result = get_pending_payment_filter_dropdowns_admin()
-        return Response({"data": result}, status=status.HTTP_200_OK)
+        result = get_pending_payment_filter_dropdowns_admin(user=request.user)
+        return Response(result, status=status.HTTP_200_OK)
 
 
-# @authentication_classes([])
-# @permission_classes([])
 class FetchAllPendingPaymentsAdmin(APIView):
-    
+    """
+    POST /adm/fetch_all_pending_payments_admin
+    Fetch all pending payments list with filtering and pagination.
+    """
     class InputSerializer(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -60,13 +59,14 @@ class FetchAllPendingPaymentsAdmin(APIView):
         }
         api_history_log(log_data)
 
-        return Response({"data": result}, status=status.HTTP_200_OK)
+        return Response(result, status=status.HTTP_200_OK)
 
 
-# @authentication_classes([])
-# @permission_classes([])
 class ExportPendingPaymentsAdmin(APIView):
-  
+    """
+    POST /adm/export_pending_payments_admin
+    Export pending payments to Excel / CSV / PDF.
+    """
     class InputSerializer(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)

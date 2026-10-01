@@ -88,43 +88,41 @@ def delete_exec_raw_sql(qry_key, qry_vars=dict()):
         raise APIException(e)
 
 
+def _get_table_alias_or_name(query, table_name):
+    sql_keywords = {
+        'where', 'on', 'join', 'set', 'using', 'left', 'right', 'inner', 'full', 'cross',
+        'group', 'order', 'limit', 'having', 'select', 'from', 'as', 'and', 'or'
+    }
+    pattern = re.compile(rf'\b{re.escape(table_name)}\s+(?:AS\s+)?([a-zA-Z0-9_]+)\b', re.IGNORECASE)
+    matches = pattern.findall(query)
+    for alias in matches:
+        if alias.lower() not in sql_keywords:
+            return alias
+    return table_name
+
+
 def replace_query(qry, qry_vars):
     replquery = qry
 
-    # 🔒 DYNAMIC MULTI-TENANCY PROTECTION: Auto-inject organization_id filter if missing in CollectionQuery template
+    # Add a non-bypassable tenant predicate even when a collection template
+    # already uses organization_id in its own filters.
     org_id = qry_vars.get('organization_id')
-    if org_id is not None and str(org_id) != "" and '@_organization_id' not in qry:
-        org_tables = [
-            'adm_pipeline_category', 'telecalling_lead_source', 'telecalling_lead', 'adm_team',
-            'telecalling_campaign', 'telecalling_pipeline_stage', 'telecalling_call_details',
-            'telecalling_user_settings', 'adm_user'
-        ]
-        # Sort by length descending so longer table names (e.g. telecalling_lead_source) match before substrings (e.g. telecalling_lead)
-        org_tables_sorted = sorted(org_tables, key=len, reverse=True)
-        query_lower = qry.lower()
-        matched_table = next((tbl for tbl in org_tables_sorted if tbl in query_lower), None)
+    if org_id is not None and str(org_id) != "":
+        # Skip injecting duplicate organization predicate if already present in the SQL query
+        if 'organization_id' not in qry.lower():
+            org_tables = [
+                'adm_user', 'telecalling_lead', 'adm_team', 'adm_pipeline_category',
+                'telecalling_lead_source', 'telecalling_campaign_name',
+                'telecalling_pipeline_stage', 'telecalling_call_details',
+                'telecalling_user_settings'
+            ]
+            query_lower = qry.lower()
+            matched_table = next((tbl for tbl in org_tables if tbl in query_lower), None)
 
-        if matched_table:
-            filter_clause = f" ({matched_table}.organization_id = @_organization_id OR @_organization_id IS NULL OR @_organization_id = 0) "
-            if 'where' in query_lower:
-                if 'order by' in query_lower:
-                    idx = query_lower.find('order by')
-                    qry = qry[:idx] + f" AND {filter_clause} " + qry[idx:]
-                elif 'group by' in query_lower:
-                    idx = query_lower.find('group by')
-                    qry = qry[:idx] + f" AND {filter_clause} " + qry[idx:]
-                else:
-                    qry = qry + f" AND {filter_clause} "
-            else:
-                if 'order by' in query_lower:
-                    idx = query_lower.find('order by')
-                    qry = qry[:idx] + f" WHERE {filter_clause} " + qry[idx:]
-                elif 'group by' in query_lower:
-                    idx = query_lower.find('group by')
-                    qry = qry[:idx] + f" WHERE {filter_clause} " + qry[idx:]
-                else:
-                    qry = qry + f" WHERE {filter_clause} "
-            replquery = qry
+            if matched_table:
+                alias = _get_table_alias_or_name(qry, matched_table)
+                filter_clause = f"{alias}.organization_id = @_organization_id"
+                replquery = _add_tenant_predicate(qry, filter_clause)
 
     for key in qry_vars:
         raw_val = qry_vars[key]
@@ -140,6 +138,101 @@ def replace_query(qry, qry_vars):
     # Safely replace any unsupplied @_placeholder variables (e.g. @_from_date) with empty string
     replquery = re.sub(r'@[_a-zA-Z0-9]+', '', replquery)
     return replquery 
+
+
+def _add_tenant_predicate(query, predicate):
+    clause_patterns = (
+        (re.compile(r'\bWHERE\b', re.IGNORECASE), 'where'),
+        (re.compile(r'\bGROUP\s+BY\b', re.IGNORECASE), 'boundary'),
+        (re.compile(r'\bORDER\s+BY\b', re.IGNORECASE), 'boundary'),
+        (re.compile(r'\bHAVING\b', re.IGNORECASE), 'boundary'),
+        (re.compile(r'\bLIMIT\b', re.IGNORECASE), 'boundary'),
+        (re.compile(r'\bOFFSET\b', re.IGNORECASE), 'boundary'),
+        (re.compile(r'\bUNION\b', re.IGNORECASE), 'union'),
+        (re.compile(r'\bFOR\s+(?:UPDATE|SHARE)\b', re.IGNORECASE), 'boundary'),
+    )
+    clauses = []
+    depth = 0
+    index = 0
+
+    while index < len(query):
+        char = query[index]
+        if char in ("'", '"', '`'):
+            quote = char
+            index += 1
+            while index < len(query):
+                if query[index] == '\\':
+                    index += 2
+                    continue
+                if query[index] == quote:
+                    if index + 1 < len(query) and query[index + 1] == quote:
+                        index += 2
+                        continue
+                    index += 1
+                    break
+                index += 1
+            continue
+        if query.startswith('--', index):
+            newline = query.find('\n', index + 2)
+            index = len(query) if newline < 0 else newline + 1
+            continue
+        if query.startswith('/*', index):
+            comment_end = query.find('*/', index + 2)
+            index = len(query) if comment_end < 0 else comment_end + 2
+            continue
+        if char == '(':
+            depth += 1
+            index += 1
+            continue
+        if char == ')':
+            depth = max(0, depth - 1)
+            index += 1
+            continue
+        if char == ';' and depth == 0:
+            clauses.append((index, index + 1, 'boundary'))
+            index += 1
+            continue
+        if depth == 0:
+            for pattern, clause_type in clause_patterns:
+                match = pattern.match(query, index)
+                if match:
+                    clauses.append((match.start(), match.end(), clause_type))
+                    index = match.end()
+                    break
+            else:
+                index += 1
+            continue
+        index += 1
+
+    if any(clause_type == 'union' for _, _, clause_type in clauses):
+        raise ValueError("Organization-scoped collection queries cannot use UNION.")
+
+    where_clause = next(
+        ((start, end) for start, end, clause_type in clauses if clause_type == 'where'),
+        None,
+    )
+    boundary = next(
+        (start for start, _, clause_type in clauses if clause_type == 'boundary'),
+        len(query),
+    )
+
+    if where_clause:
+        where_start, where_end = where_clause
+        predicate_end = min(
+            (start for start, _, clause_type in clauses
+             if clause_type == 'boundary' and start > where_end),
+            default=boundary,
+        )
+        existing_predicate = query[where_end:predicate_end].strip()
+        if not existing_predicate:
+            raise ValueError("Organization-scoped collection query has an empty WHERE clause.")
+        return (
+            query[:where_end]
+            + f" ({existing_predicate}) AND {predicate} "
+            + query[predicate_end:]
+        )
+
+    return query[:boundary].rstrip() + f" WHERE {predicate} " + query[boundary:]
 
 
 

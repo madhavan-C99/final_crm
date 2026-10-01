@@ -16,7 +16,7 @@ def fetch_loss_reasons_admin_service(user=None, data=None):
 
         return {
             "status": True,
-            "message": "Loss reasons fetched successfully via CollectionQuery",
+            "message": "Loss reasons fetched successfully",
             "data": res_options or []
         }
     except Exception as e:
@@ -25,10 +25,7 @@ def fetch_loss_reasons_admin_service(user=None, data=None):
 
 def create_loss_reason_admin_service(admin_user, data):
     try:
-        name = (data.get('name') or "").strip()
-        if not name:
-            return {"status": False, "message": "Loss reason name is required"}
-
+        name = data.get('name', '').strip()
         org = getattr(admin_user, 'organization', None) if admin_user else None
         created_by_str = (admin_user.get_full_name() or admin_user.username) if admin_user else "Admin"
 
@@ -42,7 +39,7 @@ def create_loss_reason_admin_service(admin_user, data):
                 obj.updated_by = created_by_str
                 obj.save()
                 return {"status": True, "message": "Loss reason reactivated successfully", "id": obj.id}
-            return {"status": False, "message": f"Loss reason '{name}' already exists"}
+            raise APIException(f"Loss reason '{name}' already exists")
 
         obj = LossReason.objects.create(
             name=name,
@@ -68,20 +65,19 @@ def update_loss_reason_admin_service(admin_user, data):
     try:
         reason_id = data.get('id') or data.get('loss_reason_id')
         if not reason_id:
-            return {"status": False, "message": "loss_reason_id is required"}
+            raise APIException("loss_reason_id or id is required")
 
         obj = LossReason.objects.filter(id=reason_id).first()
         if not obj:
-            return {"status": False, "message": "Loss reason not found"}
+            raise APIException("Loss reason not found")
 
         updated_by_str = (admin_user.get_full_name() or admin_user.username) if admin_user else "Admin"
 
-        if 'name' in data and str(data['name']).strip():
+        if data.get('name') and str(data['name']).strip():
             obj.name = str(data['name']).strip()
 
-        if 'is_active' in data:
-            status_val = str(data['is_active']).lower()
-            obj.is_active = (status_val in ['true', '1', 'active'])
+        if 'is_active' in data and data['is_active'] is not None:
+            obj.is_active = bool(data['is_active'])
 
         obj.updated_by = updated_by_str
         obj.save()

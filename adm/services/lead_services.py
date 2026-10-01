@@ -578,252 +578,252 @@ def upload_lead_excel_admin(file_obj, user=None):
     
 # --------------------------------export leads to excel service------------------------------------------
 
-def export_all_leads_admin(user=None, **data):
-    """
-    Admin Leads Page -> Export to Excel (.xlsx) Service.
-    Lime Green Header Styling (#84C225) & Spacious Column Widths matching reference image.
-    """
-    try:
-        # 1. Normalize filter type
-        raw_filter = (
-            data.get("lead_filter_type") or 
-            data.get("filter_type") or 
-            data.get("stage") or 
-            data.get("tab") or 
-            "all"
-        )
-        lead_filter_type = str(raw_filter).lower().strip()
+# def export_all_leads_admin(user=None, **data):
+#     """
+#     Admin Leads Page -> Export to Excel (.xlsx) Service.
+#     Lime Green Header Styling (#84C225) & Spacious Column Widths matching reference image.
+#     """
+#     try:
+#         # 1. Normalize filter type
+#         raw_filter = (
+#             data.get("lead_filter_type") or 
+#             data.get("filter_type") or 
+#             data.get("stage") or 
+#             data.get("tab") or 
+#             "all"
+#         )
+#         lead_filter_type = str(raw_filter).lower().strip()
         
-        data["lead_filter_type"] = lead_filter_type
-        data['page_size'] = "all"
+#         data["lead_filter_type"] = lead_filter_type
+#         data['page_size'] = "all"
 
-        # 2. Fetch matching leads from fetch_all_leads_admin
-        result = fetch_all_leads_admin(user=user, **data)
-        leads = result.get("leads", [])
+#         # 2. Fetch matching leads from fetch_all_leads_admin
+#         result = fetch_all_leads_admin(user=user, **data)
+#         leads = result.get("leads", [])
 
-        # 3. Create Excel Workbook
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = f"Leads_{lead_filter_type}"
+#         # 3. Create Excel Workbook
+#         wb = openpyxl.Workbook()
+#         ws = wb.active
+#         ws.title = f"Leads_{lead_filter_type}"
 
-        # 🎨 4. Exact 14 Column Headers matching reference image
-        headers = [
-            "s_no", 
-            "id", 
-            "full_name", 
-            "mobile_no", 
-            "email", 
-            "tag", 
-            "stage", 
-            "source", 
-            "campaign_name", 
-            "course_plan", 
-            "course_name", 
-            "pending_amount", 
-            "total_amount", 
-            "created_at"
-        ]
-        ws.append(headers)
+#         # 🎨 4. Exact 14 Column Headers matching reference image
+#         headers = [
+#             "s_no", 
+#             "id", 
+#             "full_name", 
+#             "mobile_no", 
+#             "email", 
+#             "tag", 
+#             "stage", 
+#             "source", 
+#             "campaign_name", 
+#             "course_plan", 
+#             "course_name", 
+#             "pending_amount", 
+#             "total_amount", 
+#             "created_at"
+#         ]
+#         ws.append(headers)
 
-        # 5. Populate Data Rows
-        for idx, lead in enumerate(leads, start=1):
-            ws.append([
-                idx,                                                                   # s_no
-                lead.get("id"),                                                        # id
-                lead.get("full_name") or "",                                           # full_name
-                lead.get("mobile_no") or "",                                           # mobile_no
-                lead.get("email") or "",                                              # email
-                lead.get("tag") or "new",                                              # tag
-                lead.get("stage") or "",                                               # stage
-                lead.get("source") or "",                                              # source
-                lead.get("campaign") or "",                                            # campaign_name
-                lead.get("course_plan") or "",                                         # course_plan
-                lead.get("course") or "",                                              # course_name
-                lead.get("pending_amount") or 0,                                       # pending_amount
-                lead.get("amount") or 0,                                               # total_amount
-                str(lead.get("created")) if lead.get("created") else ""                # created_at
-            ])
+#         # 5. Populate Data Rows
+#         for idx, lead in enumerate(leads, start=1):
+#             ws.append([
+#                 idx,                                                                   # s_no
+#                 lead.get("id"),                                                        # id
+#                 lead.get("full_name") or "",                                           # full_name
+#                 lead.get("mobile_no") or "",                                           # mobile_no
+#                 lead.get("email") or "",                                              # email
+#                 lead.get("tag") or "new",                                              # tag
+#                 lead.get("stage") or "",                                               # stage
+#                 lead.get("source") or "",                                              # source
+#                 lead.get("campaign") or "",                                            # campaign_name
+#                 lead.get("course_plan") or "",                                         # course_plan
+#                 lead.get("course") or "",                                              # course_name
+#                 lead.get("pending_amount") or 0,                                       # pending_amount
+#                 lead.get("amount") or 0,                                               # total_amount
+#                 str(lead.get("created")) if lead.get("created") else ""                # created_at
+#             ])
 
-        # 🎨 6. LIME GREEN HEADER STYLING (#84C225) & BORDERS
-        header_fill = PatternFill(start_color="84C225", end_color="84C225", fill_type="solid")  # Bright Lime Green
-        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")                   # Bold White Text
-        data_font = Font(name="Calibri", size=10)
-        center_align = Alignment(horizontal="center", vertical="center")
-        left_align = Alignment(horizontal="left", vertical="center")
+#         # 🎨 6. LIME GREEN HEADER STYLING (#84C225) & BORDERS
+#         header_fill = PatternFill(start_color="84C225", end_color="84C225", fill_type="solid")  # Bright Lime Green
+#         header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")                   # Bold White Text
+#         data_font = Font(name="Calibri", size=10)
+#         center_align = Alignment(horizontal="center", vertical="center")
+#         left_align = Alignment(horizontal="left", vertical="center")
         
-        thin_border = Border(
-            left=Side(style='thin', color='D9D9D9'),
-            right=Side(style='thin', color='D9D9D9'),
-            top=Side(style='thin', color='D9D9D9'),
-            bottom=Side(style='thin', color='D9D9D9')
-        )
+#         thin_border = Border(
+#             left=Side(style='thin', color='D9D9D9'),
+#             right=Side(style='thin', color='D9D9D9'),
+#             top=Side(style='thin', color='D9D9D9'),
+#             bottom=Side(style='thin', color='D9D9D9')
+#         )
 
-       # Apply Header Styling (Center Aligned)
-        ws.row_dimensions[1].height = 26
-        for col_num in range(1, len(headers) + 1):
-            cell = ws.cell(row=1, column=col_num)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = center_align
-            cell.border = thin_border
+#        # Apply Header Styling (Center Aligned)
+#         ws.row_dimensions[1].height = 26
+#         for col_num in range(1, len(headers) + 1):
+#             cell = ws.cell(row=1, column=col_num)
+#             cell.fill = header_fill
+#             cell.font = header_font
+#             cell.alignment = center_align
+#             cell.border = thin_border
             
-        # 🎯 Apply Data Rows Styling (Neat Center Alignment for ALL Cells)
-        for row_num in range(2, ws.max_row + 1):
-            ws.row_dimensions[row_num].height = 22
-            for col_num in range(1, len(headers) + 1):
-                cell = ws.cell(row=row_num, column=col_num)
-                cell.font = data_font
-                cell.border = thin_border
-                cell.alignment = center_align
+#         # 🎯 Apply Data Rows Styling (Neat Center Alignment for ALL Cells)
+#         for row_num in range(2, ws.max_row + 1):
+#             ws.row_dimensions[row_num].height = 22
+#             for col_num in range(1, len(headers) + 1):
+#                 cell = ws.cell(row=row_num, column=col_num)
+#                 cell.font = data_font
+#                 cell.border = thin_border
+#                 cell.alignment = center_align
 
-        # 📐 7. AUTO COLUMN WIDTH (Spacious Display)
-        for col in ws.columns:
-            max_len = 0
-            col_letter = get_column_letter(col[0].column)
-            for cell in col:
-                val_str = str(cell.value or '')
-                if len(val_str) > max_len:
-                    max_len = len(val_str)
-            ws.column_dimensions[col_letter].width = max(max_len + 6, 16)
+#         # 📐 7. AUTO COLUMN WIDTH (Spacious Display)
+#         for col in ws.columns:
+#             max_len = 0
+#             col_letter = get_column_letter(col[0].column)
+#             for cell in col:
+#                 val_str = str(cell.value or '')
+#                 if len(val_str) > max_len:
+#                     max_len = len(val_str)
+#             ws.column_dimensions[col_letter].width = max(max_len + 6, 16)
 
-        # 8. Save & Return File Link
-        file_name = f"Admin_Leads_{lead_filter_type}.xlsx"
-        export_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
-        os.makedirs(export_dir, exist_ok=True)
-        file_path = os.path.join(export_dir, file_name)
+#         # 8. Save & Return File Link
+#         file_name = f"Admin_Leads_{lead_filter_type}.xlsx"
+#         export_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
+#         os.makedirs(export_dir, exist_ok=True)
+#         file_path = os.path.join(export_dir, file_name)
 
-        wb.save(file_path)
+#         wb.save(file_path)
 
-        return {
-            "status": "success",
-            "message": f"Successfully exported {len(leads)} leads for tab '{lead_filter_type}'!",
-            "total_exported": len(leads),
-            "lead_filter_type": lead_filter_type,
-            "file_name": file_name,
-            "download_url": f"/media/exports/{file_name}"
-        }
+#         return {
+#             "status": "success",
+#             "message": f"Successfully exported {len(leads)} leads for tab '{lead_filter_type}'!",
+#             "total_exported": len(leads),
+#             "lead_filter_type": lead_filter_type,
+#             "file_name": file_name,
+#             "download_url": f"/media/exports/{file_name}"
+#         }
 
-    except Exception as e:
-        raise APIException(str(e))
+#     except Exception as e:
+#         raise APIException(str(e))
     
     
     
 # ----------------------------get_filter_dropdowns_admin----------------------------
 
-def get_filter_dropdowns_admin(user=None):
-    """
-    Admin Leads Page -> Filter Modal Dropdown Options API.
-    Returns dynamic options for:
-    1. Pipeline Stage
-    2. Lead Source
-    3. Campaign Name
-    4. Course Plan
-    5. Assigned User (Telecallers)
-    """
-    try:
-        pipeline_stages_qs = PipelineStage.objects.all()
-        pipeline_stages = [{"id": p.id, "name": p.name} for p in pipeline_stages_qs]
+# def get_filter_dropdowns_admin(user=None):
+#     """
+#     Admin Leads Page -> Filter Modal Dropdown Options API.
+#     Returns dynamic options for:
+#     1. Pipeline Stage
+#     2. Lead Source
+#     3. Campaign Name
+#     4. Course Plan
+#     5. Assigned User (Telecallers)
+#     """
+#     try:
+#         pipeline_stages_qs = PipelineStage.objects.all()
+#         pipeline_stages = [{"id": p.id, "name": p.name} for p in pipeline_stages_qs]
 
-        lead_sources_qs = LeadSource.objects.all()
-        lead_sources = [{"id": s.id, "name": s.name} for s in lead_sources_qs]
+#         lead_sources_qs = LeadSource.objects.all()
+#         lead_sources = [{"id": s.id, "name": s.name} for s in lead_sources_qs]
 
-        campaigns_qs = CampaignName.objects.all()
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            campaigns_qs = campaigns_qs.filter(organization=user.organization)
-        elif user and getattr(user, 'is_authenticated', False):
-            campaigns_qs = campaigns_qs.none()
-        campaigns = [{"id": c.id, "name": c.name} for c in campaigns_qs]
+#         campaigns_qs = CampaignName.objects.all()
+#         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+#             campaigns_qs = campaigns_qs.filter(organization=user.organization)
+#         elif user and getattr(user, 'is_authenticated', False):
+#             campaigns_qs = campaigns_qs.none()
+#         campaigns = [{"id": c.id, "name": c.name} for c in campaigns_qs]
 
-        course_plans_qs = CoursePlan.objects.all()
-        course_plans = [{"id": cp.id, "name": getattr(cp, 'courseplan', getattr(cp, 'name', str(cp)))} for cp in course_plans_qs]
+#         course_plans_qs = CoursePlan.objects.all()
+#         course_plans = [{"id": cp.id, "name": getattr(cp, 'courseplan', getattr(cp, 'name', str(cp)))} for cp in course_plans_qs]
 
-        users_qs = User.objects.filter(is_active=True).filter(
-            Q(user_roles__role__name__iexact='telecaller') |
-            Q(user_roles__role__code__iexact='TEL') |
-            Q(user_type__iexact='telecaller')
-        ).distinct().order_by("first_name")
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            users_qs = users_qs.filter(organization=user.organization)
-        elif user and getattr(user, 'is_authenticated', False):
-            users_qs = users_qs.none()
-        telecallers = []
-        for u in users_qs:
-            user_leads = Lead.objects.filter(assigned_to=u)
-            # Exclude Won (Stage 3) and Lost (Stage 4) from total_assigned_leads
-            active_user_leads = user_leads.exclude(
-                Q(pipeline_stage_id__in=[3, 4]) | 
-                Q(pipeline_stage__name__icontains="won") | 
-                Q(pipeline_stage__name__icontains="loss")
-            )
+#         users_qs = User.objects.filter(is_active=True).filter(
+#             Q(user_roles__role__name__iexact='telecaller') |
+#             Q(user_roles__role__code__iexact='TEL') |
+#             Q(user_type__iexact='telecaller')
+#         ).distinct().order_by("first_name")
+#         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+#             users_qs = users_qs.filter(organization=user.organization)
+#         elif user and getattr(user, 'is_authenticated', False):
+#             users_qs = users_qs.none()
+#         telecallers = []
+#         for u in users_qs:
+#             user_leads = Lead.objects.filter(assigned_to=u)
+#             # Exclude Won (Stage 3) and Lost (Stage 4) from total_assigned_leads
+#             active_user_leads = user_leads.exclude(
+#                 Q(pipeline_stage_id__in=[3, 4]) | 
+#                 Q(pipeline_stage__name__icontains="won") | 
+#                 Q(pipeline_stage__name__icontains="loss")
+#             )
             
-            total_assigned = active_user_leads.count()
-            followup_count = active_user_leads.filter(Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")).count()
-            new_count = active_user_leads.filter(Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")).count()
-            unreachable_count = active_user_leads.filter(
-                Q(pipeline_stage_id__in=[5, 7]) | 
-                Q(pipeline_stage__name__icontains="unreach") | 
-                Q(pipeline_stage__name__icontains="contact")
-            ).count()
+#             total_assigned = active_user_leads.count()
+#             followup_count = active_user_leads.filter(Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")).count()
+#             new_count = active_user_leads.filter(Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")).count()
+#             unreachable_count = active_user_leads.filter(
+#                 Q(pipeline_stage_id__in=[5, 7]) | 
+#                 Q(pipeline_stage__name__icontains="unreach") | 
+#                 Q(pipeline_stage__name__icontains="contact")
+#             ).count()
             
-            role_str = "Admin" if (getattr(u, 'is_superuser', False) or str(getattr(u, 'user_type', '')).lower() == 'admin') else "Telecaller"
+#             role_str = "Admin" if (getattr(u, 'is_superuser', False) or str(getattr(u, 'user_type', '')).lower() == 'admin') else "Telecaller"
             
-            telecallers.append({
-                "id": u.id,
-                "name": get_user_display_name(u),
-                "role": role_str,
-                "total_assigned_leads": total_assigned,
-                "followup_leads_count": followup_count,
-                "new_leads_count": new_count,
-                "unreachable_leads_count": unreachable_count,
-                "assigned_leads_count": total_assigned
-            })
+#             telecallers.append({
+#                 "id": u.id,
+#                 "name": get_user_display_name(u),
+#                 "role": role_str,
+#                 "total_assigned_leads": total_assigned,
+#                 "followup_leads_count": followup_count,
+#                 "new_leads_count": new_count,
+#                 "unreachable_leads_count": unreachable_count,
+#                 "assigned_leads_count": total_assigned
+#             })
 
-        # 1. Lost Reasons
-        loss_reasons_qs = LossReason.objects.filter(is_active=True)
-        if user and getattr(user, 'is_authenticated', False):
-            if getattr(user, 'organization_id', None):
-                loss_reasons_qs = loss_reasons_qs.filter(
-                    Q(organization_id=user.organization_id) | Q(organization__isnull=True)
-                )
-            else:
-                loss_reasons_qs = loss_reasons_qs.filter(organization__isnull=True)
-        loss_reasons_qs = loss_reasons_qs.order_by("id")
+#         # 1. Lost Reasons
+#         loss_reasons_qs = LossReason.objects.filter(is_active=True)
+#         if user and getattr(user, 'is_authenticated', False):
+#             if getattr(user, 'organization_id', None):
+#                 loss_reasons_qs = loss_reasons_qs.filter(
+#                     Q(organization_id=user.organization_id) | Q(organization__isnull=True)
+#                 )
+#             else:
+#                 loss_reasons_qs = loss_reasons_qs.filter(organization__isnull=True)
+#         loss_reasons_qs = loss_reasons_qs.order_by("id")
 
-        lost_reasons = [{"id": r.id, "name": getattr(r, 'display_value', None) or r.name} for r in loss_reasons_qs]
+#         lost_reasons = [{"id": r.id, "name": getattr(r, 'display_value', None) or r.name} for r in loss_reasons_qs]
 
-        # 2. Courses (from CourseName)
-        courses_qs = CourseName.objects.all().order_by("coursename")
-        courses = [{"id": c.id, "name": getattr(c, 'coursename', getattr(c, 'name', str(c)))} for c in courses_qs]
+#         # 2. Courses (from CourseName)
+#         courses_qs = CourseName.objects.all().order_by("coursename")
+#         courses = [{"id": c.id, "name": getattr(c, 'coursename', getattr(c, 'name', str(c)))} for c in courses_qs]
 
-        priorities_qs = Priority.objects.filter(is_active=True).order_by("id")
-        if not priorities_qs.exists():
-            priorities_qs = Priority.objects.all().order_by("id")
+#         priorities_qs = Priority.objects.filter(is_active=True).order_by("id")
+#         if not priorities_qs.exists():
+#             priorities_qs = Priority.objects.all().order_by("id")
 
-        priority_tags = [
-            {"id": p.id, "name": getattr(p, 'display_value', None) or p.name}
-            for p in priorities_qs
-        ]
+#         priority_tags = [
+#             {"id": p.id, "name": getattr(p, 'display_value', None) or p.name}
+#             for p in priorities_qs
+#         ]
 
-        pipelines = [
-            {"id": "Education", "name": "Education"},
-            {"id": "Product", "name": "Product"}
-        ]
+#         pipelines = [
+#             {"id": "Education", "name": "Education"},
+#             {"id": "Product", "name": "Product"}
+#         ]
 
-        return {
-            "lost_reasons": lost_reasons,
-            "telecallers": telecallers,
-            "courses": courses,
-            "lead_sources": lead_sources,
-            "pipelines": pipelines,
-            "pipeline_stages": pipelines,  # 👈 Guarantees Education & Product appear in Pipeline* dropdown!
-            "stages": pipeline_stages,     # 👈 Preserves actual stage options under 'stages'
-            "campaigns": campaigns,
-            "course_plans": course_plans,
-            "priority_tags": priority_tags,
-            "tags": priority_tags
-        }
-    except Exception as e:
-        raise APIException(str(e))
+#         return {
+#             "lost_reasons": lost_reasons,
+#             "telecallers": telecallers,
+#             "courses": courses,
+#             "lead_sources": lead_sources,
+#             "pipelines": pipelines,
+#             "pipeline_stages": pipelines,  # 👈 Guarantees Education & Product appear in Pipeline* dropdown!
+#             "stages": pipeline_stages,     # 👈 Preserves actual stage options under 'stages'
+#             "campaigns": campaigns,
+#             "course_plans": course_plans,
+#             "priority_tags": priority_tags,
+#             "tags": priority_tags
+#         }
+#     except Exception as e:
+#         raise APIException(str(e))
     
     
     
@@ -966,7 +966,7 @@ def fetch_pipeline_leads_admin(**data):
 # ---------------------------- fetch lead and timeline details for admin ------------------------------------------
 
 def fetch_lead_details_admin(**data):
-    
+     
     try:
         lead_id = data.get("lead_id")
         if not lead_id:

@@ -1,67 +1,16 @@
 from rest_framework.exceptions import APIException
 from adm.models import Team, User, Organization
-from django.db.models import Prefetch
+from adm.services.query_services import exec_raw_sql
 from django.utils import timezone
 
-def fetch_all_teams_admin_service(user=None):
+
+def fetch_all_teams_admin(user=None):
+    """
+    Fetch all active teams using CollectionQuery 'D_FETCH_ALL_TEAMS_ADMIN' (0 Python Loops).
+    """
     try:
-        teams_qs = Team.objects.select_related('leader', 'organization').prefetch_related(
-            Prefetch('adm_members', queryset=User.objects.filter(is_active=True).order_by('id'))
-        ).filter(is_active=True).order_by('id')
-
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            teams_qs = teams_qs.filter(organization=user.organization)
-        elif user and getattr(user, 'is_authenticated', False):
-            teams_qs = teams_qs.none()
-
-        if not teams_qs.exists() and not (user and getattr(user, 'is_authenticated', False)):
-            teams_qs = Team.objects.select_related('leader', 'organization').prefetch_related(
-                Prefetch('adm_members', queryset=User.objects.all().order_by('id'))
-            ).all().order_by('id')
-
-        teams_data = []
-        for team in teams_qs:
-            lead_obj = None
-            lead_name_str = None
-            lead_id_val = None
-            if team.leader:
-                fname = (team.leader.first_name or "").strip()
-                lname = (team.leader.last_name or "").strip()
-                lead_name_str = f"{fname} {lname}".strip() or team.leader.username
-                lead_id_val = team.leader.id
-                lead_obj = {
-                    "id": team.leader.id,
-                    "name": lead_name_str
-                }
-
-            members_list = []
-            members_qs = team.adm_members.all()
-            for m in members_qs:
-                fname = (m.first_name or "").strip()
-                lname = (m.last_name or "").strip()
-                m_name = f"{fname} {lname}".strip() or m.username
-                members_list.append({
-                    "id": m.id,
-                    "name": m_name
-                })
-
-            region_str = "North Region"
-            if team.organization and hasattr(team.organization, 'state') and team.organization.state:
-                region_str = team.organization.state
-
-            teams_data.append({
-                "id": team.id,
-                "name": team.name,
-                "region": region_str,
-                "lead": lead_name_str,
-                "lead_name": lead_name_str,
-                "lead_id": lead_id_val,
-                "lead_obj": lead_obj,
-                "color": team.badge_color or "#6366F1",
-                "membersCount": len(members_list),
-                "members": members_list
-            })
-
+        org_id = getattr(user, 'organization_id', 0) if (user and hasattr(user, 'organization_id') and user.organization_id) else 0
+        teams_data = exec_raw_sql('D_FETCH_ALL_TEAMS_ADMIN', {'organization_id': org_id}) or []
         return {
             "status": True,
             "message": "Teams fetched successfully",
@@ -71,24 +20,21 @@ def fetch_all_teams_admin_service(user=None):
         raise APIException(str(e))
 
 
-def create_team_admin_service(admin_user, data):
+def create_team_admin(admin_user, data):
+    """
+    Create a new Team using Pure Django ORM.
+    """
     try:
         name = str(data.get('name', '')).strip()
         if not name:
-            return {
-                "status": False,
-                "message": "Team name is required"
-            }
+            return {"status": False, "message": "Team name is required"}
 
         org = getattr(admin_user, 'organization', None) if admin_user else None
         check_qs = Team.objects.filter(name__iexact=name)
         if org:
             check_qs = check_qs.filter(organization=org)
         if check_qs.exists():
-            return {
-                "status": False,
-                "message": f"Team with name '{name}' already exists"
-            }
+            return {"status": False, "message": f"Team with name '{name}' already exists"}
 
         color = data.get('color') or "#6366F1"
         lead_id = data.get('lead_id')
@@ -101,9 +47,7 @@ def create_team_admin_service(admin_user, data):
             code = f"{base_code}_{counter}"
             counter += 1
 
-        lead_user = None
-        if lead_id:
-            lead_user = User.objects.filter(id=lead_id).first()
+        lead_user = User.objects.filter(id=lead_id).first() if lead_id else None
 
         new_team = Team.objects.create(
             name=name,
@@ -122,9 +66,7 @@ def create_team_admin_service(admin_user, data):
         assigned_members_count = 0
         if isinstance(member_ids, list) and member_ids:
             members_qs = User.objects.filter(id__in=member_ids)
-            for m in members_qs:
-                m.team = new_team
-                m.save()
+            members_qs.update(team=new_team)
             assigned_members_count = members_qs.count()
 
         lead_name = None
@@ -134,10 +76,7 @@ def create_team_admin_service(admin_user, data):
             lead_name = f"{fname} {lname}".strip() or lead_user.username
 
         created_at_str = new_team.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if new_team.created_at else timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        region_str = "North Region"
-        if new_team.organization and hasattr(new_team.organization, 'state') and new_team.organization.state:
-            region_str = new_team.organization.state
+        region_str = new_team.organization.state if (new_team.organization and getattr(new_team.organization, 'state', None)) else "North Region"
 
         return {
             "status": True,
@@ -156,14 +95,14 @@ def create_team_admin_service(admin_user, data):
         raise APIException(str(e))
 
 
-def edit_team_admin_service(admin_user, data, team_id=None):
+def edit_team_admin(admin_user, data):
+    """
+    Edit an existing Team using Pure Django ORM.
+    """
     try:
-        t_id = team_id or data.get('id') or data.get('team_id') or data.get('teamId')
+        t_id = data.get('id') or data.get('team_id') or data.get('teamId')
         if not t_id:
-            return {
-                "status": False,
-                "message": "Team ID is required"
-            }
+            return {"status": False, "message": "Team ID is required"}
 
         team_qs = Team.objects.filter(id=t_id)
         if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
@@ -171,10 +110,7 @@ def edit_team_admin_service(admin_user, data, team_id=None):
 
         team = team_qs.first()
         if not team:
-            return {
-                "status": False,
-                "message": "Team not found"
-            }
+            return {"status": False, "message": "Team not found"}
 
         name = data.get('name')
         if name and str(name).strip():
@@ -183,15 +119,11 @@ def edit_team_admin_service(admin_user, data, team_id=None):
             if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
                 check_qs = check_qs.filter(organization=admin_user.organization)
             if check_qs.exists():
-                return {
-                    "status": False,
-                    "message": f"Team with name '{name_str}' already exists"
-                }
+                return {"status": False, "message": f"Team with name '{name_str}' already exists"}
             team.name = name_str
 
-        color = data.get('color')
-        if color:
-            team.badge_color = color
+        if data.get('color'):
+            team.badge_color = data.get('color')
 
         if 'lead_id' in data:
             lead_id = data.get('lead_id')
@@ -215,10 +147,7 @@ def edit_team_admin_service(admin_user, data, team_id=None):
         team.save()
 
         updated_at_str = team.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ") if team.updated_at else timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        region_str = "North Region"
-        if team.organization and hasattr(team.organization, 'state') and team.organization.state:
-            region_str = team.organization.state
+        region_str = team.organization.state if (team.organization and getattr(team.organization, 'state', None)) else "North Region"
 
         return {
             "status": True,
@@ -235,14 +164,14 @@ def edit_team_admin_service(admin_user, data, team_id=None):
         raise APIException(str(e))
 
 
-def delete_team_admin_service(admin_user, data, team_id=None):
+def delete_team_admin(admin_user, data):
+    """
+    Soft Delete a Team using Pure Django ORM.
+    """
     try:
-        t_id = team_id or data.get('id') or data.get('team_id') or data.get('teamId')
+        t_id = data.get('id') or data.get('team_id') or data.get('teamId')
         if not t_id:
-            return {
-                "status": False,
-                "message": "Team ID is required"
-            }
+            return {"status": False, "message": "Team ID is required"}
 
         team_qs = Team.objects.filter(id=t_id)
         if admin_user and getattr(admin_user, 'is_authenticated', False) and getattr(admin_user, 'organization', None):
@@ -250,10 +179,7 @@ def delete_team_admin_service(admin_user, data, team_id=None):
 
         team = team_qs.first()
         if not team:
-            return {
-                "status": False,
-                "message": "Team not found"
-            }
+            return {"status": False, "message": "Team not found"}
 
         User.objects.filter(team=team).update(team=None)
         deleter_id = admin_user.id if (admin_user and getattr(admin_user, 'is_authenticated', False)) else None
@@ -267,84 +193,23 @@ def delete_team_admin_service(admin_user, data, team_id=None):
         raise APIException(str(e))
 
 
-def fetch_team_dropdowns_admin_service(team_id=None, user=None):
+def fetch_team_dropdowns_admin(user=None, data=None):
+    """
+    Fetch dropdown options using CollectionQuery options.
+    """
     try:
-        from django.db.models import Q
-        base_filter = Q(is_active=True) & ~Q(
-            Q(user_roles__role__name__in=['admin', 'developer', 'Admin', 'Developer']) |
-            Q(user_roles__role__code__in=['ADM', 'DEV', 'ADMIN', 'DEVELOPER']) |
-            Q(user_type__icontains='admin') |
-            Q(user_type__icontains='developer') |
-            Q(username='admin@gmail.com') |
-            Q(username='developer@gmail.com') |
-            Q(is_superuser=True)
-        )
-
-        t_id = None
-        if team_id:
-            try:
-                t_id = int(team_id)
-            except (ValueError, TypeError):
-                t_id = None
-
-        # 1. Team Filter: Unassigned users OR current team members (if editing an existing team)
-        if t_id:
-            team_filter = Q(team__isnull=True) | Q(team_id=t_id)
-            other_teams = Team.objects.filter(is_active=True).exclude(id=t_id)
-        else:
-            team_filter = Q(team__isnull=True)
-            other_teams = Team.objects.filter(is_active=True)
-
-        # 2. Exclude Leaders assigned to OTHER active teams
-        other_leader_ids = list(other_teams.filter(leader__isnull=False).values_list('leader_id', flat=True))
-
-        # Query users who are unassigned (or in current team) AND not leaders of other teams
-        users_qs = User.objects.select_related('team').filter(
-            base_filter & team_filter & ~Q(id__in=other_leader_ids)
-        ).distinct().order_by("first_name")
-
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            users_qs = users_qs.filter(organization=user.organization)
-        elif user and getattr(user, 'is_authenticated', False):
-            users_qs = users_qs.none()
-
-        leads_list = []
-        users_list = []
-        for u in users_qs:
-            fname = (u.first_name or "").strip()
-            lname = (u.last_name or "").strip()
-            u_name = f"{fname} {lname}".strip() or u.username
-            is_sel = bool(t_id and u.team_id == t_id)
-            is_ass = u.team_id is not None
-
-            user_item = {
-                "id": u.id,
-                "name": u_name,
-                "team_id": u.team_id,
-                "team_name": u.team.name if u.team else None,
-                "is_selected": is_sel,
-                "is_assigned": is_ass
-            }
-            leads_list.append({"id": u.id, "name": u_name})
-            users_list.append(user_item)
-
-        branches_list = [
-            {"id": 1, "name": "North Region"},
-            {"id": 2, "name": "South Region"}
-        ]
-        orgs = Organization.objects.all()
-        if orgs.exists():
-            branches_list = [
-                {"id": o.id, "name": o.state or o.organization_name or f"Region {o.id}"}
-                for o in orgs
-            ]
+        data = data or {}
+        org_id = getattr(user, 'organization_id', 0) if (user and hasattr(user, 'organization_id') and user.organization_id) else 0
+        
+        telecallers = exec_raw_sql('L_TELECALLERS', {'organization_id': org_id}) or []
+        teams = exec_raw_sql('L_TEAMS', {'organization_id': org_id}) or []
 
         return {
             "status": True,
+            "message": "Team dropdowns fetched successfully",
             "data": {
-                "leads": leads_list,
-                "users": users_list,
-                "branches": branches_list
+                "telecallers": telecallers,
+                "teams": teams
             }
         }
     except Exception as e:

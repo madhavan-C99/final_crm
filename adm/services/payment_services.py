@@ -1,3 +1,4 @@
+from .query_services import exec_raw_sql
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -14,66 +15,39 @@ from telecalling.models import (
 
 from datetime import datetime, date, timedelta
 
-def get_pending_payment_filter_dropdowns_admin():
+def get_pending_payment_filter_dropdowns_admin(user=None):
     """
     Pending Payments Page -> Filter Modal Dropdowns API.
-    Returns dropdown options for Course Name, Course Plan, Course Time, Payment Stage, Pending Amount Ranges.
+    Fast Dropdowns using Collection Queries (exec_raw_sql).
     """
     try:
-        seen_cn = set()
-        course_names = []
-        for c in CourseName.objects.filter(is_active=True).order_by("coursename"):
-            if c.coursename:
-                norm_name = str(c.coursename).strip().lower()
-                if norm_name not in seen_cn:
-                    seen_cn.add(norm_name)
-                    course_names.append({"id": c.id, "name": c.coursename.title() if (c.coursename.islower() or c.coursename.isupper()) else c.coursename})
+        org_id = getattr(user, 'organization_id', 0) if user else 0
+        params = {'organization_id': org_id}
 
-        seen_cp = set()
-        course_plans = []
-        for cp in CoursePlan.objects.filter(is_active=True).order_by("courseplan"):
-            if cp.courseplan:
-                norm_plan = str(cp.courseplan).strip().lower()
-                if norm_plan not in seen_cp:
-                    seen_cp.add(norm_plan)
-                    course_plans.append({"id": cp.id, "name": cp.courseplan})
-
-        seen_ct = set()
-        course_timings = []
-        for ct in CourseTiming.objects.filter(is_active=True).order_by("coursetime"):
-            if ct.coursetime:
-                norm_time = str(ct.coursetime).strip().lower()
-                if norm_time not in seen_ct:
-                    seen_ct.add(norm_time)
-                    course_timings.append({"id": ct.id, "name": ct.coursetime})
+        course_names = exec_raw_sql('L_COURSE_NAMES', params)
+        course_plans = exec_raw_sql('L_COURSE_PLANS', params)
+        course_timings = exec_raw_sql('L_COURSE_TIMINGS', params)
 
         payment_stages = [
-            {"id": "today_due", "name": "Today Due"},
-            {"id": "active_due", "name": "Active Due"},
-            {"id": "overdue", "name": "Overdue"}
-        ]
-
-        pending_amount_ranges = [
-            {"id": "all", "name": "All"},
-            {"id": "above_5k", "name": "Above ₹5,000"},
-            {"id": "below_5k", "name": "Below ₹5,000"},
-            {"id": "below_2k", "name": "Below ₹2,000"}
+            {"value": "today_due", "label": "Today Due"},
+            {"value": "active_due", "label": "Active Due"},
+            {"value": "overdue", "label": "Overdue"}
         ]
 
         return {
             "status": "success",
-            "course_names": course_names,
-            "course_plans": course_plans,
-            "course_timings": course_timings,
-            "payment_stages": payment_stages,
-            "pending_amount_ranges": pending_amount_ranges
+            "data": {
+                "course_names": course_names,
+                "course_plans": course_plans,
+                "course_timings": course_timings,
+                "payment_stages": payment_stages
+            }
         }
-
     except Exception as e:
         raise APIException(str(e))
 
 
-def fetch_all_pending_payments_admin(user=None, search=None, date_filter=None, from_date=None, to_date=None, date_filter_type=None, sort_by=None, pipeline_id=None, course_name_id=None, course_plan_id=None, course_timing_id=None, payment_stage_id=None, pending_amount_range=None, page=1, limit=1000, **kwargs):
+def fetch_all_pending_payments_admin(user=None, search=None, date_filter=None, from_date=None, to_date=None, date_filter_type=None, sort_by=None, pipeline_id=None, course_name_id=None, course_plan_id=None, course_timing_id=None, payment_stage_id=None, pending_amount_range=None, page=1, limit=1000, all_rows=False, **kwargs):
   
     try:
         date_filter = date_filter or date_filter_type
@@ -326,9 +300,13 @@ def fetch_all_pending_payments_admin(user=None, search=None, date_filter=None, f
 
         # Pagination
         total_count = len(processed_leads)
-        start = (page - 1) * limit
-        end = start + limit
-        paginated_leads = processed_leads[start:end]
+        if all_rows:
+            start = 0
+            paginated_leads = processed_leads
+        else:
+            start = (page - 1) * limit
+            end = start + limit
+            paginated_leads = processed_leads[start:end]
 
         # Reset s_no for paginated items
         for i, lead_item in enumerate(paginated_leads, start=start + 1):

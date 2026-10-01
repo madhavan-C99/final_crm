@@ -2,10 +2,17 @@ from rest_framework.views import APIView
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from adm.services.permission_services import authorize_request
-from adm.services.lead_services import fetch_leads_service, action_lead_management_service, export_all_leads_admin
+from adm.services.lead_services import fetch_leads_service, action_lead_management_service
 from adm.services.add_new_lead_services import create_new_lead
 from adm.services.generic_export_services import export_data_service
 
+
+EXPORT_PERMISSION_BY_ENTITY = {
+    "leads": "api_export_all_leads_admin",
+    "pending_payments": "api_export_pending_payments_admin",
+    "loss_approvals": "api_export_loss_lead_approval_requests_admin",
+    "performance": "api_export_performance_overview_admin",
+}
 
 
 class FetchLeadsApi(APIView):
@@ -55,23 +62,28 @@ class ExportDataApi(APIView):
             required=False,
             default=list
         )
-        filters = serializers.JSONField(required=False, default=dict)
+        filters = serializers.DictField(required=False, default=dict)
 
     def post(self, request):
-        authorize_request('api_export_all_leads_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
+        authorize_request(EXPORT_PERMISSION_BY_ENTITY[data["entity"]], request.user)
+        filters = dict(data.get('filters', {}))
+        for key, value in request.data.items():
+            if key not in {'entity', 'export_format', 'selected_ids', 'columns', 'filters'}:
+                filters[key] = value
+
         result = export_data_service(
             user=request.user,
             entity=data.get('entity'),
             export_format=data.get('export_format'),
             selected_ids=data.get('selected_ids', []),
             columns=data.get('columns', []),
-            filters=data.get('filters', {})
+            filters=filters
         )
-        return Response(result, status=status.HTTP_200_OK)
+        return Response({"data": result, **result}, status=status.HTTP_200_OK)
 
 
 
@@ -125,4 +137,3 @@ class CreateLeadApi(APIView):
             "message": "Lead created successfully!",
             "data": result
         }, status=status.HTTP_201_CREATED)
-

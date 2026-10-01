@@ -28,8 +28,6 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
             Q(pipeline_stage__name__icontains="lost") |
             Q(current_status__iexact="loss") |
             Q(current_status__iexact="lost")
-        ).exclude(
-            id__in=approved_lead_ids
         ).select_related(
             "assigned_to", "pipeline_stage", "campaign", "lead_source", "course_plan", "course_name"
         ).order_by("-updated_at", "-created_at")
@@ -129,9 +127,11 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
         if approval_status_val in ["approved", "approve"]:
             base_qs = base_qs.filter(approved_loss_record__isnull=False)
         elif approval_status_val in ["rejected", "reject"]:
-            base_qs = Lead.objects.filter(admin_loss_action_logs__action_type='rejected').distinct()
+            base_qs = base_qs.filter(admin_loss_action_logs__action_type='rejected').distinct()
         elif approval_status_val in ["reassigned", "reassign"]:
-            base_qs = Lead.objects.filter(admin_loss_action_logs__action_type='reassigned').distinct()
+            base_qs = base_qs.filter(admin_loss_action_logs__action_type='reassigned').distinct()
+        else:
+            base_qs = base_qs.exclude(id__in=approved_lead_ids)
 
         total_count = base_qs.count()
 

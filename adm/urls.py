@@ -8,10 +8,10 @@ from .views.organization_views import (
 )
 from .views.lead_views import (
     AddNewLeadAdmin, UploadLeadExcelAdmin, EditLeadAdmin, DeleteLeadAdmin,
-    FetchAllLeadsAdmin, ExportAllLeadsAdmin, FetchPipelineLeadsAdmin,
+    FetchAllLeadsAdmin, FetchPipelineLeadsAdmin,
     FetchLeadDetailsAdmin, GetMarkAsWonInfoAdmin, MarkAsWonAdmin,
     GetMarkAsLostInfoAdmin, MarkAsLostAdmin, ReassignLeadAdmin,
-    GetFilterDropdownsAdmin,
+    # GetFilterDropdownsAdmin,
 )
 from .views.payment_views import (
     FetchAllPendingPaymentsAdmin, ExportPendingPaymentsAdmin,

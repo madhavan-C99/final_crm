@@ -9,16 +9,16 @@ from rest_framework.validators import UniqueValidator
 from adm.models import User, Role
 
 from ..services.user_services import (
-    create_user, create_role, create_token, fetch_user_permissions_service,
-    fetch_all_users_admin_service, create_user_admin_service, edit_user_admin_service,
-    toggle_user_status_admin_service, change_user_password_admin_service,
-    enable_disable_lead_assignment_admin_service, transfer_leads_admin_service,
-    delete_user_admin_service, fetch_user_dropdowns_admin_service,
-    fetch_user_campaigns_admin_service, fetch_user_transfer_campaigns_admin_service,
-    fetch_transfer_telecallers_admin_service,
-    transfer_single_campaign_leads_admin_service,
-    transfer_all_campaigns_leads_admin_service,
-    fetch_user_delete_summary_admin_service
+    create_user, create_role, create_token, fetch_user_permissions,
+    fetch_all_users_admin, create_user_admin, edit_user_admin,
+    toggle_user_status_admin, change_user_password_admin,
+    enable_disable_lead_assignment_admin, transfer_leads_admin,
+    delete_user_admin, fetch_user_dropdowns_admin,
+    fetch_user_campaigns_admin, fetch_user_transfer_campaigns_admin,
+    fetch_transfer_telecallers_admin,
+    transfer_single_campaign_leads_admin,
+    transfer_all_campaigns_leads_admin,
+    fetch_user_delete_summary_admin
 )
 
 
@@ -33,12 +33,11 @@ class EnableDisableLeadAssignmentAdminApi(APIView):
         authorize_request('api_enable_disable_lead_assignment_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        res = enable_disable_lead_assignment_admin_service(
+        res = enable_disable_lead_assignment_admin(
             admin_user=request.user,
             data=serializer.validated_data
         )
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class FetchAllUsersAdminApi(APIView):
@@ -50,13 +49,14 @@ class FetchAllUsersAdminApi(APIView):
 
     def post(self, request):
         authorize_request('api_fetch_all_users_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
+        serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        data = fetch_all_users_admin_service(
+        res = fetch_all_users_admin(
             user=request.user,
             **serializer.validated_data
         )
-        return Response(data, status=status.HTTP_200_OK)
+        return Response({"data": res}, status=status.HTTP_200_OK)
+
 
 class CreateUserAdminApi(APIView):
     class InputSerializer(serializers.Serializer):
@@ -75,12 +75,12 @@ class CreateUserAdminApi(APIView):
         authorize_request('api_create_user_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        res = create_user_admin_service(
+        res = create_user_admin(
             admin_user=request.user,
             data=serializer.validated_data
         )
-        status_code = status.HTTP_201_CREATED if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
+        return Response({"data": res}, status=status.HTTP_201_CREATED)
+
 
 class EditUserAdminApi(APIView):
     class InputSerializer(serializers.Serializer):
@@ -100,12 +100,11 @@ class EditUserAdminApi(APIView):
         authorize_request('api_edit_user_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        res = edit_user_admin_service(
+        res = edit_user_admin(
             admin_user=request.user,
             data=serializer.validated_data
         )
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_404_NOT_FOUND
-        return Response(res, status=status_code)
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class ToggleUserStatusAdminApi(APIView):
@@ -118,13 +117,11 @@ class ToggleUserStatusAdminApi(APIView):
         authorize_request('api_toggle_user_status_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        res = toggle_user_status_admin_service(
+        res = toggle_user_status_admin(
             admin_user=request.user,
             data=serializer.validated_data
         )
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
-
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class ChangeUserPasswordAdminApi(APIView):
@@ -138,13 +135,11 @@ class ChangeUserPasswordAdminApi(APIView):
         authorize_request('api_change_user_password_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        res = change_user_password_admin_service(
+        res = change_user_password_admin(
             admin_user=request.user,
             data=serializer.validated_data
         )
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
-
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class TransferLeadsAdminApi(APIView):
@@ -158,19 +153,14 @@ class TransferLeadsAdminApi(APIView):
         authorize_request('api_transfer_leads_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        res = transfer_leads_admin_service(
+        res = transfer_leads_admin(
             admin_user=request.user,
             data=serializer.validated_data
         )
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class FetchUserDeleteSummaryAdminApi(APIView):
-    """
-    1. Fetch User Assigned Leads & Stats API (For Pre-Delete Review Modal)
-    POST /adm/fetch_user_delete_summary_admin
-    """
     class InputSerializer(serializers.Serializer):
         user_id = serializers.IntegerField(required=False, allow_null=True)
         id = serializers.IntegerField(required=False, allow_null=True)
@@ -180,9 +170,8 @@ class FetchUserDeleteSummaryAdminApi(APIView):
         authorize_request('api_fetch_user_delete_summary_admin', request.user)
         serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = fetch_user_delete_summary_admin_service(serializer.validated_data, admin_user=request.user)
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
+        res = fetch_user_delete_summary_admin(serializer.validated_data, admin_user=request.user)
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class DeleteUserAdminApi(APIView):
@@ -195,13 +184,11 @@ class DeleteUserAdminApi(APIView):
         authorize_request('api_delete_user_admin', request.user)
         serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = delete_user_admin_service(
+        res = delete_user_admin(
             admin_user=request.user,
             data=serializer.validated_data
         )
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
-
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 @authentication_classes([])
@@ -254,9 +241,6 @@ class FetchUserPermissionsView(APIView):
             }
         }, status=status.HTTP_200_OK)
 
-    def post(self, request):
-        return self.get(request)
-
 
 class CreateUserView(APIView):
     class InputSerializer(serializers.Serializer):
@@ -292,17 +276,13 @@ class CreateRoleView(APIView):
 
 
 class FetchUserDropdownsAdminApi(APIView):
-    def get(self, request):
+    def post(self, request):
         authorize_request('api_fetch_user_dropdowns_admin', request.user)
-        res = fetch_user_dropdowns_admin_service(user=request.user)
-        return Response(res, status=status.HTTP_200_OK)
+        res = fetch_user_dropdowns_admin(user=request.user)
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class FetchUserCampaignsAdminApi(APIView):
-    """
-    1. Fetch User Campaigns List API
-    POST /adm/fetch_user_campaigns_admin
-    """
     class InputSerializer(serializers.Serializer):
         id = serializers.IntegerField(required=False, allow_null=True)
         user_id = serializers.IntegerField(required=False, allow_null=True)
@@ -313,9 +293,8 @@ class FetchUserCampaignsAdminApi(APIView):
         authorize_request('api_fetch_user_campaigns_admin', request.user)
         serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = fetch_user_campaigns_admin_service(serializer.validated_data, admin_user=request.user)
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
+        res = fetch_user_campaigns_admin(serializer.validated_data, admin_user=request.user)
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class FetchUserTransferCampaignsAdminApi(APIView):
@@ -327,13 +306,11 @@ class FetchUserTransferCampaignsAdminApi(APIView):
         authorize_request('api_fetch_user_transfer_campaigns_admin', request.user)
         serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = fetch_user_transfer_campaigns_admin_service(admin_user=request.user, **serializer.validated_data)
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
+        res = fetch_user_transfer_campaigns_admin(admin_user=request.user, **serializer.validated_data)
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class FetchTransferTelecallersAdminApi(APIView):
-    
     class InputSerializer(serializers.Serializer):
         from_user_id = serializers.IntegerField(required=False, allow_null=True)
         from_id = serializers.IntegerField(required=False, allow_null=True)
@@ -342,14 +319,11 @@ class FetchTransferTelecallersAdminApi(APIView):
         authorize_request('api_fetch_transfer_telecallers_admin', request.user)
         serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = fetch_transfer_telecallers_admin_service(serializer.validated_data, user=request.user)
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
-
+        res = fetch_transfer_telecallers_admin(serializer.validated_data, user=request.user)
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class TransferSingleCampaignLeadsAdminApi(APIView):
-   
     class InputSerializer(serializers.Serializer):
         from_user_id = serializers.IntegerField(required=True)
         campaign_id = serializers.IntegerField(required=True)
@@ -360,13 +334,11 @@ class TransferSingleCampaignLeadsAdminApi(APIView):
         authorize_request('api_transfer_single_campaign_leads_admin', request.user)
         serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = transfer_single_campaign_leads_admin_service(admin_user=request.user, data=serializer.validated_data)
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
+        res = transfer_single_campaign_leads_admin(admin_user=request.user, data=serializer.validated_data)
+        return Response({"data": res}, status=status.HTTP_200_OK)
 
 
 class TransferAllCampaignsLeadsAdminApi(APIView):
-   
     class InputSerializer(serializers.Serializer):
         from_user_id = serializers.IntegerField(required=True)
         to_telecaller_id = serializers.IntegerField(required=True)
@@ -377,13 +349,5 @@ class TransferAllCampaignsLeadsAdminApi(APIView):
         authorize_request('api_transfer_all_campaigns_leads_admin', request.user)
         serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
-        res = transfer_all_campaigns_leads_admin_service(admin_user=request.user, data=serializer.validated_data)
-        status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
-        return Response(res, status=status_code)
-
-
-
-
-
-
-
+        res = transfer_all_campaigns_leads_admin(admin_user=request.user, data=serializer.validated_data)
+        return Response({"data": res}, status=status.HTTP_200_OK)

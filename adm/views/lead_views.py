@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from ..services.lead_services import *
-from telecalling.tasks.api_log_task import api_history_log
+# from telecalling.tasks.api_log_task import api_history_log
 
 # @authentication_classes([])
 # @permission_classes([])
@@ -38,16 +38,15 @@ class FetchAllLeadsAdmin(APIView):
 
         result = fetch_all_leads_admin(user=request.user, **serializer.validated_data)
 
-
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': {"stats": result.get("stats"), "total": result.get("total")},
-            'status_code': 200
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if request.user.id else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': serializer.validated_data,
+        #     'response_payload': {"stats": result.get("stats"), "total": result.get("total")},
+        #     'status_code': 200
+        # }
+        # api_history_log(log_data)
 
         return Response({"data": result}, status=status.HTTP_200_OK)
 
@@ -94,15 +93,16 @@ class AddNewLeadAdmin(APIView):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = add_new_lead_admin(user=request.user, **serializer.validated_data)
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': result,
-            'status_code': 201
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if request.user.id else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': serializer.validated_data,
+        #     'response_payload': result,
+        #     'status_code': 201
+        # }
+        # api_history_log(log_data)
+        
         return Response({"data": result}, status=status.HTTP_201_CREATED)
 
 
@@ -113,10 +113,7 @@ class AddNewLeadAdmin(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class UploadLeadExcelAdmin(APIView):
-    """
-    Admin Bulk Excel/CSV Lead Upload API (.csv, .xls, .xlsx).
-    Parses file and inserts leads into telecalling_lead table.
-    """
+   
     parser_classes = (MultiPartParser, FormParser)
     class InputSerializer(serializers.Serializer):
         file = serializers.FileField(required=True)
@@ -126,15 +123,16 @@ class UploadLeadExcelAdmin(APIView):
         serializer.is_valid(raise_exception=True)
         uploaded_file = serializer.validated_data['file']
         result = upload_lead_excel_admin(file_obj=uploaded_file, user=request.user)
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': {'file_name': uploaded_file.name, 'file_size': uploaded_file.size},
-            'response_payload': result,
-            'status_code': 201
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if request.user.id else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': {'file_name': uploaded_file.name, 'file_size': uploaded_file.size},
+        #     'response_payload': result,
+        #     'status_code': 201
+        # }
+        # api_history_log(log_data)
+        
         return Response({"data": result}, status=status.HTTP_201_CREATED)
     
     
@@ -144,43 +142,43 @@ class UploadLeadExcelAdmin(APIView):
 
 # @authentication_classes([])
 # @permission_classes([])
-class ExportAllLeadsAdmin(APIView):
-    """
-    Admin Leads Page -> Export Button API.
-    """
-    class InputSerializer(serializers.Serializer):
-        lead_filter_type = serializers.CharField(required=False, default="all")
-        search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        tele_id = serializers.IntegerField(required=False, allow_null=True)
-        from_date = serializers.DateField(required=False)
-        to_date = serializers.DateField(required=False)
-        date_filter_type = serializers.CharField(required=False, default="all")
-        pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        lead_source_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        course_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        priority_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        course_plan_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        campaign_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        sort_by = serializers.CharField(required=False, default="-created_at")
+# class ExportAllLeadsAdmin(APIView):
+#     """
+#     Admin Leads Page -> Export Button API.
+#     """
+#     class InputSerializer(serializers.Serializer):
+#         lead_filter_type = serializers.CharField(required=False, default="all")
+#         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+#         tele_id = serializers.IntegerField(required=False, allow_null=True)
+#         from_date = serializers.DateField(required=False)
+#         to_date = serializers.DateField(required=False)
+#         date_filter_type = serializers.CharField(required=False, default="all")
+#         pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True, default=0)
+#         lead_source_id = serializers.IntegerField(required=False, allow_null=True, default=0)
+#         course_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
+#         priority_id = serializers.IntegerField(required=False, allow_null=True, default=0)
+#         course_plan_id = serializers.IntegerField(required=False, allow_null=True, default=0)
+#         campaign_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
+#         sort_by = serializers.CharField(required=False, default="-created_at")
 
-    def post(self, request):
-        authorize_request('api_export_all_leads_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+#     def post(self, request):
+#         authorize_request('api_export_all_leads_admin', request.user)
+#         serializer = self.InputSerializer(data=request.data)
+#         serializer.is_valid(raise_exception=True)
 
-        result = export_all_leads_admin(user=request.user, **serializer.validated_data)
+#         result = export_all_leads_admin(user=request.user, **serializer.validated_data)
 
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status"), "total_exported": result.get("total_exported")},
-            'status_code': 200
-        }
-        api_history_log(log_data)
+#                     # log_data = {
+#                     #     'user_id': request.user.id if request.user.id else None,
+#                     #     'api_name': request.path,
+#                     #     'method': request.method,
+#                     #     'request_payload': serializer.validated_data,
+#                     #     'response_payload': {"status": result.get("status"), "total_exported": result.get("total_exported")},
+#                     #     'status_code': 200
+#                     # }
+#                     # api_history_log(log_data)
 
-        return Response({"data": result}, status=status.HTTP_200_OK)
+#         return Response({"data": result}, status=status.HTTP_200_OK)
     
     
     
@@ -189,12 +187,14 @@ class ExportAllLeadsAdmin(APIView):
 
 # @authentication_classes([])
 # @permission_classes([])
-class GetFilterDropdownsAdmin(APIView):
 
-    def get(self, request):
-        authorize_request('api_get_filter_dropdowns_admin', request.user)
-        result = get_filter_dropdowns_admin(user=request.user)
-        return Response({"data": result}, status=status.HTTP_200_OK)
+ # 🔄 Replaced by get_select_options
+# class GetFilterDropdownsAdmin(APIView):
+
+#     def get(self, request):
+#         authorize_request('api_get_filter_dropdowns_admin', request.user)
+#         result = get_filter_dropdowns_admin(user=request.user)
+#         return Response({"data": result}, status=status.HTTP_200_OK)
     
     
     
@@ -256,15 +256,15 @@ class FetchLeadDetailsAdmin(APIView):
 
         result = fetch_lead_details_admin(**serializer.validated_data)
 
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status")},
-            'status_code': 200
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if request.user.id else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': serializer.validated_data,
+        #     'response_payload': {"status": result.get("status")},
+        #     'status_code': 200
+        # }
+        # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
     
@@ -291,15 +291,15 @@ class GetMarkAsWonInfoAdmin(APIView):
         lead_id = serializer.validated_data.get("lead_id")
         result = get_mark_as_won_info_admin(lead_id)
 
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status")},
-            'status_code': 200
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if request.user.id else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': serializer.validated_data,
+        #     'response_payload': {"status": result.get("status")},
+        #     'status_code': 200
+        # }
+        # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
     
@@ -401,15 +401,15 @@ class MarkAsLostAdmin(APIView):
         payload = {**serializer.validated_data, **request.data}
         result = mark_as_lost_admin(user=request.user, admin_user=request.user, **payload)
 
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status"), "message": result.get("message")},
-            'status_code': 200
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if request.user.id else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': serializer.validated_data,
+        #     'response_payload': {"status": result.get("status"), "message": result.get("message")},
+        #     'status_code': 200
+        # }
+        # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
     
@@ -455,15 +455,15 @@ class EditLeadAdmin(APIView):
 
         result = edit_lead_admin(**serializer.validated_data)
 
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': result,
-            'status_code': 200
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if request.user.id else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': serializer.validated_data,
+        #        'response_payload': result,
+        #     'status_code': 200
+        # }
+        # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
 
@@ -476,15 +476,15 @@ class DeleteLeadAdmin(APIView):
         lead_id = request.data.get("lead_id") or request.data.get("id")
         result = delete_lead_admin(request.user, lead_id)
 
-        log_data = {
-            'user_id': request.user.id if getattr(request.user, 'id', None) else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': request.data,
-            'response_payload': result,
-            'status_code': 200
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if getattr(request.user, 'id', None) else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': request.data,
+        #      'response_payload': result,
+        #     'status_code': 200
+        # }
+        # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
 
@@ -500,15 +500,15 @@ class ReassignLeadAdmin(APIView):
 
         result = reassign_lead_admin(request.user, lead_id, new_telecaller_id, reason)
 
-        log_data = {
-            'user_id': request.user.id if getattr(request.user, 'id', None) else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': request.data,
-            'response_payload': result,
-            'status_code': 200
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if getattr(request.user, 'id', None) else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': request.data,
+        #     'response_payload': result,
+        #     'status_code': 200
+        # }
+        # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
 

@@ -40,7 +40,7 @@ def get_date_range(date_filter_type, from_date_str=None, to_date_str=None):
     return today.replace(day=1), today
 
 
-def fetch_performance_overview_admin(data, user=None):
+def fetch_performance_overview_admin(data, user=None, all_rows=False):
     
     try:
         if not data:
@@ -295,9 +295,13 @@ def fetch_performance_overview_admin(data, user=None):
 
         # Pagination
         total_count = len(telecaller_list)
-        start_idx = (page - 1) * page_size
-        end_idx = start_idx + page_size
-        paginated_list = telecaller_list[start_idx:end_idx]
+        if all_rows:
+            start_idx = 0
+            paginated_list = telecaller_list
+        else:
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_list = telecaller_list[start_idx:end_idx]
 
         return {
             "status": "success",

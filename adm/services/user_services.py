@@ -136,7 +136,10 @@ def create_token(**data):
     return token_data, user_data
 
 
-def fetch_user_permissions_service(user):
+from adm.services.query_services import exec_raw_sql
+
+
+def fetch_user_permissions(user):
     try:
         if not user or not user.is_authenticated:
             raise APIException("Authentication required")
@@ -152,54 +155,29 @@ def fetch_user_permissions_service(user):
         raise APIException(str(e))
 
 
-# ----------------------------- fetch_all_users_admin_service -----------------------------
+# ----------------------------- fetch_all_users_admin -----------------------------
 
-def fetch_all_users_admin_service(user, page=1, page_size=50, search=None, sort_by=None):
+def fetch_all_users_admin(user, page=1, page_size=50, search=None, sort_by=None):
+    """
+    Fetch all admin users using CollectionQuery 'D_FETCH_ALL_USERS_ADMIN' (0 Python Loops).
+    """
     try:
+        org_id = getattr(user, 'organization_id', 0) if (user and hasattr(user, 'organization_id') and user.organization_id) else 0
+        search_str = str(search).strip() if search else ''
+
+        # ⚡ Direct Collection Query Execution from DB - Zero Python Loops!
+        raw_users = exec_raw_sql('D_FETCH_ALL_USERS_ADMIN', {
+            'organization_id': org_id,
+            'search': search_str
+        }) or []
+
+        total_records = len(raw_users)
         page = int(page or 1)
         page_size_val = str(page_size or "50").lower()
 
-        # Database Query with Relations Optimization (Excludes Developer accounts ONLY, shows Admins & all other users)
-        qs = User.objects.exclude(
-            Q(user_roles__role__name__icontains='developer') |
-            Q(user_roles__role__code__in=['DEV', 'DEVELOPER'])
-        ).distinct().select_related('team', 'reporting_to').prefetch_related('user_roles__role').order_by('-created_at')
-
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            qs = qs.filter(organization=user.organization)
-        else:
-            qs = qs.none()
-
-        # 1. Search Filter (by name, phone, email, employee_id)
-        if search:
-            search_str = str(search).strip()
-            qs = qs.filter(
-                Q(first_name__icontains=search_str) |
-                Q(last_name__icontains=search_str) |
-                Q(email__icontains=search_str) |
-                Q(mobile__icontains=search_str) |
-                Q(employee_id__icontains=search_str)
-            )
-
-        # 2. Sorting
-        sort_key = str(sort_by or "").lower().strip()
-        if sort_key in ['oldest', 'oldest_first', 'oldest first', 'created_at_asc', 'asc']:
-            qs = qs.order_by('created_at', 'id')
-        elif sort_key in ['newest', 'newest_first', 'newest first', 'created_at_desc', 'desc']:
-            qs = qs.order_by('-created_at', '-id')
-        elif sort_key in ['name_asc', 'name_a_z', 'a_z']:
-            qs = qs.order_by('first_name', 'last_name')
-        elif sort_key in ['name_desc', 'name_z_a', 'z_a']:
-            qs = qs.order_by('-first_name', '-last_name')
-        else:
-            qs = qs.order_by('-created_at', '-id')
-
-        total_records = qs.count()
-
-        # 3. Pagination Logic
         if page_size_val in ['0', 'all', 'none']:
             actual_page_size = total_records or 1
-            users_list = list(qs)
+            paged_users = raw_users
             total_pages = 1
             page = 1
         else:
@@ -207,68 +185,17 @@ def fetch_all_users_admin_service(user, page=1, page_size=50, search=None, sort_
             total_pages = math.ceil(total_records / actual_page_size) if actual_page_size > 0 else 1
             start = (page - 1) * actual_page_size
             end = start + actual_page_size
-            users_list = list(qs[start:end])
-
-        users_data = []
-        for idx, u in enumerate(users_list, start=1 + (page - 1) * actual_page_size if page_size_val not in ['0', 'all', 'none'] else 1):
-            roles = []
-            if hasattr(u, 'user_roles'):
-                for ur in u.user_roles.all():
-                    if ur.role:
-                        role_disp_name = ur.role.display_value or ur.role.name or ""
-                        if role_disp_name.strip().lower() in ['telecaller', 'tele caller', 'telecallers', 'tc']:
-                            role_disp_name = "Executive"
-                        roles.append({"id": ur.role.id, "name": role_disp_name, "code": ur.role.code})
-
-            reporting_to_name = None
-            if u.reporting_to:
-                reporting_to_name = u.reporting_to.get_full_name()
-            elif u.team and u.team.leader:
-                reporting_to_name = u.team.leader.get_full_name()
-
-            emp_id = u.employee_id or f"EMP-{u.id:04d}"
-
-            raw_role_str = roles[0]["name"] if roles else (u.user_type or "Executive")
-            if str(raw_role_str).strip().lower() in ['telecaller', 'tele caller', 'telecallers', 'tc']:
-                final_role = "Executive"
-            else:
-                final_role = raw_role_str
-
-            users_data.append({
-                "id": u.id,
-                "s_no": idx,
-                "emp_id": emp_id,
-                "name": u.get_full_name(),
-                "first_name": u.first_name,
-                "last_name": u.last_name,
-                "mobile_no": u.mobile or "",
-                "location": u.address or "",
-                "email": u.email,
-                "role": final_role,
-                "roles": roles,
-                "reporting_to": reporting_to_name,
-                "reporting_to_id": u.reporting_to_id,
-                "status": "Active" if u.is_active else "Deactive",
-                "is_active": u.is_active,
-                "is_lead_enabled": not u.disable_lead_assignment,
-                "disable_lead_assignment": u.disable_lead_assignment,
-                "team_id": u.team_id,
-                "team_name": u.team.name if u.team else None,
-                "created_at": u.created_at.isoformat() if u.created_at else None
-            })
+            paged_users = raw_users[start:end]
 
         return {
             "status": True,
             "message": "Users fetched successfully",
-            "data": {
-                "users": users_data,
-                "pagination": {
-                    "totalRecords": total_records,
-                    "currentPage": page,
-                    "totalPages": total_pages,
-                    "limit": actual_page_size
-                }
-            }
+            "total_records": total_records,
+            "total_pages": total_pages,
+            "current_page": page,
+            "page_size": actual_page_size,
+            "data": paged_users,
+            "users": paged_users
         }
     except Exception as e:
         raise APIException(str(e))
@@ -276,7 +203,7 @@ def fetch_all_users_admin_service(user, page=1, page_size=50, search=None, sort_
 
 # ----------------------------- create_user_admin_service -----------------------------
 
-def create_user_admin_service(admin_user, data):
+def create_user_admin(admin_user, data):
     try:
         email = str(data.get('email') or '').strip().lower()
         emp_id = str(data.get('emp_id') or '').strip()
@@ -430,7 +357,7 @@ def create_user_admin_service(admin_user, data):
 
 # ----------------------------- edit_user_admin_service -----------------------------
 
-def edit_user_admin_service(admin_user, data):
+def edit_user_admin(admin_user, data):
     try:
         user_id = data.get('id') or data.get('user_id')
         emp_id_input = data.get('emp_id')
@@ -581,7 +508,7 @@ def edit_user_admin_service(admin_user, data):
 
 # ----------------------------- toggle_user_status_admin_service -----------------------------
 
-def toggle_user_status_admin_service(admin_user, data):
+def toggle_user_status_admin(admin_user, data):
     try:
         user_id = data.get('id') or data.get('user_id')
         emp_id_input = data.get('emp_id')
@@ -644,7 +571,7 @@ def toggle_user_status_admin_service(admin_user, data):
 
 # ----------------------------- change_user_password_admin_service -----------------------------
 
-def change_user_password_admin_service(admin_user, data):
+def change_user_password_admin(admin_user, data):
     try:
         import re
         user_id = data.get('id') or data.get('user_id')
@@ -707,7 +634,7 @@ def change_user_password_admin_service(admin_user, data):
 
 # ----------------------------- enable_disable_lead_assignment_admin_service -----------------------------
 
-def enable_disable_lead_assignment_admin_service(admin_user, data):
+def enable_disable_lead_assignment_admin(admin_user, data):
     try:
         user_id = data.get('id') or data.get('user_id')
         emp_id_input = data.get('emp_id')
@@ -759,7 +686,7 @@ def enable_disable_lead_assignment_admin_service(admin_user, data):
 
 # ----------------------------- transfer_leads_admin_service -----------------------------
 
-def transfer_leads_admin_service(admin_user, data):
+def transfer_leads_admin(admin_user, data):
     try:
         from adm.services.lead_services import bulk_transfer_leads_admin
         from_user_id = data.get('from_user_id') or data.get('from_id') or data.get('from_telecaller_id')
@@ -788,7 +715,7 @@ def transfer_leads_admin_service(admin_user, data):
 
 # ----------------------------- delete_user_admin_service & summary -----------------------------
 
-def fetch_user_delete_summary_admin_service(data, admin_user=None):
+def fetch_user_delete_summary_admin(data, admin_user=None):
     """
     1. Fetch User Assigned Leads & Stats API (For Pre-Delete Review Modal)
     POST /adm/fetch_user_delete_summary_admin
@@ -876,7 +803,7 @@ def fetch_user_delete_summary_admin_service(data, admin_user=None):
         raise APIException(str(e))
 
 
-def delete_user_admin_service(admin_user, data):
+def delete_user_admin(admin_user, data):
     """
     2. Delete User API (Final Permanent Delete with Guard & Audit History Logging)
     POST /adm/delete_user_admin
@@ -957,7 +884,7 @@ def delete_user_admin_service(admin_user, data):
         raise APIException(str(e))
 
 
-def fetch_user_dropdowns_admin_service(user=None):
+def fetch_user_dropdowns_admin(user=None):
     try:
         roles_qs = Role.objects.exclude(
             Q(name__iexact='developer') | Q(code__iexact='DEV')
@@ -1020,11 +947,12 @@ def fetch_user_dropdowns_admin_service(user=None):
         raise APIException(str(e))
 
 
-def fetch_user_campaigns_admin_service(data, admin_user=None):
+def fetch_user_campaigns_admin(data, admin_user=None):
     """
     1. Fetch User Campaigns List API
     POST /adm/fetch_user_campaigns_admin
     Returns user campaigns summary and breakdown matching frontend expected format.
+    Includes assigned_leads, unassigned_leads, called_leads, rescheduled_leads, closed_leads.
     """
     try:
         if not isinstance(data, dict):
@@ -1063,23 +991,43 @@ def fetch_user_campaigns_admin_service(data, admin_user=None):
         idx = 1
         total_leads_sum = 0
 
+        def build_campaign_metrics(camp):
+            user_leads = Lead.objects.filter(assigned_to=target_user, campaign=camp)
+            assigned_cnt = user_leads.count()
+            total_leads_cnt = Lead.objects.filter(campaign=camp).count()
+
+            called_cnt = user_leads.filter(calls__isnull=False).distinct().count()
+            rescheduled_cnt = user_leads.filter(
+                Q(followups__isnull=False) | Q(pipeline_stage_id__in=[2, 3]) | Q(pipeline_stage__name__icontains="follow")
+            ).distinct().count()
+            closed_cnt = user_leads.filter(
+                Q(pipeline_stage_id__in=[4, 5]) | Q(pipeline_stage__name__iregex=r'won|loss|lost|closed')
+            ).distinct().count()
+
+            pipeline_name = camp.pipeline_category.display_name or camp.pipeline_category.category_name if (hasattr(camp, 'pipeline_category') and camp.pipeline_category) else "Education"
+
+            return {
+                "id": camp.id,
+                "s_no": idx,
+                "campaign_name": camp.name,
+                "pipeline_name": pipeline_name,
+                "total_leads": total_leads_cnt,
+                "assigned_leads": assigned_cnt,
+                "called_leads": called_cnt,
+                "rescheduled_leads": rescheduled_cnt,
+                "closed_leads": closed_cnt
+            }, assigned_cnt
+
         for ca in ca_qs:
             camp = ca.campaign
             if not camp or camp.id in seen_campaigns:
                 continue
             seen_campaigns.add(camp.id)
 
-            leads_cnt = Lead.objects.filter(assigned_to=target_user, campaign=camp).count()
-            pipeline_name = camp.pipeline_category.display_name or camp.pipeline_category.category_name if (hasattr(camp, 'pipeline_category') and camp.pipeline_category) else "Education"
-
-            campaigns_list.append({
-                "id": camp.id,
-                "s_no": idx,
-                "campaign_name": camp.name,
-                "pipeline_name": pipeline_name,
-                "total_leads": leads_cnt
-            })
-            total_leads_sum += leads_cnt
+            camp_dict, assigned_cnt = build_campaign_metrics(camp)
+            camp_dict["s_no"] = idx
+            campaigns_list.append(camp_dict)
+            total_leads_sum += assigned_cnt
             idx += 1
 
         leads_campaign_ids = Lead.objects.filter(assigned_to=target_user, campaign__isnull=False).values_list('campaign_id', flat=True).distinct()
@@ -1088,16 +1036,10 @@ def fetch_user_campaigns_admin_service(data, admin_user=None):
                 seen_campaigns.add(c_id)
                 camp = CampaignName.objects.filter(id=c_id).first()
                 if camp:
-                    leads_cnt = Lead.objects.filter(assigned_to=target_user, campaign=camp).count()
-                    pipeline_name = camp.pipeline_category.display_name or camp.pipeline_category.category_name if (hasattr(camp, 'pipeline_category') and camp.pipeline_category) else "Education"
-                    campaigns_list.append({
-                        "id": camp.id,
-                        "s_no": idx,
-                        "campaign_name": camp.name,
-                        "pipeline_name": pipeline_name,
-                        "total_leads": leads_cnt
-                    })
-                    total_leads_sum += leads_cnt
+                    camp_dict, assigned_cnt = build_campaign_metrics(camp)
+                    camp_dict["s_no"] = idx
+                    campaigns_list.append(camp_dict)
+                    total_leads_sum += assigned_cnt
                     idx += 1
 
         null_campaign_leads = Lead.objects.filter(assigned_to=target_user, campaign__isnull=True).count()
@@ -1112,6 +1054,7 @@ def fetch_user_campaigns_admin_service(data, admin_user=None):
                 "user_name": user_name,
                 "total_campaigns": len(campaigns_list),
                 "total_leads": total_leads_sum,
+                "total_assigned_leads": total_leads_sum,
                 "campaigns": campaigns_list
             }
         }
@@ -1119,11 +1062,11 @@ def fetch_user_campaigns_admin_service(data, admin_user=None):
         raise APIException(str(e))
 
 
-def fetch_user_transfer_campaigns_admin_service(from_user_id=None, emp_id=None, admin_user=None):
+def fetch_user_transfer_campaigns_admin(from_user_id=None, emp_id=None, admin_user=None):
     return fetch_user_campaigns_admin_service({"user_id": from_user_id, "emp_id": emp_id}, admin_user=admin_user)
 
 
-def fetch_transfer_telecallers_admin_service(data=None, user=None):
+def fetch_transfer_telecallers_admin(data=None, user=None):
     
     try:
         if not isinstance(data, dict):
@@ -1172,7 +1115,7 @@ def fetch_transfer_telecallers_admin_service(data=None, user=None):
         raise APIException(str(e))
 
 
-def transfer_single_campaign_leads_admin_service(admin_user, data):
+def transfer_single_campaign_leads_admin(admin_user, data):
   
     try:
         if not isinstance(data, dict):
@@ -1261,7 +1204,7 @@ def transfer_single_campaign_leads_admin_service(admin_user, data):
         raise APIException(str(e))
 
 
-def transfer_all_campaigns_leads_admin_service(admin_user, data):
+def transfer_all_campaigns_leads_admin(admin_user, data):
   
     try:
         if not isinstance(data, dict):

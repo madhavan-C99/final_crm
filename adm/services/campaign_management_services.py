@@ -3,79 +3,30 @@ from adm.models.user import User
 from telecalling.models.leads import CampaignName
 from adm.models.pipeline_category import PipelineCategory
 from adm.models.CampaignAssignedAgent import CampaignAssignedAgent
+from adm.services.query_services import exec_raw_sql
 from django.db.models import Q
+
 
 def fetch_pipeline_categories(user, **data):
     try:
-        categories_qs = PipelineCategory.objects.filter(is_active=True)
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            categories_qs = categories_qs.filter(organization=user.organization)
-        elif user and getattr(user, 'is_authenticated', False):
-            categories_qs = categories_qs.none()
-        categories = categories_qs.values(
-            "id", "category_name", "display_name"
-        ).order_by("id")
-        return list(categories)
+        org_id = getattr(user, 'organization_id', None) if user else None
+        return exec_raw_sql('L_CATEGORIES', {'organization_id': org_id} if org_id else {})
     except Exception as e:
         raise APIException(str(e))
 
 
 def fetch_campaign_managers(user, **data):
     try:
-        managers_qs = User.objects.filter(is_active=True).filter(
-            Q(user_roles__role__name__iexact="admin") | 
-            Q(user_roles__role__name__iexact="team leader") | 
-            Q(user_type__icontains="admin") |
-            Q(user_type__icontains="team leader") |
-            Q(is_superuser=True)
-        ).distinct()
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            managers_qs = managers_qs.filter(organization=user.organization)
-        elif user and getattr(user, 'is_authenticated', False):
-            managers_qs = managers_qs.none()
-        elif not managers_qs.exists():
-            managers_qs = User.objects.filter(is_active=True)
-
-        managers = managers_qs.values("id", "username", "first_name", "last_name", "email").order_by("id")
-        
-        result = []
-        for m in managers:
-            name = f"{m['first_name'] or ''} {m['last_name'] or ''}".strip() or m['username']
-            result.append({
-                "id": m["id"],
-                "name": name,
-                "username": m["username"],
-                "email": m["email"]
-            })
-        return result
+        org_id = getattr(user, 'organization_id', None) if user else None
+        return exec_raw_sql('L_CAMPAIGN_MANAGERS', {'organization_id': org_id} if org_id else {})
     except Exception as e:
         raise APIException(str(e))
 
 
 def fetch_campaign_agents(user, **data):
     try:
-        agents_qs = User.objects.filter(is_active=True).filter(
-            Q(user_roles__role__name__iexact="telecaller") | Q(user_type__icontains="telecaller")
-        ).distinct()
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            agents_qs = agents_qs.filter(organization=user.organization)
-        elif user and getattr(user, 'is_authenticated', False):
-            agents_qs = agents_qs.none()
-        elif not agents_qs.exists():
-            agents_qs = User.objects.filter(is_active=True)
-
-        agents = agents_qs.values("id", "username", "first_name", "last_name", "email").order_by("id")
-        
-        result = []
-        for a in agents:
-            name = f"{a['first_name'] or ''} {a['last_name'] or ''}".strip() or a['username']
-            result.append({
-                "id": a["id"],
-                "name": name,
-                "username": a["username"],
-                "email": a["email"]
-            })
-        return result
+        org_id = getattr(user, 'organization_id', None) if user else None
+        return exec_raw_sql('L_TELECALLERS', {'organization_id': org_id} if org_id else {})
     except Exception as e:
         raise APIException(str(e))
 
@@ -83,40 +34,26 @@ def fetch_campaign_agents(user, **data):
 def create_campaign(user, **data):
     try:
         name = data.get("name")
-        pipeline_category_id = data.get("pipeline_category_id")
-        manager_id = data.get("manager_id")
-        agent_ids = data.get("agent_ids", [])
-        distribution_type = data.get("distribution_type", "on_demand")
-
         if not name:
             raise APIException("Campaign Name is required")
 
-        creator_name = (getattr(user, "username", None) if user and hasattr(user, "username") else None) or "admin"
-        user_org = getattr(user, 'organization', None) if (user and getattr(user, 'is_authenticated', False)) else None
-
-        # 1. Create CampaignName Record
         campaign = CampaignName.objects.create(
             name=name,
-            pipeline_category_id=pipeline_category_id,
-            manager_id=manager_id,
-            lead_distribution_type=distribution_type,
-            created_by=creator_name,
-            organization=user_org
+            pipeline_category_id=data.get("pipeline_category_id"),
+            manager_id=data.get("manager_id"),
+            lead_distribution_type=data.get("distribution_type", "on_demand"),
+            created_by=getattr(user, "username", "admin"),
+            organization=getattr(user, 'organization', None)
         )
 
-        # 2. Assign Agents
-        if agent_ids and isinstance(agent_ids, list):
-            for agent_id in agent_ids:
-                if agent_id:
-                    CampaignAssignedAgent.objects.create(
-                        campaign=campaign,
-                        agent_user_id=agent_id
-                    )
+        for agent_id in data.get("agent_ids", []):
+            if agent_id:
+                CampaignAssignedAgent.objects.create(campaign=campaign, agent_user_id=agent_id)
 
         return {
+            "status": True,
             "message": "Campaign Created Successfully",
-            "campaign_id": campaign.id,
-            "campaign_name": campaign.name
+            "data": {"campaign_id": campaign.id, "campaign_name": campaign.name}
         }
     except Exception as e:
         raise APIException(str(e))
@@ -124,24 +61,18 @@ def create_campaign(user, **data):
 
 def toggle_campaign_status(user, **data):
     try:
-        campaign_id = data.get("campaign_id")
-        is_active = data.get("is_active")
-        
-        qs = CampaignName.objects.filter(id=campaign_id)
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            qs = qs.filter(organization=user.organization)
-        campaign = qs.first()
+        campaign = CampaignName.objects.filter(id=data.get("campaign_id")).first()
         if not campaign:
             raise APIException("Campaign Not Found")
-            
-        campaign.is_active = is_active
+
+        campaign.is_active = data.get("is_active", True)
         campaign.save()
-        
-        status_text = "Resumed" if is_active else "Paused"
+
+        status_text = "Resumed" if campaign.is_active else "Paused"
         return {
+            "status": True,
             "message": f"Campaign '{campaign.name}' {status_text} Successfully",
-            "campaign_id": campaign.id,
-            "is_active": campaign.is_active
+            "data": {"campaign_id": campaign.id, "is_active": campaign.is_active}
         }
     except Exception as e:
         raise APIException(str(e))
@@ -149,72 +80,32 @@ def toggle_campaign_status(user, **data):
 
 def fetch_campaign_detail(user, **data):
     try:
-        campaign_id = data.get("campaign_id")
-        campaign_name = data.get("campaign_name")
+        org_id = getattr(user, 'organization_id', None) if user else None
+        c_id = data.get("campaign_id") or 0
+        c_name = str(data.get("campaign_name") or "").strip()
 
-        qs = CampaignName.objects.all()
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            qs = qs.filter(organization=user.organization)
+        # 1. Fetch Campaign Main Info via SQL Collection Query
+        campaign_info = exec_raw_sql('D_FETCH_CAMPAIGN_DETAIL', {
+            'organization_id': org_id,
+            'campaign_id': c_id,
+            'campaign_name': c_name
+        })
 
-        campaign = None
-        if campaign_id:
-            campaign = qs.filter(id=campaign_id).first()
-        elif campaign_name:
-            campaign = qs.filter(name__iexact=campaign_name).first()
-
-        if not campaign:
+        if not campaign_info:
             raise APIException("Campaign Not Found")
 
-        # Manager details
-        manager_name = ""
-        if campaign.manager_id:
-            mgr = User.objects.filter(id=campaign.manager_id).first()
-            if mgr:
-                manager_name = f"{mgr.first_name or ''} {mgr.last_name or ''}".strip() or mgr.username
+        detail = campaign_info[0]
 
-        # Category details
-        pipeline_category_name = ""
-        if campaign.pipeline_category_id:
-            cat = PipelineCategory.objects.filter(id=campaign.pipeline_category_id).first()
-            if cat:
-                pipeline_category_name = cat.display_name or cat.category_name
-
-        # All Telecallers with their assignment status & is_active toggle for this campaign
-        telecallers = User.objects.filter(
-            Q(user_roles__role__name__iexact='telecaller') | Q(user_type__icontains='telecaller')
-        ).distinct()
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            telecallers = telecallers.filter(organization=user.organization)
-
-        assigned_map = {
-            ca.agent_user_id: ca.is_active
-            for ca in CampaignAssignedAgent.objects.filter(campaign=campaign)
-        }
-
-        agents_list = []
-        for index, agent in enumerate(telecallers, 1):
-            is_assigned = agent.id in assigned_map
-            is_active = assigned_map.get(agent.id, True) if is_assigned else False
-            agent_name = f"{agent.first_name or ''} {agent.last_name or ''}".strip() or agent.username
-            agents_list.append({
-                "s_no": index,
-                "agent_id": agent.id,
-                "user_name": agent_name,
-                "email": agent.email or "",
-                "is_assigned": is_assigned,
-                "is_active": is_active,
-            })
+        # 2. Fetch Agents List via SQL Collection Query (s_no generated by ROW_NUMBER() in SQL - 0 Python Loops!)
+        detail['agents'] = exec_raw_sql('D_FETCH_CAMPAIGN_AGENTS', {
+            'organization_id': org_id,
+            'campaign_id': detail['campaign_id']
+        }) or []
 
         return {
-            "campaign_id": campaign.id,
-            "name": campaign.name,
-            "pipeline_category_id": campaign.pipeline_category_id,
-            "pipeline_category_name": pipeline_category_name or "Education",
-            "manager_id": campaign.manager_id,
-            "manager_name": manager_name or None,
-            "lead_distribution_type": campaign.lead_distribution_type or "on_demand",
-            "is_active": campaign.is_active,
-            "agents": agents_list,
+            "status": True,
+            "message": "Campaign Detail Fetched Successfully",
+            "data": detail
         }
     except Exception as e:
         raise APIException(str(e))
@@ -222,41 +113,25 @@ def fetch_campaign_detail(user, **data):
 
 def update_campaign_detail(user, **data):
     try:
-        campaign_id = data.get("campaign_id")
-        campaign_name = data.get("campaign_name")
-
-        qs = CampaignName.objects.all()
-        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-            qs = qs.filter(organization=user.organization)
-
-        campaign = None
-        if campaign_id:
-            campaign = qs.filter(id=campaign_id).first()
-        elif campaign_name:
-            campaign = qs.filter(name__iexact=campaign_name.strip()).first()
+        c_id = data.get("campaign_id")
+        c_name = data.get("campaign_name")
+        campaign = CampaignName.objects.filter(id=c_id).first() if c_id else CampaignName.objects.filter(name__iexact=str(c_name).strip()).first()
 
         if not campaign:
             raise APIException("Campaign Not Found")
 
-        if "is_active" in data and data["is_active"] is not None:
+        if data.get("is_active") is not None:
             campaign.is_active = data["is_active"]
-        if "lead_distribution_type" in data and data["lead_distribution_type"]:
+        if data.get("lead_distribution_type"):
             campaign.lead_distribution_type = data["lead_distribution_type"]
         campaign.save()
 
-        # Update Agent active toggles
-        agent_toggles = data.get("agent_toggles", [])
-        for item in agent_toggles:
-            agent_id = item.get("agent_id")
-            is_act = item.get("is_active")
-            if agent_id is not None and is_act is not None:
-                ca, created = CampaignAssignedAgent.objects.get_or_create(
-                    campaign=campaign,
-                    agent_user_id=agent_id
-                )
-                ca.is_active = is_act
+        for item in data.get("agent_toggles", []):
+            if item.get("agent_id") is not None and item.get("is_active") is not None:
+                ca, _ = CampaignAssignedAgent.objects.get_or_create(campaign=campaign, agent_user_id=item["agent_id"])
+                ca.is_active = item["is_active"]
                 ca.save()
 
-        return {"message": "Campaign Details Updated Successfully"}
+        return {"status": True, "message": "Campaign Details Updated Successfully"}
     except Exception as e:
         raise APIException(str(e))
