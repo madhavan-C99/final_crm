@@ -17,7 +17,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { createLead, getLeadSelectOptions } from "../../../services/leadService";
 
-const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, existingLeads = [] }) => {
+const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedPipeline = null }) => {
   const isEdit = Boolean(editLeadData);
 
   const getInitialState = () => {
@@ -75,7 +75,7 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, existingL
       setErrorMessage("");
       fetchOptions();
     }
-  }, [open, editLeadData, existingLeads]);
+  }, [open, editLeadData]);
 
   const capitalize = (str) => {
     if (!str) return "";
@@ -96,7 +96,8 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, existingL
 
       // 1. Query dropdown options API directly from Backend
       try {
-        const response = await getLeadSelectOptions();
+        const optFilter = selectedPipeline ? { pipeline_id: selectedPipeline, category_id: selectedPipeline } : null;
+        const response = await getLeadSelectOptions(optFilter);
         const raw = response?.data?.data || response?.data?.result || response?.data;
 
         if (raw && typeof raw === "object") {

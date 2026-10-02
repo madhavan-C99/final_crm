@@ -1,74 +1,35 @@
 import React from "react";
 import { Grid, Card, Typography, Skeleton } from "@mui/material";
-import dayjs from "dayjs";
 
-const PendingPaymentStats = ({ summaryCards: propSummaryCards, tableData = [], loading = false }) => {
-    let summaryCards = propSummaryCards;
-
-    const safeTableData = Array.isArray(tableData) ? tableData : [];
-
-    const computedOverdueItems = safeTableData.filter(item => {
-        const st = String(item?.status || item?.due_status || "").toLowerCase();
-        if (st.includes("over")) return true;
-        if (item?.is_overdue === true || item?.is_overdue === 1 || item?.is_overdue === "true" || item?.is_overdue === "1") return true;
-        const dueDateStr = item?.due_date || item?.next_followup || item?.next_follow_up;
-        if (dueDateStr && dayjs(dueDateStr).isValid() && dayjs(dueDateStr).isBefore(dayjs(), 'day')) {
-            return true;
-        }
-        return false;
-    });
-
-    const computedTodayItems = safeTableData.filter(item => {
-        const st = String(item?.status || item?.due_status || "").toLowerCase();
-        if (st.includes("today")) return true;
-        const dueDateStr = item?.due_date || item?.next_followup || item?.next_follow_up;
-        if (dueDateStr && dayjs(dueDateStr).isValid() && dayjs(dueDateStr).isSame(dayjs(), 'day')) {
-            return true;
-        }
-        return false;
-    });
-
-    const computedTotalAmount = safeTableData.reduce((sum, item) => sum + (parseFloat(item?.pending_amount ?? item?.payment_amount) || 0), 0);
-    const computedOverdueAmount = computedOverdueItems.reduce((sum, item) => sum + (parseFloat(item?.pending_amount ?? item?.payment_amount) || 0), 0);
-    const computedTodayAmount = computedTodayItems.reduce((sum, item) => sum + (parseFloat(item?.pending_amount ?? item?.payment_amount) || 0), 0);
-
-    if (!summaryCards) {
-        summaryCards = {
-            total_pending: { amount: computedTotalAmount, count: safeTableData.length },
-            due_today: { amount: computedTodayAmount, count: computedTodayItems.length },
-            overdue: { amount: computedOverdueAmount, count: computedOverdueItems.length }
-        };
-    }
-
-    const parseAmount = (val, fallback = 0) => {
-        if (val === null || val === undefined) return fallback;
+const PendingPaymentStats = ({ summaryCards, loading = false }) => {
+    const parseAmount = (val) => {
+        if (val === null || val === undefined) return 0;
         if (typeof val === "object") {
             const num = parseFloat(val?.amount ?? val?.value ?? val?.total_amount ?? val?.pending_amount);
-            return isNaN(num) ? fallback : num;
+            return isNaN(num) ? 0 : num;
         }
         const num = parseFloat(val);
-        return isNaN(num) ? fallback : num;
+        return isNaN(num) ? 0 : num;
     };
 
-    const parseCount = (val, fallback = 0) => {
-        if (val === null || val === undefined) return fallback;
+    const parseCount = (val) => {
+        if (val === null || val === undefined) return 0;
         if (typeof val === "object") {
             const num = parseInt(val?.count ?? val?.leads ?? val?.leads_count ?? val?.total_leads, 10);
-            return isNaN(num) ? fallback : num;
+            return isNaN(num) ? 0 : num;
         }
         const num = parseInt(val, 10);
-        return isNaN(num) ? fallback : num;
+        return isNaN(num) ? 0 : num;
     };
 
-    // Always display the true master overall numbers from Backend API
-    const totalPendingAmount = parseAmount(summaryCards?.total_pending, computedTotalAmount);
-    const totalPendingCount = parseCount(summaryCards?.total_pending, safeTableData.length);
+    const totalPendingAmount = parseAmount(summaryCards?.total_pending);
+    const totalPendingCount = parseCount(summaryCards?.total_pending);
 
-    const dueTodayAmount = parseAmount(summaryCards?.due_today, computedTodayAmount);
-    const dueTodayCount = parseCount(summaryCards?.due_today, computedTodayItems.length);
+    const dueTodayAmount = parseAmount(summaryCards?.due_today);
+    const dueTodayCount = parseCount(summaryCards?.due_today);
 
-    const overdueAmount = parseAmount(summaryCards?.overdue, computedOverdueAmount);
-    const overdueCount = parseCount(summaryCards?.overdue, computedOverdueItems.length);
+    const overdueAmount = parseAmount(summaryCards?.overdue);
+    const overdueCount = parseCount(summaryCards?.overdue);
 
     if (loading && !summaryCards) {
         return (

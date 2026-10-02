@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import {
   Dialog,
@@ -27,10 +27,9 @@ import DeleteIcon from "@mui/icons-material/DeleteOutlined";
 import CheckCircleIcon from "@mui/icons-material/CheckCircleOutlined";
 import WarningIcon from "@mui/icons-material/WarningOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { getLeadData } from "../../../services/leadService";
 import { useAuth } from "@/shared/context/AuthContext";
 
-const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
+const UploadLeadsModal = ({ open, onClose, onUpload }) => {
   const { hasPermission } = useAuth();
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -38,32 +37,7 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
   const [step, setStep] = useState("select"); // "select" | "preview"
   const [previewRows, setPreviewRows] = useState([]);
   const [fileHeaders, setFileHeaders] = useState([]);
-  const [masterDbLeads, setMasterDbLeads] = useState([]);
   const fileInputRef = useRef(null);
-
-  // Always fetch complete 100% unfiltered master DB leads on modal open to ignore active screen filters
-  React.useEffect(() => {
-    if (open) {
-      const fetchMaster = async () => {
-        try {
-          const res = await getLeadData({ lead_filter_type: "all", limit: 10000, per_page: 10000 });
-          const raw = res?.data?.data || res?.data?.result || res?.data;
-          let list = [];
-          if (Array.isArray(raw)) {
-            list = Array.isArray(raw[0]) ? raw[0] : raw;
-          } else if (raw && typeof raw === "object") {
-            list = raw.leads || raw.rows || raw.data || [];
-          }
-          if (Array.isArray(list) && list.length > 0) {
-            setMasterDbLeads(list);
-          }
-        } catch (err) {
-          console.warn("Failed to fetch master db leads in UploadLeadsModal:", err);
-        }
-      };
-      fetchMaster();
-    }
-  }, [open]);
 
   // Exact Lime Green Colors
   const LIME_GREEN = "#88D000";
@@ -180,7 +154,9 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
                   return String(safeObj[match]).trim();
                 }
               }
-            } catch (e) {}
+            } catch {
+              /* ignore */
+            }
             return "";
           };
 
@@ -244,7 +220,7 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
           return !isGarbage;
         });
 
-        const verified = runDuplicateCheck(cleanRows, existingLeads || []);
+        const verified = runDuplicateCheck(cleanRows);
 
         const cleanHeaders = headers.filter((h) => {
           const hLow = String(h || "").toLowerCase();
@@ -281,25 +257,7 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
     reader.readAsArrayBuffer(file);
   };
 
-  const runDuplicateCheck = (rows = [], existingList = []) => {
-    const activeExisting = masterDbLeads.length > 0 ? masterDbLeads : (Array.isArray(existingList) ? existingList : []);
-    const safeExisting = Array.isArray(activeExisting) ? activeExisting : [];
-
-    const dbMobiles = new Set();
-    const dbEmails = new Set();
-
-    safeExisting.forEach((l) => {
-      if (!l || typeof l !== "object") return;
-      let rawMob = String(l.mobile_no || l.phone_no || l.phone || l.contact || "").replace(/\D/g, "");
-      if (rawMob.length >= 10) {
-        dbMobiles.add(rawMob.slice(-10));
-      }
-      let rawEmail = String(l.email || l.email_id || "").trim().toLowerCase();
-      if (rawEmail && rawEmail.includes("@")) {
-        dbEmails.add(rawEmail);
-      }
-    });
-
+  const runDuplicateCheck = (rows = []) => {
     const batchMobiles = new Set();
     const batchEmails = new Set();
 
@@ -333,7 +291,9 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
               return String(obj[match]).trim();
             }
           }
-        } catch (e) {}
+        } catch {
+          /* ignore */
+        }
         return "";
       };
 
@@ -371,20 +331,16 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
 
       const mobileVal = cleanDigits;
 
-      const isDbMobDup = mobileVal && dbMobiles.has(mobileVal);
       const isBatchMobDup = mobileVal && batchMobiles.has(mobileVal);
-      const isDbEmailDup = cleanEmail && dbEmails.has(cleanEmail);
       const isBatchEmailDup = cleanEmail && batchEmails.has(cleanEmail);
 
       if (mobileVal) batchMobiles.add(mobileVal);
       if (cleanEmail) batchEmails.add(cleanEmail);
 
-      const isDup = isDbMobDup || isBatchMobDup || isDbEmailDup || isBatchEmailDup;
+      const isDup = isBatchMobDup || isBatchEmailDup;
 
       let reasonStr = "Valid Lead";
-      if (isDbMobDup) reasonStr = "Mobile already in Database";
-      else if (isBatchMobDup) reasonStr = "Duplicate Mobile in Upload File";
-      else if (isDbEmailDup) reasonStr = "Email already in Database";
+      if (isBatchMobDup) reasonStr = "Duplicate Mobile in Upload File";
       else if (isBatchEmailDup) reasonStr = "Duplicate Email in Upload File";
 
       return {
@@ -435,7 +391,9 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
                 return String(newRawObj[match]).trim();
               }
             }
-          } catch (e) {}
+          } catch {
+          /* ignore */
+        }
           return "";
         };
 
@@ -454,7 +412,7 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
         };
       });
 
-      return runDuplicateCheck(updatedRows, existingLeads || []);
+      return runDuplicateCheck(updatedRows);
     });
   };
 
@@ -477,7 +435,7 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
   };
 
   const handleReVerify = () => {
-    const updated = runDuplicateCheck(previewRows, existingLeads);
+    const updated = runDuplicateCheck(previewRows);
     setPreviewRows(updated);
   };
 
@@ -870,7 +828,6 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
                   {previewRows.map((row) => {
                     const isDup = row.status === "duplicate";
                     const isMissing = row.status === "mandatory_missing";
-                    const isBad = isDup || isMissing;
                     return (
                       <TableRow
                         key={row.id}

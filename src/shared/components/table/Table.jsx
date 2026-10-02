@@ -40,23 +40,50 @@ const Table = ({
   // hideable by setting `hideable: false` on that column definition
   // (e.g. "No" / "Action" columns you never want hidden).
   enableColumnSettings = false,
+  // 🌟 SERVER-SIDE PAGINATION PROPS
+  serverSide = false,
+  page: pageProp,
+  rowsPerPage: rowsPerPageProp,
+  totalCount: totalCountProp,
+  onPageChange,
+  onRowsPerPageChange,
 }) => {
-  const [page, setPage] = React.useState(0);
-  const [rowsPerPage, setRowsPerPage] = React.useState(10);
+  const [internalPage, setInternalPage] = React.useState(0);
+  const [internalRowsPerPage, setInternalRowsPerPage] = React.useState(10);
   const [selected, setSelected] = React.useState([]);
   const [settingsAnchorEl, setSettingsAnchorEl] = React.useState(null);
   const [hiddenFields, setHiddenFields] = React.useState([]);
 
   const rowRefs = React.useRef({});
 
+  // Active pagination values
+  const activePage = serverSide ? (pageProp ?? 0) : internalPage;
+  const activeRowsPerPage = serverSide ? (rowsPerPageProp ?? 10) : internalRowsPerPage;
+  const activeCount = serverSide ? (totalCountProp ?? rows.length) : rows.length;
+
   const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+    if (serverSide) {
+      onPageChange?.(event, newPage);
+    } else {
+      setInternalPage(newPage);
+      onPageChange?.(event, newPage);
+    }
   };
 
   const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+    if (serverSide) {
+      onRowsPerPageChange?.(event);
+    } else {
+      const newRowsPerPage = parseInt(event.target.value, 10);
+      setInternalRowsPerPage(newRowsPerPage);
+      setInternalPage(0);
+      onRowsPerPageChange?.(event);
+    }
   };
+
+  const displayedRows = serverSide
+    ? rows
+    : rows.slice(activePage * activeRowsPerPage, activePage * activeRowsPerPage + activeRowsPerPage);
 
   const allSelected = rows.length > 0 && selected.length === rows.length;
 
@@ -269,80 +296,78 @@ const Table = ({
                 </TableCell>
               </TableRow>
             ) : (
-              rows
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((row, rowIndex) => {
-                  const rowId = getRowId(row);
-                  const isExpanded =
-                    renderExpandedRow &&
-                    expandedRowId !== null &&
-                    expandedRowId !== undefined &&
-                    rowId === expandedRowId;
+              displayedRows.map((row, rowIndex) => {
+                const rowId = getRowId(row);
+                const isExpanded =
+                  renderExpandedRow &&
+                  expandedRowId !== null &&
+                  expandedRowId !== undefined &&
+                  rowId === expandedRowId;
 
-                  return (
-                    <React.Fragment key={rowId ?? rowIndex}>
-                      <TableRow
-                        ref={(el) => { rowRefs.current[rowId] = el; }}
-                        onClick={() => onRowClick && onRowClick(row)}
-                        sx={{
-                          height: "50px",
-                          cursor: onRowClick ? "pointer" : "default",
-                          ...(getRowStyle ? getRowStyle(row) : {}),
-                        }}
-                      >
-                        {selectable && (
-                          <TableCell padding="checkbox" sx={{ height: "50px", opacity: 1, borderBottom: isExpanded ? "none" : "2px solid #D0CCCC" }}>
-                            <Checkbox
-                              size="small"
-                              checked={selected.includes(rowId)}
-                              onChange={(event) => {
-                                event.stopPropagation();
-                                toggleOne(rowId);
-                              }}
-                              onClick={(event) => event.stopPropagation()}
-                            />
-                          </TableCell>
-                        )}
-                        {visibleColumns.map((column, colIndex) => (
-                          <TableCell
-                            key={colIndex}
-                            align={column.align || "left"}
-                            sx={{
-                              color: "#4D4D4D",
-                              fontFamily: "'Inter', sans-serif",
-                              fontWeight: 500,
-                              fontSize: "14px",
-                              lineHeight: "100%",
-                              letterSpacing: "0px",
-                              height: "50px",
-                              py: 0,
-                              opacity: 1,
-                              whiteSpace: "nowrap",
-                              minWidth: column.minWidth || "auto",
-                              textAlign: "center",
-                              borderBottom: isExpanded ? "none" : "2px solid #D0CCCC",
+                return (
+                  <React.Fragment key={rowId ?? rowIndex}>
+                    <TableRow
+                      ref={(el) => { rowRefs.current[rowId] = el; }}
+                      onClick={() => onRowClick && onRowClick(row)}
+                      sx={{
+                        height: "50px",
+                        cursor: onRowClick ? "pointer" : "default",
+                        ...(getRowStyle ? getRowStyle(row) : {}),
+                      }}
+                    >
+                      {selectable && (
+                        <TableCell padding="checkbox" sx={{ height: "50px", opacity: 1, borderBottom: isExpanded ? "none" : "2px solid #D0CCCC" }}>
+                          <Checkbox
+                            size="small"
+                            checked={selected.includes(rowId)}
+                            onChange={(event) => {
+                              event.stopPropagation();
+                              toggleOne(rowId);
                             }}
-                          >
-                            {column.renderCell ? column.renderCell(row, rowIndex) : row[column.field]}
-                          </TableCell>
-                        ))}
-                        {enableColumnSettings && (
-                          <TableCell sx={{ borderBottom: isExpanded ? "none" : "2px solid #D0CCCC" }} />
-                        )}
-                      </TableRow>
-
-                      {renderExpandedRow && (
-                        <TableRow>
-                          <TableCell colSpan={totalColSpan} sx={{ p: 0, background: "#F7F7F7", border: "none" }}>
-                            <Collapse in={isExpanded} timeout="auto" unmountOnExit sx={{ background: "#F7F7F7" }}>
-                              {renderExpandedRow(row)}
-                            </Collapse>
-                          </TableCell>
-                        </TableRow>
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        </TableCell>
                       )}
-                    </React.Fragment>
-                  );
-                })
+                      {visibleColumns.map((column, colIndex) => (
+                        <TableCell
+                          key={colIndex}
+                          align={column.align || "left"}
+                          sx={{
+                            color: "#4D4D4D",
+                            fontFamily: "'Inter', sans-serif",
+                            fontWeight: 500,
+                            fontSize: "14px",
+                            lineHeight: "100%",
+                            letterSpacing: "0px",
+                            height: "50px",
+                            py: 0,
+                            opacity: 1,
+                            whiteSpace: "nowrap",
+                            minWidth: column.minWidth || "auto",
+                            textAlign: "center",
+                            borderBottom: isExpanded ? "none" : "2px solid #D0CCCC",
+                          }}
+                        >
+                          {column.renderCell ? column.renderCell(row, rowIndex) : row[column.field]}
+                        </TableCell>
+                      ))}
+                      {enableColumnSettings && (
+                        <TableCell sx={{ borderBottom: isExpanded ? "none" : "2px solid #D0CCCC" }} />
+                      )}
+                    </TableRow>
+
+                    {renderExpandedRow && (
+                      <TableRow>
+                        <TableCell colSpan={totalColSpan} sx={{ p: 0, background: "#F7F7F7", border: "none" }}>
+                          <Collapse in={isExpanded} timeout="auto" unmountOnExit sx={{ background: "#F7F7F7" }}>
+                            {renderExpandedRow(row)}
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                );
+              })
             )}
           </TableBody>
         </MuiTable>
@@ -350,10 +375,10 @@ const Table = ({
 
       <TablePagination
         component="div"
-        count={rows.length}
-        page={page}
+        count={activeCount}
+        page={activePage}
         onPageChange={handleChangePage}
-        rowsPerPage={rowsPerPage}
+        rowsPerPage={activeRowsPerPage}
         onRowsPerPageChange={handleChangeRowsPerPage}
         labelRowsPerPage="Items per page"
         rowsPerPageOptions={[10, 25, 50, 100]}

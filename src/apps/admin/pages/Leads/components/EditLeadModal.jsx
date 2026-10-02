@@ -26,7 +26,7 @@ const parseNumericAmount = (val) => {
   return 0;
 };
 
-const EditLeadModal = ({ open, onClose, lead, onSaveSuccess, existingLeads = [] }) => {
+const EditLeadModal = ({ open, onClose, lead, onSaveSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showAltPhone, setShowAltPhone] = useState(false);
@@ -137,7 +137,7 @@ const EditLeadModal = ({ open, onClose, lead, onSaveSuccess, existingLeads = [] 
     };
 
     fetchLeadDetails();
-  }, [open, lead, existingLeads]);
+  }, [open, lead]);
 
   const fetchDropdownOptions = async () => {
     try {

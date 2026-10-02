@@ -21,24 +21,37 @@ import { getMarkAsWonInfo } from "../../../services/leadService";
 const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
   const [wonInfoData, setWonInfoData] = useState(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
-  const [stage, setStage] = useState("Prospective");
-  const [paidThrough, setPaidThrough] = useState("Online");
+  const [stage, setStage] = useState("");
+  const [paidThrough, setPaidThrough] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
   const [isFullPayment, setIsFullPayment] = useState(false);
   const [pendingAmount, setPendingAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState("Partial");
+  const [paymentStatus, setPaymentStatus] = useState("");
   const [quickFollowup, setQuickFollowup] = useState("");
   const [manualFollowup, setManualFollowup] = useState("");
   const [summary, setSummary] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const updatePaymentStatusByAmounts = (paid, pending) => {
+    const halfFee = totalCourseFee / 2;
+    const completedStatus = wonInfoData?.completed_status_name || "Completed";
+    const partialStatus = wonInfoData?.partial_status_name || "Partial";
+    const pendingStatus = wonInfoData?.pending_status_name || "Pending";
+
+    if (pending <= 0 && paid > 0) {
+      setPaymentStatus(completedStatus);
+    } else if (paid >= halfFee && pending > 0) {
+      setPaymentStatus(partialStatus);
+    } else {
+      setPaymentStatus(pendingStatus);
+    }
+  };
+
   // Fetch live GET info on modal open
   useEffect(() => {
     if (!open || !lead) {
-      setWonInfoData(null);
-      setErrorMsg("");
       return;
     }
     setErrorMsg("");
@@ -98,12 +111,11 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
   const name =
     activeData?.full_name ||
     activeData?.name ||
-    `${activeData?.first_name || ""} ${activeData?.last_name || ""}`.trim() ||
-    "-";
+    `${activeData?.first_name || ""} ${activeData?.last_name || ""}`.trim();
   const phone =
-    activeData?.mobile_no || activeData?.phone_no || activeData?.phone || activeData?.contact || "-";
+    activeData?.mobile_no || activeData?.phone_no || activeData?.phone || activeData?.contact || "";
   const assignedTo =
-    activeData?.assigned_to || activeData?.user_name || activeData?.telecaller || "-";
+    activeData?.assigned_to || activeData?.user_name || activeData?.telecaller || "";
 
   const totalCourseFee = Number(activeData?.total_amount || activeData?.amount || activeData?.course_fee || 0);
 
@@ -111,20 +123,9 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
     if (isFullPayment) {
       setAmountPaid(String(totalCourseFee));
       setPendingAmount("0");
-      setPaymentStatus("Completed");
+      setPaymentStatus(wonInfoData?.completed_status_name || "Completed");
     }
-  }, [isFullPayment, totalCourseFee]);
-
-  const updatePaymentStatusByAmounts = (paid, pending) => {
-    const halfFee = totalCourseFee / 2;
-    if (pending <= 0 && paid > 0) {
-      setPaymentStatus("Completed");
-    } else if (paid >= halfFee && pending > 0) {
-      setPaymentStatus("Partial");
-    } else {
-      setPaymentStatus("Pending");
-    }
-  };
+  }, [isFullPayment, totalCourseFee, wonInfoData]);
 
   const handleAmountChange = (e) => {
     const val = e.target.value;
@@ -202,14 +203,14 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
       const payload = {
         lead_id: numericLeadId,
         id: numericLeadId,
-        stage: stage || "Won",
-        stage_name: stage || "Won",
-        paid_through: paidThrough || "Online",
+        stage: stage,
+        stage_name: stage,
+        paid_through: paidThrough,
         amount_paid: numAmountPaid,
         paid_amount: numAmountPaid,
         pending_amount: numPendingAmount,
         due_date: numPendingAmount > 0 ? formatDateToISO(dueDate) : null,
-        payment_status: paymentStatus || (isFullPayment ? "Paid" : "Partial"),
+        payment_status: paymentStatus,
         next_followup: followupVal,
         summary: summary || "",
         remarks: summary || "",
@@ -347,7 +348,7 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
                 "& .MuiSvgIcon-root": { color: "#FFFFFF" },
               }}
             >
-              {(wonInfoData?.lead_stages || wonInfoData?.priority_tags || ["Prospective", "Interested", "Just Follow Up"]).map((opt) => {
+              {(wonInfoData?.lead_stages || wonInfoData?.priority_tags || []).map((opt) => {
                 const val = typeof opt === "object" ? opt.name || opt.label : opt;
                 return (
                   <MenuItem key={val} value={val}>
@@ -377,7 +378,7 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
                 },
               }}
             >
-              {(wonInfoData?.payment_modes || ["Online", "UPI", "Bank Transfer", "Cash", "Cheque"]).map((opt) => {
+              {(wonInfoData?.payment_modes || []).map((opt) => {
                 const val = typeof opt === "object" ? opt.name || opt.label : opt;
                 return (
                   <MenuItem key={val} value={val}>
@@ -494,9 +495,14 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
                 },
               }}
             >
-              <MenuItem value="Completed">Completed</MenuItem>
-              <MenuItem value="Partial">Partial</MenuItem>
-              <MenuItem value="Pending">Pending</MenuItem>
+              {(wonInfoData?.payment_statuses || wonInfoData?.payment_status_list || []).map((opt) => {
+                const val = typeof opt === "object" ? opt.name || opt.label : opt;
+                return (
+                  <MenuItem key={val} value={val}>
+                    {val}
+                  </MenuItem>
+                );
+              })}
             </TextField>
           </Box>
 
@@ -506,7 +512,7 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
               Next Follow Up <span style={{ color: "#94A3B8", fontWeight: 400 }}>(Optional)</span>
             </Typography>
             <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
-              {["1 Hour", "3 Hour", "6 Hour"].map((label) => (
+              {(wonInfoData?.quick_followups || wonInfoData?.followup_options || []).map((label) => (
                 <Button
                   key={label}
                   size="small"

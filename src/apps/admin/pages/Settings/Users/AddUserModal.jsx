@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import {
   Box,
   Dialog,
@@ -15,6 +15,26 @@ import EditIcon from "@mui/icons-material/Edit";
 import { toast } from "react-toastify";
 
 const ACCENT = "#90D916";
+const ERROR_COLOR = "#D32F2F";
+
+// Mandatory fields: key -> label shown in the error message
+const REQUIRED_FIELDS = {
+  fullName: "Full Name",
+  contactNo: "Contact No",
+  email: "Email",
+  location: "Location",
+  role: "Role",
+  reportingTo: "Reporting To",
+  joinedDate: "Joined Date",
+  employeeId: "Employee Id",
+};
+
+// Role / Reporting To values can be numeric ids, so don't call .trim() blindly
+const isEmpty = (v) =>
+  v === "" ||
+  v === null ||
+  v === undefined ||
+  (typeof v === "string" && !v.trim());
 
 const fieldStyles = {
   "& .MuiOutlinedInput-root": {
@@ -25,6 +45,7 @@ const fieldStyles = {
     "& fieldset": { border: "0.5px solid #00000017" },
     "&:hover fieldset": { border: "0.5px solid #00000017" },
     "&.Mui-focused fieldset": { border: `1px solid ${ACCENT}` },
+    "&.Mui-error fieldset": { border: `1px solid ${ERROR_COLOR}` },
   },
   "& .MuiInputBase-input": {
     padding: "6px 12px",
@@ -50,6 +71,11 @@ const fieldStyles = {
     display: "flex",
     alignItems: "center",
     boxSizing: "border-box",
+  },
+  "& .MuiFormHelperText-root": {
+    margin: "2px 0 0",
+    fontSize: "12px",
+    fontFamily: "Inter, sans-serif",
   },
 };
 
@@ -78,7 +104,7 @@ function FieldLabel({ children, required }) {
     <Typography sx={labelStyles}>
       {children}
       {required && (
-        <Box component="span" sx={{ color: ACCENT }}>
+        <Box component="span" sx={{ color: ERROR_COLOR }}>
           {" "}
           *
         </Box>
@@ -86,6 +112,19 @@ function FieldLabel({ children, required }) {
     </Typography>
   );
 }
+
+const EMPTY_FORM = {
+  fullName: "",
+  contactNo: "",
+  email: "",
+  location: "",
+  role: "",
+  reportingTo: "",
+  status: "Active",
+  joinedDate: "",
+  employeeId: "",
+  team: "",
+};
 
 export default function AddUserModal({
   open,
@@ -95,57 +134,44 @@ export default function AddUserModal({
   managersList = [],
   teamsList = [],
 }) {
-  const [form, setForm] = useState({
-    fullName: "",
-    contactNo: "",
-    email: "",
-    location: "",
-    role: "",
-    reportingTo: "",
-    status: "Active",
-    joinedDate: "",
-    employeeId: "",
-    team: "",
-  });
-
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (open) {
       setForm({
-        fullName: "",
-        contactNo: "",
-        email: "",
-        location: "",
-        role: "",
-        reportingTo: "",
-        status: "Active",
+        ...EMPTY_FORM,
         joinedDate: new Date().toISOString().split("T")[0],
-        employeeId: "",
-        team: "",
       });
+      setErrors({});
     }
   }, [open]);
 
   const handleChange = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
+    // clear this field's error as soon as the user edits it
+    setErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
+  const validate = () => {
+    const newErrors = {};
+
+    Object.entries(REQUIRED_FIELDS).forEach(([key, label]) => {
+      if (isEmpty(form[key])) newErrors[key] = `${label} is required`;
+    });
+
+    if (!newErrors.email && !/^\S+@\S+\.\S+$/.test(String(form.email).trim())) {
+      newErrors.email = "Enter a valid email";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSave = async () => {
-    if (!form.fullName.trim()) {
-      toast.error("Please enter Full Name");
-      return;
-    }
-    if (!form.contactNo.trim()) {
-      toast.error("Please enter Contact No");
-      return;
-    }
-    if (!form.location.trim()) {
-      toast.error("Please enter Location");
-      return;
-    }
-    if (!form.role.trim()) {
-      toast.error("Please enter or select Role");
+    if (!validate()) {
+      toast.error("Please fill all mandatory fields");
       return;
     }
 
@@ -182,7 +208,16 @@ export default function AddUserModal({
         },
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 3, pt: 2, pb: 1.5 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          px: 3,
+          pt: 2,
+          pb: 1.5,
+        }}
+      >
         <EditIcon sx={{ color: ACCENT, fontSize: 20 }} />
         <Typography sx={{ color: ACCENT, fontWeight: 600, fontSize: "17px" }}>
           Add New User
@@ -212,6 +247,8 @@ export default function AddUserModal({
                 value={form.fullName}
                 onChange={handleChange("fullName")}
                 sx={fieldStyles}
+                error={Boolean(errors.fullName)}
+                helperText={errors.fullName}
               />
             </Box>
             <Box sx={{ flex: 1 }}>
@@ -222,19 +259,23 @@ export default function AddUserModal({
                 value={form.contactNo}
                 onChange={handleChange("contactNo")}
                 sx={fieldStyles}
+                error={Boolean(errors.contactNo)}
+                helperText={errors.contactNo}
               />
             </Box>
           </Stack>
 
           <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
             <Box sx={{ flex: 1 }}>
-              <FieldLabel>Email</FieldLabel>
+              <FieldLabel required>Email</FieldLabel>
               <TextField
                 fullWidth
                 placeholder="Enter Email"
                 value={form.email}
                 onChange={handleChange("email")}
                 sx={fieldStyles}
+                error={Boolean(errors.email)}
+                helperText={errors.email}
               />
             </Box>
             <Box sx={{ flex: 1 }}>
@@ -245,6 +286,8 @@ export default function AddUserModal({
                 value={form.location}
                 onChange={handleChange("location")}
                 sx={fieldStyles}
+                error={Boolean(errors.location)}
+                helperText={errors.location}
               />
             </Box>
           </Stack>
@@ -260,11 +303,19 @@ export default function AddUserModal({
                 onChange={handleChange("role")}
                 sx={fieldStyles}
                 SelectProps={{ displayEmpty: true }}
+                error={Boolean(errors.role)}
+                helperText={errors.role}
               >
                 {rolesList.length > 0 ? (
                   rolesList.map((r, idx) => {
-                    const val = typeof r === "object" ? r.label || r.name || r.role_name || r.value || r.id : r;
-                    const label = typeof r === "object" ? r.label || r.name || r.role_name || String(val) : String(r);
+                    const val =
+                      typeof r === "object"
+                        ? r.label || r.name || r.role_name || r.value || r.id
+                        : r;
+                    const label =
+                      typeof r === "object"
+                        ? r.label || r.name || r.role_name || String(val)
+                        : String(r);
                     return (
                       <MenuItem key={idx} value={val}>
                         {label}
@@ -287,14 +338,22 @@ export default function AddUserModal({
                 onChange={handleChange("reportingTo")}
                 sx={fieldStyles}
                 SelectProps={{ displayEmpty: true }}
+                error={Boolean(errors.reportingTo)}
+                helperText={errors.reportingTo}
               >
                 <MenuItem value="" disabled>
                   Select Manager
                 </MenuItem>
                 {managersList.length > 0 ? (
                   managersList.map((m, idx) => {
-                    const val = typeof m === "object" ? m.id || m.value || m.name || m.full_name : m;
-                    const label = typeof m === "object" ? m.label || m.name || m.full_name || String(val) : String(m);
+                    const val =
+                      typeof m === "object"
+                        ? m.id || m.value || m.name || m.full_name
+                        : m;
+                    const label =
+                      typeof m === "object"
+                        ? m.label || m.name || m.full_name || String(val)
+                        : String(m);
                     return (
                       <MenuItem key={idx} value={val}>
                         {label}
@@ -325,13 +384,15 @@ export default function AddUserModal({
               </TextField>
             </Box>
             <Box sx={{ flex: 1 }}>
-              <FieldLabel>Joined Date</FieldLabel>
+              <FieldLabel required>Joined Date</FieldLabel>
               <TextField
                 fullWidth
                 type="date"
                 value={form.joinedDate}
                 onChange={handleChange("joinedDate")}
                 sx={fieldStyles}
+                error={Boolean(errors.joinedDate)}
+                helperText={errors.joinedDate}
               />
             </Box>
           </Stack>
@@ -345,10 +406,12 @@ export default function AddUserModal({
                 value={form.employeeId}
                 onChange={handleChange("employeeId")}
                 sx={fieldStyles}
+                error={Boolean(errors.employeeId)}
+                helperText={errors.employeeId}
               />
             </Box>
             <Box sx={{ flex: 1 }}>
-              <FieldLabel required>Team</FieldLabel>
+              <FieldLabel>Team</FieldLabel>
               <TextField
                 select={teamsList.length > 0}
                 fullWidth
@@ -360,8 +423,14 @@ export default function AddUserModal({
               >
                 {teamsList.length > 0 ? (
                   teamsList.map((t, idx) => {
-                    const val = typeof t === "object" ? t.label || t.name || t.team_name || t.value || t.id : t;
-                    const label = typeof t === "object" ? t.label || t.name || t.team_name || String(val) : String(t);
+                    const val =
+                      typeof t === "object"
+                        ? t.label || t.name || t.team_name || t.value || t.id
+                        : t;
+                    const label =
+                      typeof t === "object"
+                        ? t.label || t.name || t.team_name || String(val)
+                        : String(t);
                     return (
                       <MenuItem key={idx} value={val}>
                         {label}

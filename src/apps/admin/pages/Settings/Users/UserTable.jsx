@@ -24,6 +24,11 @@ import Table from "@/shared/components/table/Table";
 export default function UserTable({
   tableData = [],
   loading = false,
+  page = 1,
+  pageSize = 50,
+  totalRecords = 0,
+  onPageChange,
+  onRowsPerPageChange,
   onEditUser,
   onDeactivateUser,
   onChangePassword,
@@ -309,6 +314,12 @@ export default function UserTable({
   return (
     <>
       <Table
+        serverSide={true}
+        page={page - 1}
+        rowsPerPage={pageSize}
+        totalCount={totalRecords}
+        onPageChange={onPageChange}
+        onRowsPerPageChange={onRowsPerPageChange}
         columns={columns}
         rows={tableData}
         loading={loading}

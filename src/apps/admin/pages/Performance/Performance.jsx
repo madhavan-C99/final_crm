@@ -103,42 +103,15 @@ export default function Performance() {
     }
   };
 
-  // Transform API response into clean UI structures with client-side Team Validation & Re-ranking
+  // Transform API response into clean UI structures directly using API order and rank
   const transformApiResponse = (data) => {
     if (!data) return;
 
-    let rawList = data.performance_list || [];
-
-    // Client-side Team Filter & Safety Validation
-    const teamId = getTeamId(selectedTeam);
-    if (teamId !== 0 && selectedTeam !== "all") {
-      const selectedTeamStr = String(selectedTeam).toLowerCase().trim();
-      const filteredByTeam = rawList.filter((item) => {
-        const itemTeamId = Number(item.team_id || item.team || 0);
-        const itemTeamName = String(item.team_name || item.team || "").toLowerCase().trim();
-        if (teamId && itemTeamId === teamId) return true;
-        if (selectedTeamStr && itemTeamName.includes(selectedTeamStr)) return true;
-        return false;
-      });
-      if (filteredByTeam.length > 0) {
-        rawList = filteredByTeam;
-      }
-    }
-
-    const list = [...rawList].sort((a, b) => {
-      const rankA = Number(a.rank || 999);
-      const rankB = Number(b.rank || 999);
-      if (rankA !== rankB) return rankA - rankB;
-      const scoreA = Number(a.performance_score ?? 0);
-      const scoreB = Number(b.performance_score ?? 0);
-      return scoreB - scoreA;
-    });
-
-    const isFilteredTeam = teamId !== 0 && selectedTeam !== "all";
+    const list = data.performance_list || [];
 
     // 1. Table rows
     const rows = list.map((item, index) => {
-      const displayRank = isFilteredTeam ? index + 1 : (item.rank ?? index + 1);
+      const displayRank = item.rank ?? (index + 1);
       const rawRating = item.rating_label || "";
       const cleanRating =
         rawRating.replace(/^\d+\s*/, "") ||
@@ -167,7 +140,7 @@ export default function Performance() {
     // 2. Rank 1 Top Performer
     const rank1 = list[0];
     if (rank1) {
-      const displayRank1 = isFilteredTeam ? 1 : (rank1.rank || 1);
+      const displayRank1 = rank1.rank ?? 1;
       const leads = rank1.leads_assigned || 0;
       const admissions = rank1.admissions || 0;
       const followupsDone = rank1.followups_done || 0;
@@ -240,7 +213,7 @@ export default function Performance() {
     const otherRanks = list.slice(1, 4);
     if (otherRanks.length > 0) {
       const mappedOthers = otherRanks.map((p, idx) => {
-        const displayRankOther = isFilteredTeam ? idx + 2 : (p.rank || idx + 2);
+        const displayRankOther = p.rank ?? (idx + 2);
         const leads = p.leads_assigned || 0;
         const admissions = p.admissions || 0;
         const convRate =

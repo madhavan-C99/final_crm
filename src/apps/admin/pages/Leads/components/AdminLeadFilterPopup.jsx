@@ -32,6 +32,7 @@ const AdminLeadFilterPopup = ({
   onClose,
   fetchLeadData,
   open,
+  selectedPipeline,
 }) => {
   const [tempFilters, setTempFilters] = useState({});
   const [dropdownOptions, setDropdownOptions] = useState(INITIAL_DROPDOWN_STATE);
@@ -49,7 +50,8 @@ const AdminLeadFilterPopup = ({
   const loadAdminSelectOptions = async () => {
     try {
       setLoadingOptions(true);
-      const res = await getLeadSelectOptions();
+      const optFilter = selectedPipeline ? { pipeline_id: selectedPipeline, category_id: selectedPipeline } : null;
+      const res = await getLeadSelectOptions(optFilter);
       const raw = res?.data;
       const data = raw?.data || raw?.result || raw || {};
 

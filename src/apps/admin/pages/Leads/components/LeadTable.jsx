@@ -27,6 +27,11 @@ import { useAuth } from "@/shared/context/AuthContext";
 const LeadTable = ({
   tableData = [],
   loading = false,
+  page = 1,
+  pageSize = 50,
+  totalRecords = 0,
+  onPageChange,
+  onRowsPerPageChange,
   onEditLead,
   onRefreshLead,
   onReassignLead,
@@ -131,7 +136,7 @@ const LeadTable = ({
         const index = tableData.indexOf(row);
         return (
           <Typography sx={{ fontSize: "14px", color: "#4B5563" }}>
-            {row.s_no ?? (index >= 0 ? index + 1 : "-")}
+            {row.s_no ?? (index >= 0 ? (page - 1) * pageSize + index + 1 : "-")}
           </Typography>
         );
       },
@@ -404,12 +409,18 @@ const LeadTable = ({
       >
         Showing{" "}
         <Box component="span" sx={{ fontWeight: 700, color: "#111827" }}>
-          {tableData.length}
+          {totalRecords}
         </Box>{" "}
         leads
       </Typography>
 
       <Table
+        serverSide={true}
+        page={page - 1}
+        rowsPerPage={pageSize}
+        totalCount={totalRecords}
+        onPageChange={onPageChange}
+        onRowsPerPageChange={onRowsPerPageChange}
         columns={columns}
         rows={tableData}
         loading={loading}
@@ -424,8 +435,6 @@ const LeadTable = ({
             onClose={() => setExpandedLeadId(null)}
           />
         )}
-        rowsPerPageOptions={[10, 25, 50, 100, 500]}
-        initialRowsPerPage={50}
       />
 
       {/* Action Menu Popover matching screenshot design */}

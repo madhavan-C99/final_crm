@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, Box, Typography, Button } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import useDebounce from "@/shared/hooks/useDebounce";
 import LossLeadApprovalHeader from "./components/LossLeadApprovalHeader";
 import LossLeadApprovalFilter from "./components/LossLeadApprovalFilter";
 import LossLeadApprovalTable from "./components/LossLeadApprovalTable";
@@ -34,6 +35,7 @@ export default function LossLeadApproval() {
   const [tableData, setTableData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebounce(searchTerm, 400);
   const [filterType, setFilterType] = useState("all");
   const [sortType, setSortType] = useState("newest");
   const [fromDate, setFromDate] = useState("");
@@ -44,6 +46,14 @@ export default function LossLeadApproval() {
     course: "All",
     lead_source: "All",
   });
+
+  // Server-Side Pagination States
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const abortControllerRef = useRef(null);
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [selectedRejectLead, setSelectedRejectLead] = useState(null);
@@ -102,32 +112,121 @@ export default function LossLeadApproval() {
     return { from: "", to: "" };
   };
 
-  const loadData = async () => {
+  const loadData = async (targetPage = page, targetPageSize = pageSize) => {
     if (!selectedPipeline) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       setLoading(true);
       const dates = getComputedDates(filterType, fromDate, toDate);
-      const res = await fetchLossLeadApprovalRequests({
+      const payload = {
         pipeline_id: Number(selectedPipeline),
         date_filter_type: filterType,
         from_date: dates.from || "",
         to_date: dates.to || "",
-        search: searchTerm,
-        search_key: searchTerm,
-      });
+        search: debouncedSearchTerm || "",
+        search_key: debouncedSearchTerm || "",
+        sort_type: sortType || "newest",
+        sort_order: sortType || "newest",
+        loss_reason: selectedFilters.loss_reason !== "All" ? selectedFilters.loss_reason : "",
+        telecaller: selectedFilters.telecaller !== "All" ? selectedFilters.telecaller : "",
+        course: selectedFilters.course !== "All" ? selectedFilters.course : "",
+        lead_source: selectedFilters.lead_source !== "All" ? selectedFilters.lead_source : "",
+        page: targetPage,
+        page_size: targetPageSize,
+      };
+
+      const res = await fetchLossLeadApprovalRequests(payload, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+
       const resData = res?.data?.data || res?.data?.result || res?.data;
       const requests = resData?.requests || resData?.leads || resData?.data || (Array.isArray(resData) ? resData : []);
+
+      const totalRec =
+        resData?.total_records ??
+        resData?.total_count ??
+        res?.data?.total_records ??
+        res?.data?.total_count ??
+        (Array.isArray(requests) ? requests.length : 0);
+
+      const totalPg =
+        resData?.total_pages ??
+        resData?.total_page ??
+        ((Math.ceil(totalRec / targetPageSize)) || 1);
+
+      if (controller.signal.aborted) return;
+
       setTableData(requests);
+      setTotalRecords(totalRec);
+      setTotalPages(totalPg);
     } catch (err) {
+      if (err?.name === "CanceledError" || err?.name === "AbortError" || err?.code === "ERR_CANCELED") {
+        return;
+      }
       console.warn("fetchLossLeadApprovalRequests error:", err);
     } finally {
-      setLoading(false);
+      if (abortControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
   };
 
+  const selectedFiltersStr = JSON.stringify(selectedFilters);
+
+  const prevFiltersRef = useRef({
+    selectedPipeline,
+    filterType,
+    sortType,
+    fromDate,
+    toDate,
+    debouncedSearchTerm,
+    selectedFiltersStr,
+  });
+
   useEffect(() => {
-    loadData();
-  }, [filterType, fromDate, toDate, selectedPipeline, searchTerm]);
+    const prev = prevFiltersRef.current;
+    const filtersChanged =
+      prev.selectedPipeline !== selectedPipeline ||
+      prev.filterType !== filterType ||
+      prev.sortType !== sortType ||
+      prev.fromDate !== fromDate ||
+      prev.toDate !== toDate ||
+      prev.debouncedSearchTerm !== debouncedSearchTerm ||
+      prev.selectedFiltersStr !== selectedFiltersStr;
+
+    prevFiltersRef.current = {
+      selectedPipeline,
+      filterType,
+      sortType,
+      fromDate,
+      toDate,
+      debouncedSearchTerm,
+      selectedFiltersStr,
+    };
+
+    if (filtersChanged && page !== 1) {
+      setPage(1);
+      return;
+    }
+
+    loadData(page, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedPipeline,
+    filterType,
+    sortType,
+    fromDate,
+    toDate,
+    debouncedSearchTerm,
+    selectedFiltersStr,
+    page,
+    pageSize,
+  ]);
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
@@ -144,47 +243,6 @@ export default function LossLeadApproval() {
     { id: "lead_age", label: "Lead Age" },
   ];
 
-  const handleExportWithColumns = (selectedKeys) => {
-    const safeTableData = Array.isArray(tableData) ? tableData : [];
-    if (safeTableData.length === 0) {
-      showToast("No loss lead approval requests to export");
-      return;
-    }
-
-    const colMap = {
-      s_no: { label: "S.No", getValue: (row, idx) => idx + 1 },
-      name: { label: "Lead Name", getValue: (row) => `"${(row.name || row.full_name || "").replace(/"/g, '""')}"` },
-      contact: { label: "Contact No", getValue: (row) => `"${(row.contact || row.mobile_no || "").replace(/"/g, '""')}"` },
-      assigned_to: { label: "Assigned To", getValue: (row) => `"${(row.assigned_to || row.user_name || row.telecaller || "-").replace(/"/g, '""')}"` },
-      effort_summary: { label: "Effort Summary", getValue: (row) => `"${(row.effort_summary || row.calls_count || "12 Calls Done").replace(/"/g, '""')}"` },
-      loss_reason: { label: "Loss Reason", getValue: (row) => `"${(row.loss_reason || row.main_reason || row.reason || "-").replace(/"/g, '""')}"` },
-      last_conversation_outcome: { label: "Last Conversation Outcome", getValue: (row) => `"${(row.last_conversation_outcome || row.last_conversation || row.outcome || "-").replace(/"/g, '""')}"` },
-      last_contacted: { label: "Last Contacted", getValue: (row) => `"${(row.last_contacted || row.last_call_date || "-").replace(/"/g, '""')}"` },
-      inquiry_date: { label: "Inquiry Date", getValue: (row) => `"${(row.inquiry_date || row.created_at || row.joining_date || "-").replace(/"/g, '""')}"` },
-      lead_age: { label: "Lead Age", getValue: (row) => `"${(row.lead_age || row.age || "-").replace(/"/g, '""')}"` },
-    };
-
-    const activeKeys = selectedKeys && selectedKeys.length > 0 ? selectedKeys : Object.keys(colMap);
-    const headers = activeKeys.map((key) => colMap[key]?.label || key);
-    const rows = safeTableData.map((row, idx) =>
-      activeKeys.map((key) => (colMap[key] ? colMap[key].getValue(row, idx) : '""'))
-    );
-
-    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    const dateStr = new Date().toISOString().split("T")[0];
-    link.setAttribute("download", `Loss_Lead_Approval_Requests_${dateStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    showToast("The loss lead approval data is successfully exported");
-  };
-
   const handleExport = async () => {
     try {
       const dates = getComputedDates(filterType, fromDate, toDate);
@@ -193,8 +251,15 @@ export default function LossLeadApproval() {
         date_filter_type: filterType,
         from_date: dates.from || "",
         to_date: dates.to || "",
-        search: searchTerm,
-        search_key: searchTerm,
+        search: debouncedSearchTerm || "",
+        search_key: debouncedSearchTerm || "",
+        sort_type: sortType || "newest",
+        sort_order: sortType || "newest",
+        loss_reason: selectedFilters.loss_reason !== "All" ? selectedFilters.loss_reason : "",
+        telecaller: selectedFilters.telecaller !== "All" ? selectedFilters.telecaller : "",
+        course: selectedFilters.course !== "All" ? selectedFilters.course : "",
+        lead_source: selectedFilters.lead_source !== "All" ? selectedFilters.lead_source : "",
+        page_size: "all",
       });
       const data = res?.data || {};
       if (data?.download_url) {
@@ -208,8 +273,8 @@ export default function LossLeadApproval() {
         data?.message || "The loss lead approval data is successfully exported"
       );
     } catch (err) {
-      console.error("Export error, falling back to CSV export:", err);
-      handleExportWithColumns();
+      console.error("Export error:", err);
+      showToast("Failed to export loss lead approval requests");
     }
   };
 
@@ -239,10 +304,17 @@ export default function LossLeadApproval() {
       <LossLeadApprovalTable
         tableData={tableData}
         loading={loading}
-        searchTerm={searchTerm}
-        filterType={filterType}
-        sortType={sortType}
-        selectedFilters={selectedFilters}
+        page={page}
+        pageSize={pageSize}
+        totalRecords={totalRecords}
+        onPageChange={(event, newPage) => {
+          setPage(newPage + 1);
+        }}
+        onRowsPerPageChange={(event) => {
+          const newSize = parseInt(event.target.value, 10);
+          setPageSize(newSize);
+          setPage(1);
+        }}
         onApprove={(row) => {
           setSelectedApproveLead(row);
           setApproveModalOpen(true);
@@ -330,7 +402,7 @@ export default function LossLeadApproval() {
         open={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         columns={lossLeadExportColumns}
-        onExport={handleExportWithColumns}
+        onExport={handleExport}
       />
     </Box>
   );

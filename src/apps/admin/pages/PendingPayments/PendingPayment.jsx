@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Box, Typography, Snackbar } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import useDebounce from "@/shared/hooks/useDebounce";
 import PendingPaymentHeader from "./components/PendingPaymentHeader";
 import PendingPaymentStats from "./components/PendingPaymentStats";
 import PendingPaymentFilters from "./components/PendingPaymentFilters";
@@ -9,7 +10,6 @@ import ExportColumnsModal from "../Leads/components/ExportColumnsModal";
 import {
     fetchAdminPendingPayments,
     exportAdminPendingPaymentsFile,
-    exportToCSV
 } from "@/apps/admin/services/pendingPaymentAdminService";
 
 import { getSelectOptions } from "@/apps/admin/services/dropdownService";
@@ -31,6 +31,7 @@ export default function PendingPayment() {
     }, []);
 
     const [searchTerm, setSearchTerm] = useState("");
+    const debouncedSearchTerm = useDebounce(searchTerm, 400);
     const [filterType, setFilterType] = useState("today");
 
     // Multi-field Popover Filters matching screenshot
@@ -45,10 +46,19 @@ export default function PendingPayment() {
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
     const [sortType, setSortType] = useState("newest");
+
+    // Server-Side Pagination States
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
+
     const [tableData, setTableData] = useState([]);
     const [summaryCards, setSummaryCards] = useState(null);
     const [loading, setLoading] = useState(false);
     const [exportLoading, setExportLoading] = useState(false);
+
+    const abortControllerRef = useRef(null);
 
     // Toast Popup state
     const [toastState, setToastState] = useState({
@@ -97,8 +107,15 @@ export default function PendingPayment() {
         return { from: "", to: "" };
     };
 
-    const fetchTableData = async () => {
+    const fetchTableData = async (targetPage = page, targetPageSize = pageSize) => {
         if (!selectedPipeline) return;
+
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
         try {
             setLoading(true);
             const stageNormalized = String(selectedFilters?.payment_stage || "").toLowerCase().replace(/\s+/g, "");
@@ -112,10 +129,10 @@ export default function PendingPayment() {
                 ? "all" 
                 : currentFilterType;
 
-            const response = await fetchAdminPendingPayments({
+            const payload = {
                 pipeline_id: selectedPipeline,
                 pipeline: selectedPipeline,
-                search: searchTerm || "",
+                search: debouncedSearchTerm || "",
                 date_filter_type: payloadDateFilter,
                 sort_type: sortType,
                 from_date: dates.from || "",
@@ -124,8 +141,14 @@ export default function PendingPayment() {
                 course_plan: selectedFilters.course_plan !== "All" ? selectedFilters.course_plan : "",
                 course_time: selectedFilters.course_time !== "All" ? selectedFilters.course_time : "",
                 payment_stage: selectedFilters.payment_stage !== "All" ? (isOverdueSelected ? "overdue" : (isTodayStageSelected ? "today" : selectedFilters.payment_stage.toLowerCase())) : "",
-                pending_amount: selectedFilters.pending_amount !== "All" ? selectedFilters.pending_amount : ""
-            });
+                pending_amount: selectedFilters.pending_amount !== "All" ? selectedFilters.pending_amount : "",
+                page: targetPage,
+                page_size: targetPageSize,
+            };
+
+            const response = await fetchAdminPendingPayments(payload, { signal: controller.signal });
+
+            if (controller.signal.aborted) return;
 
             const resData = response?.data?.data || response?.data;
             
@@ -133,7 +156,23 @@ export default function PendingPayment() {
                 ? resData.leads
                 : (Array.isArray(resData?.data) ? resData.data : (Array.isArray(resData) ? resData : []));
 
+            const totalRec =
+                resData?.total_records ??
+                resData?.total_count ??
+                response?.data?.total_records ??
+                response?.data?.total_count ??
+                (Array.isArray(leadsList) ? leadsList.length : 0);
+
+            const totalPg =
+                resData?.total_pages ??
+                resData?.total_page ??
+                ((Math.ceil(totalRec / targetPageSize)) || 1);
+
+            if (controller.signal.aborted) return;
+
             setTableData(leadsList);
+            setTotalRecords(totalRec);
+            setTotalPages(totalPg);
 
             const rawData = response?.data?.data || response?.data || {};
             const summaryCardsFromApi = rawData?.summary_cards || rawData?.summary || null;
@@ -141,7 +180,7 @@ export default function PendingPayment() {
             const summaryData = {
                 total_pending: {
                     amount: summaryCardsFromApi?.total_pending?.amount ?? rawData?.total_pending_amount ?? rawData?.total_pending ?? 0,
-                    count: summaryCardsFromApi?.total_pending?.count ?? rawData?.total_leads ?? rawData?.total_count ?? 0,
+                    count: summaryCardsFromApi?.total_pending?.count ?? rawData?.total_leads ?? rawData?.total_count ?? totalRec,
                 },
                 due_today: {
                     amount: summaryCardsFromApi?.due_today?.amount ?? rawData?.today_due_amount ?? rawData?.due_today_amount ?? 0,
@@ -154,15 +193,58 @@ export default function PendingPayment() {
             };
             setSummaryCards(summaryData);
         } catch (error) {
+            if (error?.name === "CanceledError" || error?.name === "AbortError" || error?.code === "ERR_CANCELED") {
+                return;
+            }
             console.log("Error fetching admin pending payments data:", error);
         } finally {
-            setLoading(false);
+            if (abortControllerRef.current === controller) {
+                setLoading(false);
+            }
         }
     };
 
+    const selectedFiltersStr = JSON.stringify(selectedFilters);
+
+    const prevFiltersRef = useRef({
+        selectedPipeline,
+        filterType,
+        sortType,
+        fromDate,
+        toDate,
+        debouncedSearchTerm,
+        selectedFiltersStr,
+    });
+
     useEffect(() => {
-        fetchTableData();
-    }, [selectedPipeline, filterType, sortType, fromDate, toDate, selectedFilters]);
+        const prev = prevFiltersRef.current;
+        const filtersChanged =
+            prev.selectedPipeline !== selectedPipeline ||
+            prev.filterType !== filterType ||
+            prev.sortType !== sortType ||
+            prev.fromDate !== fromDate ||
+            prev.toDate !== toDate ||
+            prev.debouncedSearchTerm !== debouncedSearchTerm ||
+            prev.selectedFiltersStr !== selectedFiltersStr;
+
+        prevFiltersRef.current = {
+            selectedPipeline,
+            filterType,
+            sortType,
+            fromDate,
+            toDate,
+            debouncedSearchTerm,
+            selectedFiltersStr,
+        };
+
+        if (filtersChanged && page !== 1) {
+            setPage(1);
+            return;
+        }
+
+        fetchTableData(page, pageSize);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedPipeline, filterType, sortType, fromDate, toDate, debouncedSearchTerm, selectedFiltersStr, page, pageSize]);
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
@@ -182,64 +264,26 @@ export default function PendingPayment() {
         { id: "next_followup", label: "Next Follow up" },
     ];
 
-    const handleExportWithColumns = (selectedKeys) => {
-        const safeTableData = Array.isArray(tableData) ? tableData : [];
-        if (safeTableData.length === 0) {
-            setToastState({ open: true, message: "No pending payment records to export" });
-            return;
-        }
-
-        const colMap = {
-            s_no: { label: "S.No", getValue: (row, idx) => idx + 1 },
-            name: { label: "Lead Name", getValue: (row) => `"${(row.name || row.full_name || "").replace(/"/g, '""')}"` },
-            contact: { label: "Contact No", getValue: (row) => `"${(row.contact || row.mobile_no || "").replace(/"/g, '""')}"` },
-            assigned_to: { label: "Assigned To", getValue: (row) => `"${(row.assigned_to || "-").replace(/"/g, '""')}"` },
-            campaign: { label: "Campaign", getValue: (row) => `"${(row.campaign || "-").replace(/"/g, '""')}"` },
-            course_plan: { label: "Course Plan", getValue: (row) => `"${(row.course_plan || "-").replace(/"/g, '""')}"` },
-            course: { label: "Course", getValue: (row) => `"${(row.course || row.course_name || "-").replace(/"/g, '""')}"` },
-            joining_date: { label: "Joining Date", getValue: (row) => `"${(row.joining_date || row.enquiry_date || "-").replace(/"/g, '""')}"` },
-            batch_timing: { label: "Batch & Timing", getValue: (row) => `"${(row.batch_timing || row.course_timing || "-").replace(/"/g, '""')}"` },
-            amount_paid: { label: "Amount Paid", getValue: (row) => `"${parseFloat(row.amount_paid) || 0}"` },
-            pending_amount: { label: "Pending Amount", getValue: (row) => `"${parseFloat(row.pending_amount ?? row.payment_amount) || 0}"` },
-            status: { label: "Status", getValue: (row) => `"${(row.status || row.due_status || "Active").replace(/"/g, '""')}"` },
-            next_followup: { label: "Next Follow up", getValue: (row) => `"${(row.next_followup || row.next_follow_up || "-").replace(/"/g, '""')}"` },
-        };
-
-        const activeKeys = selectedKeys && selectedKeys.length > 0 ? selectedKeys : Object.keys(colMap);
-        const headers = activeKeys.map((key) => colMap[key]?.label || key);
-        const rows = safeTableData.map((row, idx) =>
-            activeKeys.map((key) => (colMap[key] ? colMap[key].getValue(row, idx) : '""'))
-        );
-
-        const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Pending_Payments_${new Date().toISOString().slice(0, 10)}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        setToastState({
-            open: true,
-            message: "Pending payment leads exported successfully",
-        });
-    };
-
-    // EXPORT HANDLER WITH INDEPENDENT BACKGROUND STATE
+    // EXPORT HANDLER (BACKEND EXPORT ONLY)
     const handleExport = async () => {
         try {
             setExportLoading(true);
             const dates = getComputedDates(filterType, fromDate, toDate);
 
             const payload = {
-                search: searchTerm || "",
+                pipeline_id: selectedPipeline,
+                pipeline: selectedPipeline,
+                search: debouncedSearchTerm || "",
                 date_filter_type: filterType,
                 sort_type: sortType,
                 from_date: dates.from,
                 to_date: dates.to,
+                course_name: selectedFilters.course_name !== "All" ? selectedFilters.course_name : "",
+                course_plan: selectedFilters.course_plan !== "All" ? selectedFilters.course_plan : "",
+                course_time: selectedFilters.course_time !== "All" ? selectedFilters.course_time : "",
+                payment_stage: selectedFilters.payment_stage !== "All" ? selectedFilters.payment_stage : "",
+                pending_amount: selectedFilters.pending_amount !== "All" ? selectedFilters.pending_amount : "",
+                page_size: "all",
             };
 
             const response = await exportAdminPendingPaymentsFile(payload);
@@ -261,8 +305,11 @@ export default function PendingPayment() {
                 message: "Pending payment leads exported successfully"
             });
         } catch (error) {
-            console.error("Backend export error, fallback to CSV:", error);
-            handleExportWithColumns();
+            console.error("Backend export error:", error);
+            setToastState({
+                open: true,
+                message: "Failed to export pending payments file"
+            });
         } finally {
             setExportLoading(false);
         }
@@ -287,7 +334,7 @@ export default function PendingPayment() {
                 
                 return !isProduct ? (
                 <>
-                    <PendingPaymentStats summaryCards={summaryCards} tableData={tableData} loading={loading} />
+                    <PendingPaymentStats summaryCards={summaryCards} loading={loading} />
                     <PendingPaymentFilters
                         searchTerm={searchTerm}
                         setSearchTerm={setSearchTerm}
@@ -306,10 +353,17 @@ export default function PendingPayment() {
                     <PendingPaymentTable
                         tableData={tableData}
                         loading={loading}
-                        searchTerm={searchTerm}
-                        filterType={filterType}
-                        selectedFilters={selectedFilters}
-                        sortType={sortType}
+                        page={page}
+                        pageSize={pageSize}
+                        totalRecords={totalRecords}
+                        onPageChange={(event, newPage) => {
+                            setPage(newPage + 1);
+                        }}
+                        onRowsPerPageChange={(event) => {
+                            const newSize = parseInt(event.target.value, 10);
+                            setPageSize(newSize);
+                            setPage(1);
+                        }}
                     />
                 </>
             ) : (
@@ -364,7 +418,7 @@ export default function PendingPayment() {
                 open={isExportModalOpen}
                 onClose={() => setIsExportModalOpen(false)}
                 columns={pendingPaymentExportColumns}
-                onExport={handleExportWithColumns}
+                onExport={handleExport}
             />
         </Box>
     );

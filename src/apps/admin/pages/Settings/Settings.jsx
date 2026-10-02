@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Box, Typography } from "@mui/material";
+import useDebounce from "@/shared/hooks/useDebounce";
 import SettingsTabs from "./components/SettingTabs";
 import UsersHeader from "./Users/UserHeader";
 import UserTable from "./Users/UserTable";
@@ -43,14 +44,22 @@ export default function Settings() {
   const [usersList, setUsersList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebounce(searchTerm, 400);
   const [sortOption, setSortOption] = useState("newest");
+
+  // Server-Side Pagination States
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const [dropdownOptions, setDropdownOptions] = useState({
     rolesList: [],
     managersList: [],
     teamsList: [],
   });
 
-  const dropdownsFetchedRef = React.useRef(false);
+  const dropdownsFetchedRef = useRef(false);
   // Load User Dropdowns (Roles, Managers, Teams) from Backend API lazily on modal open
   const loadDropdowns = useCallback(async () => {
     if (dropdownsFetchedRef.current) return;
@@ -79,11 +88,16 @@ export default function Settings() {
     }
   }, []);
 
-  // Load Users from Backend API
-  const loadUsers = useCallback(async () => {
+  // Load Users from Backend API with pagination, debounced search & sort
+  const loadUsers = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
     try {
       setLoading(true);
-      const response = await fetchUsersAdmin({ search: searchTerm, sort: sortOption });
+      const response = await fetchUsersAdmin({
+        search: debouncedSearchTerm,
+        sort: sortOption,
+        page: targetPage,
+        page_size: targetPageSize,
+      });
       const rawData = response?.data;
       const apiData =
         rawData?.data?.users ||
@@ -96,10 +110,25 @@ export default function Settings() {
         rawData?.details ||
         (Array.isArray(rawData) ? rawData : []);
       
+      const totalRec =
+        rawData?.total_records ??
+        rawData?.total_count ??
+        rawData?.data?.total_records ??
+        rawData?.data?.total_count ??
+        (Array.isArray(apiData) ? apiData.length : 0);
+
+      const totalPg =
+        rawData?.total_pages ??
+        rawData?.total_page ??
+        ((Math.ceil(totalRec / targetPageSize)) || 1);
+
+      setTotalRecords(totalRec);
+      setTotalPages(totalPg);
+
       const formattedList = Array.isArray(apiData)
         ? apiData.map((item, idx) => ({
             id: item.id || item.user_id || idx + 1,
-            s_no: idx + 1,
+            s_no: (targetPage - 1) * targetPageSize + idx + 1,
             emp_id: item.emp_id || item.employee_id || item.employeeId || item.emp_code || item.employee_code || "-",
             name: item.name || item.full_name || item.fullName || item.user_name || item.username || "-",
             mobile_no: item.mobile_no || item.contact_no || item.contactNo || item.phone_no || item.phone || item.mobile || "-",
@@ -149,13 +178,33 @@ export default function Settings() {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, sortOption]);
+  }, [debouncedSearchTerm, sortOption, page, pageSize]);
+
+  const prevFiltersRef = useRef({
+    debouncedSearchTerm,
+    sortOption,
+  });
 
   useEffect(() => {
-    if (activeTab === "users") {
-      loadUsers();
+    const prev = prevFiltersRef.current;
+    const filtersChanged =
+      prev.debouncedSearchTerm !== debouncedSearchTerm ||
+      prev.sortOption !== sortOption;
+
+    prevFiltersRef.current = {
+      debouncedSearchTerm,
+      sortOption,
+    };
+
+    if (filtersChanged && page !== 1) {
+      setPage(1);
+      return;
     }
-  }, [activeTab, loadUsers]);
+
+    if (activeTab === "users") {
+      loadUsers(page, pageSize);
+    }
+  }, [activeTab, debouncedSearchTerm, sortOption, page, pageSize, loadUsers]);
 
   useEffect(() => {
     if (isAddUserOpen || isEditUserOpen) {
@@ -212,8 +261,7 @@ export default function Settings() {
     setIsDeleteUserOpen(true);
   };
 
-  const handleDeleteUserConfirm = async (targetUser) => {
-    setUsersList((prev) => prev.filter((u) => u.id !== targetUser?.id));
+  const handleDeleteUserConfirm = async () => {
     await loadUsers();
   };
 
@@ -286,20 +334,6 @@ export default function Settings() {
     }
   };
 
-  // Local filter fallback if search is done on loaded state
-  const filteredUsers = usersList.filter((user) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      (user.name && user.name.toLowerCase().includes(term)) ||
-      (user.emp_id && user.emp_id.toLowerCase().includes(term)) ||
-      (user.mobile_no && user.mobile_no.includes(term)) ||
-      (user.email && user.email.toLowerCase().includes(term)) ||
-      (user.location && user.location.toLowerCase().includes(term)) ||
-      (user.role && user.role.toLowerCase().includes(term))
-    );
-  });
-
   return (
     <Box
       sx={{
@@ -345,8 +379,19 @@ export default function Settings() {
               onAddUserClick={() => setIsAddUserOpen(true)}
             />
             <UserTable
-              tableData={filteredUsers}
+              tableData={usersList}
               loading={loading}
+              page={page}
+              pageSize={pageSize}
+              totalRecords={totalRecords}
+              onPageChange={(event, newPage) => {
+                setPage(newPage + 1);
+              }}
+              onRowsPerPageChange={(event) => {
+                const newSize = parseInt(event.target.value, 10);
+                setPageSize(newSize);
+                setPage(1);
+              }}
               onEditUser={handleOpenEditUser}
               onDeactivateUser={handleOpenDeactivateUser}
               onChangePassword={handleOpenChangePassword}

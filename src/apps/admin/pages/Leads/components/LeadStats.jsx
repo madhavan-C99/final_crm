@@ -1,10 +1,8 @@
 import React, { useMemo } from "react";
 import { Box, Typography, Button, Skeleton } from "@mui/material";
-import { isLeadInStageDynamic } from "../utils/leadUtils";
 
 const LeadStats = ({
   statsData = {},
-  tableData = [],
   selectedLeadType,
   setSelectedLeadType,
   stagesList = [],
@@ -28,32 +26,17 @@ const LeadStats = ({
     return baseOptions;
   }, [stagesList]);
 
-  // Compute stats object dynamically from tableData using isLeadInStageDynamic
-  // This guarantees 100% synchronization between Badge counts and Table row counts
-  const activeStats = useMemo(() => {
-    const total = tableData.length;
-    const counts = { all: total };
-
-    leadOptions.forEach((opt) => {
-      if (opt.value === "all") return;
-
-      let count = 0;
-      tableData.forEach((row) => {
-        if (isLeadInStageDynamic(row, opt.value, stagesList)) {
-          count++;
-        }
-      });
-
-      counts[opt.value] = count;
-    });
-
-    return counts;
-  }, [tableData, leadOptions, stagesList]);
-
   const getCount = (item) => {
-    if (!activeStats) return 0;
-    if (item.value === "all") return activeStats.all || 0;
-    return activeStats[item.value] ?? 0;
+    if (item.value === "all") {
+      return statsData.total_count ?? statsData.total_records ?? 0;
+    }
+    const stageId = item.value;
+    return (
+      statsData[`${stageId}_count`] ??
+      statsData[stageId] ??
+      statsData[item.countKey] ??
+      0
+    );
   };
 
   if (loading) {
