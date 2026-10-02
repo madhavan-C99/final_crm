@@ -100,83 +100,44 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, existingL
         const raw = response?.data?.data || response?.data?.result || response?.data;
 
         if (raw && typeof raw === "object") {
-          const rawStages = raw.pipeline_stages || raw.pipelines || raw.stages;
+          const rawStages = raw.stages;
           if (Array.isArray(rawStages) && rawStages.length > 0) {
-            apiPipelines = rawStages.map((item, idx) =>
+            apiPipelines = rawStages.map((item) =>
               typeof item === "object"
-                ? { id: item.id ?? item.stage_id ?? idx + 1, name: capitalize(item.name || item.stage_name || item.title || String(item)) }
-                : { id: idx + 1, name: capitalize(String(item)) }
+                ? { id: item.id ?? item.value ?? item.stage_id, name: capitalize(item.name || item.label || item.stage_name || item.title || String(item.value ?? "")) }
+                : { id: item, name: capitalize(String(item)) }
             );
           }
 
-          const rawCampaigns = raw.campaigns || raw.campaign_names;
+          const rawCampaigns = raw.campaigns;
           if (Array.isArray(rawCampaigns) && rawCampaigns.length > 0) {
-            apiCampaigns = rawCampaigns.map((item, idx) =>
+            apiCampaigns = rawCampaigns.map((item) =>
               typeof item === "object"
-                ? { id: item.id ?? item.campaign_id ?? idx + 1, name: capitalize(item.name || item.campaign_name || String(item)) }
-                : { id: idx + 1, name: capitalize(String(item)) }
+                ? { id: item.id ?? item.value ?? item.campaign_id, name: capitalize(item.name || item.label || item.campaign_name || String(item.value ?? "")) }
+                : { id: item, name: capitalize(String(item)) }
             );
           }
 
-          const rawSources = raw.lead_sources || raw.sources;
+          const rawSources = raw.sources;
           if (Array.isArray(rawSources) && rawSources.length > 0) {
-            apiSources = rawSources.map((item, idx) =>
+            apiSources = rawSources.map((item) =>
               typeof item === "object"
-                ? { id: item.id ?? item.source_id ?? idx + 1, name: capitalize(item.name || item.source_name || String(item)) }
-                : { id: idx + 1, name: capitalize(String(item)) }
+                ? { id: item.id ?? item.value ?? item.source_id, name: capitalize(item.name || item.label || item.source_name || String(item.value ?? "")) }
+                : { id: item, name: capitalize(String(item)) }
             );
           }
 
-          const rawTelecallers = raw.telecallers || raw.users || raw.assigned_users || raw.assigned_to;
+          const rawTelecallers = raw.telecallers;
           if (Array.isArray(rawTelecallers) && rawTelecallers.length > 0) {
-            apiTelecallers = rawTelecallers.map((item, idx) =>
+            apiTelecallers = rawTelecallers.map((item) =>
               typeof item === "object"
-                ? { id: item.id ?? item.user_id ?? idx + 1, name: capitalize(item.name || item.user_name || item.telecaller || String(item)) }
-                : { id: idx + 1, name: capitalize(String(item)) }
+                ? { id: item.id ?? item.value ?? item.user_id, name: capitalize(item.name || item.label || item.user_name || item.telecaller || String(item.value ?? "")) }
+                : { id: item, name: capitalize(String(item)) }
             );
           }
         }
       } catch (apiErr) {
-        console.warn("getLeadSelectOptions API error, extracting from live leads:", apiErr);
-      }
-
-      // 2. Dynamically extract options from live API leads if API list is empty
-      if (Array.isArray(existingLeads) && existingLeads.length > 0) {
-        if (apiCampaigns.length === 0) {
-          const uniqueCampaigns = [
-            ...new Set(existingLeads.map((l) => l.campaign || l.campaign_name).filter(Boolean)),
-          ];
-          apiCampaigns = uniqueCampaigns.map((name, idx) => ({ id: idx + 1, name: capitalize(name) }));
-        }
-
-        if (apiSources.length === 0) {
-          const uniqueSources = [
-            ...new Set(existingLeads.map((l) => l.source || l.lead_source).filter(Boolean)),
-          ];
-          apiSources = uniqueSources.map((name, idx) => ({ id: idx + 1, name: capitalize(name) }));
-        }
-
-        if (apiTelecallers.length === 0) {
-          const uniqueTelecallers = [
-            ...new Set(
-              existingLeads
-                .map((l) => l.assigned_to || l.telecaller || l.user_name)
-                .filter(Boolean)
-            ),
-          ];
-          apiTelecallers = uniqueTelecallers.map((name, idx) => ({ id: idx + 1, name: capitalize(name) }));
-        }
-
-        if (apiPipelines.length === 0) {
-          const uniquePipelines = [
-            ...new Set(
-              existingLeads
-                .map((l) => l.pipeline_stage || l.stage || l.pipeline || l.pipeline_name)
-                .filter(Boolean)
-            ),
-          ];
-          apiPipelines = uniquePipelines.map((name, idx) => ({ id: idx + 1, name: capitalize(name) }));
-        }
+        console.warn("getLeadSelectOptions API error:", apiErr);
       }
 
       setOptions({
@@ -189,10 +150,10 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, existingL
       if (!isEdit) {
         setFormData((prev) => ({
           ...prev,
-          pipeline: prev.pipeline || apiPipelines[0]?.id || 1,
-          campaign: prev.campaign || apiCampaigns[0]?.id || 1,
-          sourceType: prev.sourceType || apiSources[0]?.id || 1,
-          user: prev.user || apiTelecallers[0]?.id || 1,
+          pipeline: prev.pipeline || apiPipelines[0]?.id || apiPipelines[0]?.value || "",
+          campaign: prev.campaign || apiCampaigns[0]?.id || apiCampaigns[0]?.value || "",
+          sourceType: prev.sourceType || apiSources[0]?.id || apiSources[0]?.value || "",
+          user: prev.user || apiTelecallers[0]?.id || apiTelecallers[0]?.value || "",
         }));
       }
     } catch (error) {
@@ -255,10 +216,10 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, existingL
         last_name: formData.lastName,
         mobile_no: formattedMobile,
         email: formData.emailId,
-        pipeline_stage_id: formData.pipeline === "Education" ? 1 : formData.pipeline === "Product" ? 2 : (Number(formData.pipeline) || 1),
-        campaign_id: Number(formData.campaign) || 1,
-        lead_source_id: Number(formData.sourceType) || 1,
-        assigned_to_id: Number(formData.user) || 1,
+        pipeline_stage_id: Number(formData.pipeline) || 0,
+        campaign_id: Number(formData.campaign) || 0,
+        lead_source_id: Number(formData.sourceType) || 0,
+        assigned_to_id: Number(formData.user) || 0,
         enquiry_date: formData.inquiryDate
           ? `${formData.inquiryDate}T12:00:00.000Z`
           : new Date().toISOString(),

@@ -105,7 +105,7 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
   const assignedTo =
     activeData?.assigned_to || activeData?.user_name || activeData?.telecaller || "-";
 
-  const totalCourseFee = Number(activeData?.total_amount || activeData?.amount || activeData?.course_fee || 16000);
+  const totalCourseFee = Number(activeData?.total_amount || activeData?.amount || activeData?.course_fee || 0);
 
   useEffect(() => {
     if (isFullPayment) {

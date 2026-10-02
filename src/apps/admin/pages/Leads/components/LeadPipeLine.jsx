@@ -8,129 +8,7 @@ import dayjs from "dayjs";
 import { getPipelineLeads } from "../../../services/leadService";
 import { useAuth } from "@/shared/context/AuthContext";
 
-// Safe date and category parsing helper cross-browser
-const getSubTabCategory = (lead) => {
-  if (
-    lead._sub_tab &&
-    (lead._sub_tab === "past" ||
-      lead._sub_tab === "current" ||
-      lead._sub_tab === "future" ||
-      lead._sub_tab === "no_response" ||
-      lead._sub_tab === "not_reachable" ||
-      lead._sub_tab === "wrong_number" ||
-      lead._sub_tab === "won" ||
-      lead._sub_tab === "lost")
-  ) {
-    return lead._sub_tab;
-  }
 
-  const reasonStr = String(
-    lead.sub_stage ||
-    lead.timing_type ||
-    lead.tab_type ||
-    lead.reason ||
-    lead.close_reason ||
-    lead.disconnection_reason ||
-    lead.status_reason ||
-    ""
-  ).toLowerCase().trim();
-
-  if (reasonStr) {
-    if (reasonStr.includes("no response") || reasonStr.includes("no_response") || reasonStr.includes("no resp")) return "no_response";
-    if (reasonStr.includes("not reachable") || reasonStr.includes("not_reachable") || reasonStr.includes("unreach")) return "not_reachable";
-    if (reasonStr.includes("wrong number") || reasonStr.includes("wrong_number") || reasonStr.includes("wrong")) return "wrong_number";
-    if (reasonStr.includes("won")) return "won";
-    if (reasonStr.includes("lost") || reasonStr.includes("loss")) return "lost";
-    if (reasonStr.includes("past")) return "past";
-    if (reasonStr.includes("current") || reasonStr.includes("today")) return "current";
-    if (reasonStr.includes("future") || reasonStr.includes("upcoming")) return "future";
-  }
-
-  // Check stage for won / lost
-  const stageStr = String(lead.stage || lead.pipeline_stage || lead.tag || "").toLowerCase().trim();
-  if (stageStr.includes("won") || stageStr.includes("closed won")) return "won";
-  if (stageStr.includes("lost") || stageStr.includes("closed lost") || stageStr.includes("loss")) return "lost";
-
-  // Calculate timing (past, current, future) from lead's next follow-up date or created date
-  const leadDateStr =
-    lead.next_follow_up ||
-    lead.follow_up_date ||
-    lead.next_followup_date ||
-    lead.created_at ||
-    lead.date ||
-    lead.created_date;
-
-  if (!leadDateStr) return "current";
-
-  let parsed = dayjs(leadDateStr);
-  if (!parsed.isValid()) {
-    const currentYear = new Date().getFullYear();
-    const withYear = `${leadDateStr} ${currentYear}`.replace(",", "");
-    parsed = dayjs(withYear);
-  }
-
-  if (!parsed.isValid()) return "current";
-
-  const today = dayjs().startOf("day");
-  const target = parsed.startOf("day");
-
-  if (target.isBefore(today)) return "past";
-  if (target.isSame(today)) return "current";
-  if (target.isAfter(today)) return "future";
-
-  return "current";
-};
-
-// Default column definitions matching UI/UX design
-const PIPELINE_COLUMNS_CONFIG = [
-  {
-    key: "new_lead",
-    title: "New Lead",
-    stageMatch: ["new"],
-  },
-  {
-    key: "follow_up",
-    title: "Follow up",
-    stageMatch: ["follow"],
-    tabs: [
-      { key: "past", label: "Past" },
-      { key: "current", label: "Current" },
-      { key: "future", label: "Future" },
-    ],
-  },
-  {
-    key: "unreached_calls",
-    title: "Un Reached Calls",
-    stageMatch: ["unreach", "not connect", "call", "unreached"],
-    tabs: [
-      { key: "past", label: "Past" },
-      { key: "current", label: "Current" },
-      { key: "future", label: "Future" },
-    ],
-  },
-  {
-    key: "pending_payment",
-    title: "Pending Payment",
-    stageMatch: ["payment", "pending"],
-    tabs: [
-      { key: "past", label: "Past" },
-      { key: "current", label: "Current" },
-      { key: "future", label: "Future" },
-    ],
-  },
-  {
-    key: "closed",
-    title: "Closed",
-    stageMatch: ["closed", "won", "lost", "loss"],
-    tabs: [
-      { key: "no_response", label: "No response" },
-      { key: "not_reachable", label: "Not reachable" },
-      { key: "wrong_number", label: "Wrong number" },
-      { key: "won", label: "Won" },
-      { key: "lost", label: "Lost" },
-    ],
-  },
-];
 
 // Lead Card Component matching exact UI/UX design
 const LeadCard = ({ lead, onClick }) => {
@@ -138,11 +16,11 @@ const LeadCard = ({ lead, onClick }) => {
     lead.full_name ||
     lead.name ||
     `${lead.first_name || ""} ${lead.last_name || ""}`.trim() ||
-    "Rahul Sharma";
-  const counselor = lead.assigned_to || lead.user_name || lead.telecaller || "Prakash Raj";
-  const phone = lead.mobile_no || lead.phone_no || lead.phone || lead.contact || "+91 74013 23510";
-  const source = lead.source || lead.lead_source || "Facebook";
-  const date = lead.created_at || lead.created_date || lead.date || "31 Jan, 10:55 AM";
+    "";
+  const counselor = lead.assigned_to || lead.user_name || lead.telecaller || "";
+  const phone = lead.mobile_no || lead.phone_no || lead.phone || lead.contact || "";
+  const source = lead.source || lead.lead_source || "";
+  const date = lead.created_at || lead.created_date || lead.date || "";
   const isHot = lead.is_hot ?? lead.isHot ?? false;
 
   return (
@@ -250,9 +128,7 @@ const LeadCard = ({ lead, onClick }) => {
 };
 
 // Column Header Chevron Arrow Ribbon Component
-const ChevronHeader = ({ column, activeTab, setActiveTab, tabCounts }) => {
-  const hasTabs = Array.isArray(column.tabs) && column.tabs.length > 0;
-
+const ChevronHeader = ({ column }) => {
   return (
     <Box
       sx={{
@@ -264,7 +140,7 @@ const ChevronHeader = ({ column, activeTab, setActiveTab, tabCounts }) => {
         pb: 1.5,
         pl: 2,
         pr: 3.5,
-        minHeight: hasTabs ? "76px" : "56px",
+        minHeight: "56px",
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
@@ -276,7 +152,6 @@ const ChevronHeader = ({ column, activeTab, setActiveTab, tabCounts }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          mb: hasTabs ? 1 : 0,
         }}
       >
         <Typography
@@ -308,94 +183,13 @@ const ChevronHeader = ({ column, activeTab, setActiveTab, tabCounts }) => {
           {column.leads.length}
         </Box>
       </Box>
-
-      {/* Dynamic Sub-filter tabs row (Past, Current, Future etc.) */}
-      {hasTabs && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0.6,
-            overflowX: "auto",
-            "&::-webkit-scrollbar": { display: "none" },
-          }}
-        >
-          {column.tabs.map((tab) => {
-            const isActive = tab.key === activeTab;
-            const count = tabCounts[tab.key] ?? 0;
-            return (
-              <Box
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                sx={{
-                  cursor: "pointer",
-                  userSelect: "none",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  borderRadius: "5px",
-                  px: 1,
-                  py: "2px",
-                  backgroundColor: isActive ? "#84CC16" : "#EBEBEB",
-                  color: isActive ? "#FFFFFF" : "#555555",
-                  whiteSpace: "nowrap",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                {tab.label} {count}
-              </Box>
-            );
-          })}
-        </Box>
-      )}
     </Box>
   );
 };
 
 // Column Container Component
 const PipelineColumn = ({ column, onCardClick }) => {
-  const hasTabs = Array.isArray(column.tabs) && column.tabs.length > 0;
-  const [activeTab, setActiveTab] = useState(
-    hasTabs ? column.tabs[1]?.key || column.tabs[0]?.key : null
-  );
-
-  // Dynamically calculate counts for each sub-tab from API leads
-  const tabCounts = useMemo(() => {
-    if (!hasTabs) return {};
-    const counts = {};
-    column.tabs.forEach((tab) => {
-      counts[tab.key] = column.leads.filter((lead) => {
-        const cat = getSubTabCategory(lead);
-        const normTab = tab.key.toLowerCase().replace(/\s+/g, "_");
-        return cat === normTab || cat.includes(normTab) || normTab.includes(cat);
-      }).length;
-    });
-    return counts;
-  }, [column.leads, column.tabs, hasTabs]);
-
-  // Auto-switch to first non-empty tab if active tab has 0 leads
-  useEffect(() => {
-    if (hasTabs && column.leads.length > 0) {
-      const currentTabCount = tabCounts[activeTab] ?? 0;
-      if (currentTabCount === 0) {
-        const tabWithLeads = column.tabs.find((t) => (tabCounts[t.key] ?? 0) > 0);
-        if (tabWithLeads) {
-          setActiveTab(tabWithLeads.key);
-        }
-      }
-    }
-  }, [tabCounts, hasTabs, column.leads.length]);
-
-  // Dynamically filter leads displayed based on activeTab
-  const displayedLeads = useMemo(() => {
-    if (!hasTabs || !activeTab) return column.leads;
-    const normActiveTab = activeTab.toLowerCase().replace(/\s+/g, "_");
-    const filtered = column.leads.filter((lead) => {
-      const cat = getSubTabCategory(lead);
-      return cat === normActiveTab || cat.includes(normActiveTab) || normActiveTab.includes(cat);
-    });
-    // If the active tab has 0 leads but column has leads, fallback to showing all column leads
-    return filtered.length > 0 ? filtered : column.leads;
-  }, [column.leads, column.tabs, hasTabs, activeTab]);
+  const displayedLeads = column.leads || [];
 
   return (
     <Box
@@ -410,13 +204,8 @@ const PipelineColumn = ({ column, onCardClick }) => {
         maxHeight: "calc(100vh - 200px)",
       }}
     >
-      {/* Chevron Header with dynamic tabs */}
-      <ChevronHeader
-        column={column}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        tabCounts={tabCounts}
-      />
+      {/* Chevron Header */}
+      <ChevronHeader column={column} />
 
       {/* Cards List */}
       <Box
@@ -466,6 +255,8 @@ const LeadPipeLine = ({
   toDate = null,
   selectedFilters = {},
   selectedLeadType = "all",
+  stagesList = [],
+  selectedPipeline = null,
   onCardClick,
   onMarkAsWon,
 }) => {
@@ -481,8 +272,10 @@ const LeadPipeLine = ({
     }
     try {
       setLoading(true);
+      const pipeId = Number(selectedPipeline || selectedFilters?.pipeline_stage_id || 0);
       const payload = {
-        pipeline_id: selectedFilters?.pipeline_stage_id ? Number(selectedFilters.pipeline_stage_id) || 1 : 1,
+        pipeline_id: pipeId,
+        pipeline: pipeId,
         date_filter_type: dateFilterType && dateFilterType !== "monthly" ? dateFilterType : "all",
         search: searchTerm || "",
         ...selectedFilters,
@@ -508,33 +301,30 @@ const LeadPipeLine = ({
     }
   };
 
+  const selectedFiltersStr = JSON.stringify(selectedFilters);
+
   useEffect(() => {
     fetchPipelineData();
-  }, [dateFilterType, fromDate, toDate, selectedFilters, searchTerm]);
+  }, [dateFilterType, fromDate, toDate, selectedFiltersStr, searchTerm, selectedPipeline]);
 
   // Helper to check if a lead matches current filters (pipeline, source, campaign, course plan, assignee, date, search)
   const matchesLeadFilter = (lead) => {
     if (!lead) return false;
 
-    // 1. Pipeline Stage / Category (Education vs Product)
+    // 1. Pipeline Stage / Category Filter (Dynamic ID or Label Match)
     if (selectedFilters?.pipeline_stage_id && selectedFilters.pipeline_stage_id !== 0 && selectedFilters.pipeline_stage_id !== "all") {
       const pVal = String(selectedFilters.pipeline_stage_id).toLowerCase().trim();
       const pLabel = String(selectedFilters.pipeline_stage_label || selectedFilters.pipeline_stage_name || "").toLowerCase().trim();
-      const isProduct = pVal === "2" || pVal.includes("product") || pLabel.includes("product");
-      const isEducation = pVal === "1" || pVal.includes("education") || pLabel.includes("education");
 
-      const itemPId = String(lead.pipeline_id || lead.pipeline_stage_id || lead.stage_id || "");
-      const itemPName = String(lead.pipeline || lead.pipeline_name || lead.pipeline_stage || "").toLowerCase();
+      const itemPId = String(lead.pipeline_id || lead.pipeline_stage_id || lead.stage_id || "").toLowerCase().trim();
+      const itemPName = String(lead.pipeline || lead.pipeline_name || lead.pipeline_stage || "").toLowerCase().trim();
 
-      if (isProduct && !(itemPId === "2" || itemPName.includes("product"))) {
-        return false;
-      }
-      if (isEducation && !(itemPId === "1" || itemPName.includes("education") || (!itemPId && !itemPName))) {
-        return false;
-      }
-      if (!isProduct && !isEducation && !(itemPId === pVal || (pLabel && itemPName.includes(pLabel)) || itemPName.includes(pVal))) {
-        return false;
-      }
+      const matched =
+        (itemPId && itemPId === pVal) ||
+        (itemPName && (itemPName === pVal || itemPName.includes(pVal) || pVal.includes(itemPName))) ||
+        (pLabel && itemPName && (itemPName === pLabel || itemPName.includes(pLabel) || pLabel.includes(itemPName)));
+
+      if (!matched) return false;
     }
 
     // 2. Lead Source Filter
@@ -665,25 +455,58 @@ const LeadPipeLine = ({
   };
 
   const columns = useMemo(() => {
+    let colsConfig = [];
+
+    if (Array.isArray(stagesList) && stagesList.length > 0) {
+      colsConfig = stagesList.map((stg, idx) => {
+        const title = stg.name || stg.label || stg.stage_name || (typeof stg === "string" ? stg : `Stage ${idx + 1}`);
+        const key = String(stg.id || stg.value || title).toLowerCase().replace(/\s+/g, "_");
+
+        return {
+          id: stg.id || idx + 1,
+          key,
+          title,
+          stageMatch: [title.toLowerCase(), key],
+          stageObj: stg,
+        };
+      });
+    } else {
+      colsConfig = [];
+    }
+
     // 1. If tableData is present (which is already filtered by Date, Search, and Popups), map directly
     if (Array.isArray(tableData) && tableData.length > 0) {
-      return PIPELINE_COLUMNS_CONFIG.map((cfg) => {
-        const leads = tableData
-          .filter((item) => {
-            const stage = (
-              item.stage ||
-              item.pipeline_stage ||
-              item.tag ||
-              item.stage_name ||
-              item.status ||
-              ""
-            ).toLowerCase();
-            return cfg.stageMatch.some((match) => stage.includes(match));
-          })
-          .map((lead) => ({
-            ...lead,
-            _sub_tab: getSubTabCategory(lead),
-          }));
+      return colsConfig.map((cfg) => {
+        const leads = tableData.filter((item) => {
+          const itemStageId = Number(item.stage_id || item.status_id || item.lead_stage_id || 0);
+          const cfgStageId = Number(cfg.id || cfg.stageObj?.id || 0);
+
+          if (cfgStageId > 0 && itemStageId > 0 && cfgStageId === itemStageId) {
+            return true;
+          }
+
+          const stage = (
+            item.stage ||
+            item.pipeline_stage ||
+            item.tag ||
+            item.stage_name ||
+            item.status ||
+            ""
+          ).toLowerCase();
+
+          if (cfg.stageMatch && cfg.stageMatch.some((match) => stage.includes(match.toLowerCase()))) {
+            return true;
+          }
+
+          const titleNorm = cfg.title.toLowerCase().replace(/_/g, " ");
+          const stageNorm = stage.replace(/_/g, " ");
+
+          if (stageNorm === titleNorm || stageNorm.includes(titleNorm) || titleNorm.includes(stageNorm)) {
+            return true;
+          }
+
+          return false;
+        });
 
         return {
           ...cfg,
@@ -694,42 +517,23 @@ const LeadPipeLine = ({
 
     // 2. Fallback to apiPipelineData if tableData is empty
     const boardObj = apiPipelineData || {};
-    return PIPELINE_COLUMNS_CONFIG.map((cfg) => {
+    return colsConfig.map((cfg) => {
       let columnLeads = [];
 
-      if (cfg.key === "new_lead") {
-        columnLeads = Array.isArray(boardObj.new_lead)
-          ? boardObj.new_lead
-          : boardObj.new_lead?.leads || [];
-      } else if (cfg.key === "follow_up") {
-        const fu = boardObj.follow_up || {};
+      const rawCol = boardObj[cfg.key] || boardObj[cfg.title] || {};
+      if (Array.isArray(rawCol)) {
+        columnLeads = rawCol;
+      } else if (rawCol && typeof rawCol === "object") {
         columnLeads = [
-          ...(Array.isArray(fu.past) ? fu.past.map((l) => ({ ...l, _sub_tab: "past" })) : []),
-          ...(Array.isArray(fu.current) ? fu.current.map((l) => ({ ...l, _sub_tab: "current" })) : []),
-          ...(Array.isArray(fu.future) ? fu.future.map((l) => ({ ...l, _sub_tab: "future" })) : []),
-        ];
-      } else if (cfg.key === "unreached_calls") {
-        const uc = boardObj.unreached_calls || {};
-        columnLeads = [
-          ...(Array.isArray(uc.past) ? uc.past.map((l) => ({ ...l, _sub_tab: "past" })) : []),
-          ...(Array.isArray(uc.current) ? uc.current.map((l) => ({ ...l, _sub_tab: "current" })) : []),
-          ...(Array.isArray(uc.future) ? uc.future.map((l) => ({ ...l, _sub_tab: "future" })) : []),
-        ];
-      } else if (cfg.key === "pending_payment") {
-        const pp = boardObj.pending_payment || {};
-        columnLeads = [
-          ...(Array.isArray(pp.past) ? pp.past.map((l) => ({ ...l, _sub_tab: "past" })) : []),
-          ...(Array.isArray(pp.current) ? pp.current.map((l) => ({ ...l, _sub_tab: "current" })) : []),
-          ...(Array.isArray(pp.future) ? pp.future.map((l) => ({ ...l, _sub_tab: "future" })) : []),
-        ];
-      } else if (cfg.key === "closed") {
-        const cl = boardObj.closed || {};
-        columnLeads = [
-          ...(Array.isArray(cl.no_response) ? cl.no_response.map((l) => ({ ...l, _sub_tab: "no_response" })) : []),
-          ...(Array.isArray(cl.not_reachable) ? cl.not_reachable.map((l) => ({ ...l, _sub_tab: "not_reachable" })) : []),
-          ...(Array.isArray(cl.wrong_number) ? cl.wrong_number.map((l) => ({ ...l, _sub_tab: "wrong_number" })) : []),
-          ...(Array.isArray(cl.won) ? cl.won.map((l) => ({ ...l, _sub_tab: "won" })) : []),
-          ...(Array.isArray(cl.lost) ? cl.lost.map((l) => ({ ...l, _sub_tab: "lost" })) : []),
+          ...(Array.isArray(rawCol.past) ? rawCol.past : []),
+          ...(Array.isArray(rawCol.current) ? rawCol.current : []),
+          ...(Array.isArray(rawCol.future) ? rawCol.future : []),
+          ...(Array.isArray(rawCol.no_response) ? rawCol.no_response : []),
+          ...(Array.isArray(rawCol.not_reachable) ? rawCol.not_reachable : []),
+          ...(Array.isArray(rawCol.wrong_number) ? rawCol.wrong_number : []),
+          ...(Array.isArray(rawCol.won) ? rawCol.won : []),
+          ...(Array.isArray(rawCol.lost) ? rawCol.lost : []),
+          ...(Array.isArray(rawCol.leads) ? rawCol.leads : []),
         ];
       }
 
@@ -738,12 +542,22 @@ const LeadPipeLine = ({
         leads: columnLeads.filter(matchesLeadFilter),
       };
     });
-  }, [tableData, apiPipelineData, searchTerm, selectedFilters, dateFilterType, fromDate, toDate]);
+  }, [tableData, apiPipelineData, searchTerm, selectedFilters, dateFilterType, fromDate, toDate, stagesList]);
 
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
         <CircularProgress size={32} sx={{ color: "#84CC16" }} />
+      </Box>
+    );
+  }
+
+  if (columns.length === 0) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8, px: 2 }}>
+        <Typography sx={{ color: "#64748B", fontSize: "15px", fontWeight: 500 }}>
+          No pipeline stages available for this pipeline.
+        </Typography>
       </Box>
     );
   }

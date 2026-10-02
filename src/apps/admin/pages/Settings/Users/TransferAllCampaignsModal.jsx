@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   Box,
@@ -9,20 +9,12 @@ import {
   InputAdornment,
   Button,
   Radio,
+  CircularProgress,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
 import SearchIcon from "@mui/icons-material/Search";
-
-const mockTelecallers = [
-  { id: 1, name: "Priya Shankar", badge: null, leads: 13, segments: ["#0205C8", "#90D916", "#DC2626"] },
-  { id: 2, name: "Priya Shankar", badge: "Experienced", leads: 13, segments: ["#90D916", "#90D916", "#90D916"] },
-  { id: 3, name: "Priya Shankar", badge: null, leads: 13, segments: ["#F97316", "#F97316", "#F97316"] },
-  { id: 4, name: "Priya Shankar", badge: null, leads: 13, segments: ["#DC2626", "#DC2626", "#DC2626"] },
-  { id: 5, name: "Priya Shankar", badge: null, leads: 13, segments: ["#DC2626", "#DC2626", "#DC2626"] },
-  { id: 6, name: "Priya Shankar", badge: null, leads: 13, segments: ["#0205C8", "#90D916", "#DC2626"] },
-  { id: 7, name: "Priya Shankar", badge: null, leads: 13, segments: ["#90D916", "#90D916", "#90D916"] },
-];
+import { getSelectOptions } from "@/apps/admin/services/dropdownService";
 
 export default function TransferAllCampaignsModal({
   open,
@@ -34,30 +26,66 @@ export default function TransferAllCampaignsModal({
   subtitleText = null,
   campaignValueText = null,
   leadsCountValueText = null,
-  currentAssignee = "Prakash Raj",
-  totalLeadsCount = 250,
-  totalCampaignsCount = 10,
+  currentAssignee = "",
+  totalLeadsCount = 0,
+  totalCampaignsCount = 0,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTelecallerId, setSelectedTelecallerId] = useState(null);
+  const [fetchedTelecallers, setFetchedTelecallers] = useState([]);
+  const [loadingTelecallers, setLoadingTelecallers] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (open) {
+      setSearchQuery("");
+      setSelectedTelecallerId(null);
+      setLoadingTelecallers(true);
+
+      getSelectOptions("L_TELECALLERS")
+        .then((options) => {
+          if (!isMounted) return;
+          const list = Array.isArray(options) ? options : [];
+          setFetchedTelecallers(list);
+
+          const source = list.length > 0 ? list : telecallersList;
+          if (source.length > 0) {
+            const firstId = source[0].id ?? source[0].value ?? 1;
+            setSelectedTelecallerId(firstId);
+          }
+        })
+        .catch((err) => {
+          console.error("Error fetching all telecallers:", err);
+          if (!isMounted) return;
+          setFetchedTelecallers([]);
+        })
+        .finally(() => {
+          if (isMounted) setLoadingTelecallers(false);
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [open, telecallersList]);
 
   if (!open) return null;
 
-  const telecallers =
-    Array.isArray(telecallersList) && telecallersList.length > 0
-      ? telecallersList.map((t, idx) => ({
-          id: t.id !== undefined ? t.id : idx + 1,
-          name: t.name || t.full_name || `Telecaller ${idx + 1}`,
-          badge: t.badge || null,
-          leads:
-            t.current_leads !== undefined
-              ? t.current_leads
-              : t.leads || t.currentLeads || 0,
-          segments: Array.isArray(t.segments)
-            ? t.segments
-            : ["#0205C8", "#90D916", "#DC2626"],
-        }))
-      : mockTelecallers;
+  const activeSourceList = fetchedTelecallers.length > 0 ? fetchedTelecallers : telecallersList;
+
+  const telecallers = Array.isArray(activeSourceList)
+    ? activeSourceList.map((t, idx) => ({
+        id: t.id !== undefined ? t.id : (t.value !== undefined ? t.value : idx + 1),
+        name: t.name || t.full_name || t.label || t.user_name || "",
+        badge: t.badge || null,
+        leads:
+          t.current_leads !== undefined
+            ? t.current_leads
+            : t.leads || t.currentLeads || 0,
+        segments: Array.isArray(t.segments)
+          ? t.segments
+          : ["#0205C8", "#90D916", "#DC2626"],
+      }))
+    : [];
 
   const filteredTelecallers = telecallers.filter((t) =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -323,114 +351,132 @@ export default function TransferAllCampaignsModal({
           },
         }}
       >
-        {filteredTelecallers.map((telecaller) => {
-          const isSelected = selectedTelecallerId === telecaller.id;
-          return (
-            <Box
-              key={telecaller.id}
-              onClick={() => setSelectedTelecallerId(telecaller.id)}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                p: 1.2,
-                backgroundColor: "#FFFFFF",
-                borderRadius: "8px",
-                border: isSelected
-                  ? "1.5px solid #0205C8"
-                  : "1px solid #E2E8F0",
-                cursor: "pointer",
-                boxShadow: "0px 1px 3px rgba(0, 0, 0, 0.02)",
-                "&:hover": { borderColor: "#CBD5E1" },
-              }}
-            >
-              {/* Left Radio + Name */}
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Radio
-                  checked={isSelected}
-                  onChange={() => setSelectedTelecallerId(telecaller.id)}
-                  size="small"
-                  sx={{
-                    p: 0,
-                    color: "#CBD5E1",
-                    "&.Mui-checked": { color: "#0205C8" },
-                  }}
-                />
-                <Typography
-                  sx={{
-                    fontSize: "10px",
-                    fontWeight: 500,
-                    color: "#1E293B",
-                    fontFamily: "Inter, sans-serif",
-                  }}
-                >
-                  {telecaller.name}
-                </Typography>
-                {telecaller.badge && (
-                  <Box
+        {loadingTelecallers ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+            <CircularProgress size={24} sx={{ color: "#0205C8" }} />
+          </Box>
+        ) : filteredTelecallers.length === 0 ? (
+          <Typography
+            sx={{
+              fontSize: "12px",
+              color: "#64748B",
+              textAlign: "center",
+              py: 2,
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            No telecallers found.
+          </Typography>
+        ) : (
+          filteredTelecallers.map((telecaller) => {
+            const isSelected = selectedTelecallerId === telecaller.id;
+            return (
+              <Box
+                key={telecaller.id}
+                onClick={() => setSelectedTelecallerId(telecaller.id)}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  p: 1.2,
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "8px",
+                  border: isSelected
+                    ? "1.5px solid #0205C8"
+                    : "1px solid #E2E8F0",
+                  cursor: "pointer",
+                  boxShadow: "0px 1px 3px rgba(0, 0, 0, 0.02)",
+                  "&:hover": { borderColor: "#CBD5E1" },
+                }}
+              >
+                {/* Left Radio + Name */}
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Radio
+                    checked={isSelected}
+                    onChange={() => setSelectedTelecallerId(telecaller.id)}
+                    size="small"
                     sx={{
-                      backgroundColor: "#E2F1C6",
-                      color: "#4A7C15",
-                      fontSize: "5px",
+                      p: 0,
+                      color: "#CBD5E1",
+                      "&.Mui-checked": { color: "#0205C8" },
+                    }}
+                  />
+                  <Typography
+                    sx={{
+                      fontSize: "10px",
                       fontWeight: 500,
-                      px: 0,
-                      py: 0.2,
-                      borderRadius: "4px",
+                      color: "#1E293B",
+                      fontFamily: "Inter, sans-serif",
                     }}
                   >
-                    {telecaller.badge}
-                  </Box>
-                )}
-              </Box>
-
-              {/* Right Workload Segments + Count */}
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                {/* Segment Progress Bar */}
-                <Box sx={{ display: "flex", gap: "2px" }}>
-                  {telecaller.segments.map((color, idx) => (
+                    {telecaller.name}
+                  </Typography>
+                  {telecaller.badge && (
                     <Box
-                      key={idx}
                       sx={{
-                        width: "32px",
-                        height: "10px",
-                        backgroundColor: color,
-                        borderRadius:
-                          idx === 0
-                            ? "4px 0 0 4px"
-                            : idx === 2
-                              ? "0 4px 4px 0"
-                              : "0",
+                        backgroundColor: "#E2F1C6",
+                        color: "#4A7C15",
+                        fontSize: "5px",
+                        fontWeight: 500,
+                        px: 0,
+                        py: 0.2,
+                        borderRadius: "4px",
                       }}
-                    />
-                  ))}
+                    >
+                      {telecaller.badge}
+                    </Box>
+                  )}
                 </Box>
 
-                <Typography
-                  sx={{
-                    fontSize: "10px",
-                    fontWeight: 400,
-                    color: "black",
-                    fontFamily: "Inter, sans-serif",
-                    minWidth: "50px",
-                  }}
-                >
-                  {telecaller.leads} Leads
-                </Typography>
+                {/* Right Workload Segments + Count */}
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  {/* Segment Progress Bar */}
+                  <Box sx={{ display: "flex", gap: "2px" }}>
+                    {telecaller.segments.map((color, idx) => (
+                      <Box
+                        key={idx}
+                        sx={{
+                          width: "32px",
+                          height: "10px",
+                          backgroundColor: color,
+                          borderRadius:
+                            idx === 0
+                              ? "4px 0 0 4px"
+                              : idx === 2
+                                ? "0 4px 4px 0"
+                                : "0",
+                        }}
+                      />
+                    ))}
+                  </Box>
 
-                <Radio
-                  checked={isSelected}
-                  onChange={() => setSelectedTelecallerId(telecaller.id)}
-                  size="small"
-                  sx={{
-                    p: 0,
-                    color: "#CBD5E1",
-                    "&.Mui-checked": { color: "#0205C8" },
-                  }}
-                />
+                  <Typography
+                    sx={{
+                      fontSize: "10px",
+                      fontWeight: 400,
+                      color: "black",
+                      fontFamily: "Inter, sans-serif",
+                      minWidth: "50px",
+                    }}
+                  >
+                    {telecaller.leads} Leads
+                  </Typography>
+
+                  <Radio
+                    checked={isSelected}
+                    onChange={() => setSelectedTelecallerId(telecaller.id)}
+                    size="small"
+                    sx={{
+                      p: 0,
+                      color: "#CBD5E1",
+                      "&.Mui-checked": { color: "#0205C8" },
+                    }}
+                  />
+                </Box>
               </Box>
-            </Box>
-          );
-        })}
+            );
+          })
+        )}
       </Box>
 
       {/* 5. FIXED Footer Buttons */}

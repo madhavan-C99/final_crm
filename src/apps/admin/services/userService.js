@@ -1,4 +1,5 @@
 import api from "@/shared/services/axios";
+import { invalidateSelectOptions } from "./dropdownService";
 
 /**
  * Fetch all users from admin backend
@@ -33,7 +34,9 @@ export const createUserAdmin = async (userData) => {
     emp_id: userData.employeeId || userData.emp_id || "",
     team: userData.team || "",
   };
-  return await api.post("/adm/create_user_admin", payload);
+  const res = await api.post("/adm/create_user_admin", payload);
+  invalidateSelectOptions("L_TELECALLERS");
+  return res;
 };
 
 /**
@@ -55,7 +58,9 @@ export const editUserAdmin = async (userData) => {
     emp_id: userData.employeeId || userData.emp_id || "",
     team: userData.team || "",
   };
-  return await api.post("/adm/edit_user_admin", payload);
+  const res = await api.post("/adm/edit_user_admin", payload);
+  invalidateSelectOptions("L_TELECALLERS");
+  return res;
 };
 
 /**
@@ -80,19 +85,33 @@ export const toggleLeadAssignmentAdmin = async (payload) => {
   return await api.post("/adm/enable_disable_lead_assignment_admin", payload);
 };
 
+import dropdownService from "./dropdownService";
+
 /**
  * Fetch dropdown options for user creation/editing (Roles, Reporting To, Teams)
  * Endpoint: GET / POST /adm/fetch_user_dropdowns_admin
  */
 export const fetchUserDropdownsAdmin = async () => {
-  try {
-    return await api.get("/adm/fetch_user_dropdowns_admin");
-  } catch (err) {
-    if (err?.response?.status === 405 || err?.response?.status === 404) {
-      return await api.post("/adm/fetch_user_dropdowns_admin");
-    }
-    throw err;
-  }
+  const [roles, reporting_users, teams] = await Promise.all([
+    dropdownService.getSelectOptions("L_ROLES"),
+    dropdownService.getSelectOptions("L_TELECALLERS"),
+    dropdownService.getSelectOptions("L_TEAMS"),
+  ]);
+
+  return {
+    data: {
+      roles,
+      roles_list: roles,
+      role_list: roles,
+      reporting_users,
+      managers: reporting_users,
+      managers_list: reporting_users,
+      reporting_to_list: reporting_users,
+      teams,
+      teams_list: teams,
+      team_list: teams,
+    },
+  };
 };
 
 /**
@@ -117,7 +136,9 @@ export const toggleUserStatusAdmin = async (payload = {}) => {
     emp_id: String(payload.emp_id || payload.employee_id || payload.emp_code || ""),
     status: payload.status,
   };
-  return await api.post("/adm/toggle_user_status_admin", data);
+  const res = await api.post("/adm/toggle_user_status_admin", data);
+  invalidateSelectOptions("L_TELECALLERS");
+  return res;
 };
 
 /**
@@ -141,14 +162,7 @@ export const fetchTransferTelecallersAdmin = async (payload = {}) => {
   const data = {
     from_user_id: Number(payload.from_user_id || payload.user_id || payload.id || 0),
   };
-  try {
-    return await api.post("/adm/fetch_transfer_telecallers_admin", data);
-  } catch (err) {
-    if (err?.response?.status === 405 || err?.response?.status === 404) {
-      return await api.get("/adm/fetch_transfer_telecallers_admin");
-    }
-    throw err;
-  }
+  return await api.post("/adm/fetch_transfer_telecallers_admin", data);
 };
 
 /**
@@ -201,7 +215,9 @@ export const deleteUserAdmin = async (payload = {}) => {
     id: Number(payload.id || payload.user_id || 0),
     emp_id: String(payload.emp_id || payload.employee_id || payload.emp_code || ""),
   };
-  return await api.post("/adm/delete_user_admin", data);
+  const res = await api.post("/adm/delete_user_admin", data);
+  invalidateSelectOptions("L_TELECALLERS");
+  return res;
 };
 
 

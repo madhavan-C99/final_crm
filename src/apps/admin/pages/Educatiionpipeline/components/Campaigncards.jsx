@@ -107,6 +107,8 @@ const CampaignCard = ({ campaign, onToggleFavorite, onMenuAction, onViewDetails 
                             )}
                         </IconButton>
 
+                        {/* TODO(backend): Favorite campaign API not supported by backend */}
+
                         <IconButton
                             size="small"
                             onClick={(e) => {
@@ -122,7 +124,8 @@ const CampaignCard = ({ campaign, onToggleFavorite, onMenuAction, onViewDetails 
                             open={open}
                             onClose={() => setAnchorEl(null)}
                         >
-                            {["Edit", "Duplicate", "Archive", "Delete"].map((label) => {
+                            {/* TODO(backend): Duplicate, Archive, and Delete APIs are not implemented on backend. Only Edit is supported. */}
+                            {["Edit"].map((label) => {
                                 if (label === "Edit" && !hasPermission("api_update_campaign_detail_admin")) {
                                     return null;
                                 }

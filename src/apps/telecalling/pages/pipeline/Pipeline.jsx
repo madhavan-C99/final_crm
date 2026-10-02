@@ -56,35 +56,12 @@ function Pipeline() {
 
     useEffect(() => {
         sessionStorage.setItem("last_pipeline_path", "/telecalling/pipeline");
-    }, []);
-
-    // ✅ ORU VALUE MAARUMBODHU sessionStorage LA SAVE PANNUM
-
-    useEffect(() => {
         sessionStorage.setItem("pipeline_filterType", filterType);
-    }, [filterType]);
-
-    useEffect(() => {
         sessionStorage.setItem("pipeline_fromDate", fromDate || "");
-    }, [fromDate]);
-
-    useEffect(() => {
         sessionStorage.setItem("pipeline_toDate", toDate || "");
-    }, [toDate]);
-
-    useEffect(() => {
-        sessionStorage.setItem(
-            "pipeline_payload",
-            JSON.stringify(payload)
-        );
-    }, [payload]);
-
-    useEffect(() => {
-        sessionStorage.setItem(
-            "pipeline_selectedFilters",
-            JSON.stringify(selectedFilters)
-        );
-    }, [selectedFilters]);
+        sessionStorage.setItem("pipeline_payload", JSON.stringify(payload));
+        sessionStorage.setItem("pipeline_selectedFilters", JSON.stringify(selectedFilters));
+    }, [filterType, fromDate, toDate, payload, selectedFilters]);
 
     return (
 

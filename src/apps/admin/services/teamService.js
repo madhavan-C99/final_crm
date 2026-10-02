@@ -1,4 +1,5 @@
 import api from "@/shared/services/axios";
+import dropdownService, { invalidateSelectOptions } from "./dropdownService";
 
 /**
  * Fetch all teams from admin backend
@@ -23,7 +24,12 @@ export const createTeamAdmin = async (payload) => {
       ? (payload.member_ids || payload.memberIds).map(Number)
       : [],
   };
-  return await api.post("/adm/create_team_admin", data);
+  const res = await api.post("/adm/create_team_admin", data);
+  invalidateSelectOptions("L_TEAMS");
+  invalidateSelectOptions("L_TELECALLERS");
+  invalidateSelectOptions("L_UNASSIGNED_TEAM_LEADS");
+  invalidateSelectOptions("L_UNASSIGNED_TELECALLERS");
+  return res;
 };
 
 /**
@@ -42,7 +48,12 @@ export const editTeamAdmin = async (payload) => {
       ? (payload.member_ids || payload.memberIds).map(Number)
       : [],
   };
-  return await api.post("/adm/edit_team_admin", data);
+  const res = await api.post("/adm/edit_team_admin", data);
+  invalidateSelectOptions("L_TEAMS");
+  invalidateSelectOptions("L_TELECALLERS");
+  invalidateSelectOptions("L_UNASSIGNED_TEAM_LEADS");
+  invalidateSelectOptions("L_UNASSIGNED_TELECALLERS");
+  return res;
 };
 
 /**
@@ -55,7 +66,12 @@ export const deleteTeamAdmin = async (payload) => {
     id: Number(payload.id || payload.team_id),
     team_id: Number(payload.id || payload.team_id),
   };
-  return await api.post("/adm/delete_team_admin", data);
+  const res = await api.post("/adm/delete_team_admin", data);
+  invalidateSelectOptions("L_TEAMS");
+  invalidateSelectOptions("L_TELECALLERS");
+  invalidateSelectOptions("L_UNASSIGNED_TEAM_LEADS");
+  invalidateSelectOptions("L_UNASSIGNED_TELECALLERS");
+  return res;
 };
 
 /**
@@ -76,5 +92,21 @@ export const fetchTeamDropdownsAdmin = async (payload = {}) => {
         : {}),
     };
   }
-  return await api.post("/adm/fetch_team_dropdowns_admin", data);
+
+  const [normLeads, normMembers] = await Promise.all([
+    dropdownService.getSelectOptions("L_UNASSIGNED_TEAM_LEADS", data),
+    dropdownService.getSelectOptions("L_UNASSIGNED_TELECALLERS", data),
+  ]);
+
+  return {
+    data: {
+      status: true,
+      data: {
+        leads: normLeads,
+        telecallers: normMembers,
+        members: normMembers,
+        users: normMembers,
+      },
+    },
+  };
 };

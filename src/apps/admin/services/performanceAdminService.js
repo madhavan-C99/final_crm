@@ -18,12 +18,20 @@ export const fetchAdminPerformanceOverview = (payload = {}) => {
 
 // 2. Fetch Performance Filter Dropdowns (Teams + Date Filters)
 
+import { getSelectOptions } from "@/apps/admin/services/dropdownService";
+
 export const fetchPerformanceFilterDropdowns = async () => {
-  try {
-    return await api.get("/adm/get_performance_filter_dropdowns_admin");
-  } catch (err) {
-    return await api.post("/adm/get_performance_filter_dropdowns_admin");
-  }
+  const [teams, telecallers] = await Promise.all([
+    getSelectOptions("L_TEAMS"),
+    getSelectOptions("L_TELECALLERS"),
+  ]);
+
+  return {
+    data: {
+      teams,
+      telecallers,
+    },
+  };
 };
 
 // 3. Export Performance Overview Report (Excel / CSV file Blob)

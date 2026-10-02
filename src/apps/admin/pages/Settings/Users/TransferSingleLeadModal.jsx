@@ -10,6 +10,7 @@ import {
   Button,
   Checkbox,
   Avatar,
+  CircularProgress,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
@@ -20,62 +21,37 @@ import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import RemoveIcon from "@mui/icons-material/Remove";
 import AddIcon from "@mui/icons-material/Add";
 import PersonIcon from "@mui/icons-material/Person";
+import { getSelectOptions } from "@/apps/admin/services/dropdownService";
 
 const PRIMARY_BLUE = "#0021CA";
-
-const initialTelecallers = [
-  {
-    id: 1,
-    name: "Priya Shankar",
-    currentLeads: 13,
-    totalLeadsText: "15 Leads",
-    segments: ["#2563EB", "#84CC16", "#DC2626"],
-  },
-  {
-    id: 2,
-    name: "Arun Kumar",
-    currentLeads: 21,
-    totalLeadsText: "21 Leads",
-    segments: ["#F97316", "#F97316", "#F97316"],
-  },
-  {
-    id: 3,
-    name: "Madhavan",
-    currentLeads: 10,
-    totalLeadsText: "10 Leads",
-    segments: ["#84CC16", "#84CC16", "#84CC16"],
-  },
-  {
-    id: 4,
-    name: "Ramya",
-    currentLeads: 18,
-    totalLeadsText: "18 Leads",
-    segments: ["#6366F1", "#6366F1", "#DC2626"],
-  },
-];
 
 export default function TransferSingleLeadModal({
   open,
   onClose,
   onTransferConfirm,
   onTransferSuccess,
+  campaignId = null,
   telecallersList = [],
   title = "Transfer Leads",
-  subtitleText = "30 leads",
-  campaignValueText = "Google Ads",
-  leadsCountValueText = "30 Leads",
-  currentAssignee = "Prakash Raj",
-  totalLeadsCount = 30,
+  subtitleText = null,
+  campaignValueText = "",
+  leadsCountValueText = "",
+  currentAssignee = "",
+  totalLeadsCount = 0,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTelecallerIds, setSelectedTelecallerIds] = useState([]);
   const [allocations, setAllocations] = useState({});
+  const [fetchedTelecallers, setFetchedTelecallers] = useState([]);
+  const [loadingTelecallers, setLoadingTelecallers] = useState(false);
+
+  const activeSourceList = fetchedTelecallers.length > 0 ? fetchedTelecallers : telecallersList;
 
   const telecallers =
-    Array.isArray(telecallersList) && telecallersList.length > 0
-      ? telecallersList.map((t, idx) => ({
-          id: t.id !== undefined ? t.id : idx + 1,
-          name: t.name || t.full_name || `Telecaller ${idx + 1}`,
+    Array.isArray(activeSourceList)
+      ? activeSourceList.map((t, idx) => ({
+          id: t.id !== undefined ? t.id : (t.value !== undefined ? t.value : idx + 1),
+          name: t.name || t.full_name || t.label || t.user_name || "",
           currentLeads:
             t.current_leads !== undefined
               ? t.current_leads
@@ -89,32 +65,65 @@ export default function TransferSingleLeadModal({
             ? t.segments
             : ["#0205C8", "#90D916", "#DC2626"],
         }))
-      : initialTelecallers;
+      : [];
 
   const targetCount = subtitleText
-    ? parseInt(String(subtitleText).replace(/\D/g, ""), 10) || totalLeadsCount || 30
-    : totalLeadsCount || 30;
+    ? parseInt(String(subtitleText).replace(/\D/g, ""), 10) || totalLeadsCount || 0
+    : totalLeadsCount || 0;
 
   useEffect(() => {
+    let isMounted = true;
     if (open) {
       setSearchQuery("");
-      const initialSelected = telecallers.slice(0, 2).map((t) => t.id);
-      setSelectedTelecallerIds(initialSelected);
+      setSelectedTelecallerIds([]);
+      setAllocations({});
+      setLoadingTelecallers(true);
 
-      if (initialSelected.length > 0) {
-        const count = initialSelected.length;
-        const perPerson = Math.floor(targetCount / count);
-        const remainder = targetCount % count;
-        const newAlloc = {};
-        initialSelected.forEach((tId, idx) => {
-          newAlloc[tId] = perPerson + (idx === 0 ? remainder : 0);
+      const optFilter = campaignId ? { campaign_id: Number(campaignId) } : null;
+
+      getSelectOptions("L_TELECALLERS", optFilter)
+        .then((options) => {
+          if (!isMounted) return;
+          const list = Array.isArray(options) ? options : [];
+          setFetchedTelecallers(list);
+
+          const source = list.length > 0 ? list : telecallersList;
+          const mapped = Array.isArray(source)
+            ? source.map((t, idx) => ({
+                id: t.id !== undefined ? t.id : (t.value !== undefined ? t.value : idx + 1),
+                name: t.name || t.full_name || t.label || t.user_name || "",
+              }))
+            : [];
+
+          const initialSelected = mapped.slice(0, 2).map((t) => t.id);
+          setSelectedTelecallerIds(initialSelected);
+
+          if (initialSelected.length > 0) {
+            const count = initialSelected.length;
+            const perPerson = Math.floor(targetCount / count);
+            const remainder = targetCount % count;
+            const newAlloc = {};
+            initialSelected.forEach((tId, idx) => {
+              newAlloc[tId] = perPerson + (idx === 0 ? remainder : 0);
+            });
+            setAllocations(newAlloc);
+          }
+        })
+        .catch((err) => {
+          console.error("Error fetching campaign telecallers:", err);
+          if (!isMounted) return;
+          setFetchedTelecallers([]);
+          setSelectedTelecallerIds([]);
+          setAllocations({});
+        })
+        .finally(() => {
+          if (isMounted) setLoadingTelecallers(false);
         });
-        setAllocations(newAlloc);
-      } else {
-        setAllocations({});
-      }
     }
-  }, [open, telecallersList, targetCount]);
+    return () => {
+      isMounted = false;
+    };
+  }, [open, campaignId, targetCount]);
 
   if (!open) return null;
 
@@ -385,83 +394,101 @@ export default function TransferSingleLeadModal({
 
           {/* Telecallers Checkbox List */}
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
-            {filteredTelecallers.map((telecaller) => {
-              const isChecked = selectedTelecallerIds.includes(telecaller.id);
-              return (
-                <Box
-                  key={telecaller.id}
-                  onClick={() => handleToggleTelecaller(telecaller.id)}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    p: 1,
-                    backgroundColor: "#FFFFFF",
-                    borderRadius: "6px",
-                    border:"1px solid #E2E8F0",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                    "&:hover": { borderColor: PRIMARY_BLUE },
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                    <Checkbox
-                      checked={isChecked}
-                      onChange={() => handleToggleTelecaller(telecaller.id)}
-                      size="small"
-                      sx={{
-                        p: 0,
-                        color: "#CBD5E1",
-                        "&.Mui-checked": { color: PRIMARY_BLUE },
-                      }}
-                    />
-                    <Typography
-                      sx={{
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: "#1E293B",
-                        fontFamily: "Inter, sans-serif",
-                      }}
-                    >
-                      {telecaller.name}
-                    </Typography>
-                  </Box>
-
-                  {/* Progress Segments & Leads count */}
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
-                    <Box sx={{ display: "flex", gap: "2px" }}>
-                      {telecaller.segments.map((color, idx) => (
-                        <Box
-                          key={idx}
-                          sx={{
-                            width: "28px",
-                            height: "8px",
-                            backgroundColor: color,
-                            borderRadius:
-                              idx === 0
-                                ? "4px 0 0 4px"
-                                : idx === 2
-                                ? "0 4px 4px 0"
-                                : "0",
-                          }}
-                        />
-                      ))}
+            {loadingTelecallers ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                <CircularProgress size={24} sx={{ color: PRIMARY_BLUE }} />
+              </Box>
+            ) : filteredTelecallers.length === 0 ? (
+              <Typography
+                sx={{
+                  fontSize: "12px",
+                  color: "#64748B",
+                  textAlign: "center",
+                  py: 1.5,
+                  fontFamily: "Inter, sans-serif",
+                }}
+              >
+                No telecallers found for this campaign.
+              </Typography>
+            ) : (
+              filteredTelecallers.map((telecaller) => {
+                const isChecked = selectedTelecallerIds.includes(telecaller.id);
+                return (
+                  <Box
+                    key={telecaller.id}
+                    onClick={() => handleToggleTelecaller(telecaller.id)}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      p: 1,
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: "6px",
+                      border: "1px solid #E2E8F0",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      "&:hover": { borderColor: PRIMARY_BLUE },
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                      <Checkbox
+                        checked={isChecked}
+                        onChange={() => handleToggleTelecaller(telecaller.id)}
+                        size="small"
+                        sx={{
+                          p: 0,
+                          color: "#CBD5E1",
+                          "&.Mui-checked": { color: PRIMARY_BLUE },
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: "#1E293B",
+                          fontFamily: "Inter, sans-serif",
+                        }}
+                      >
+                        {telecaller.name}
+                      </Typography>
                     </Box>
 
-                    <Typography
-                      sx={{
-                        fontSize: "12px",
-                        fontWeight: 400,
-                        color: "#64748B",
-                        fontFamily: "Inter, sans-serif",
-                      }}
-                    >
-                      {telecaller.totalLeadsText}
-                    </Typography>
+                    {/* Progress Segments & Leads count */}
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+                      <Box sx={{ display: "flex", gap: "2px" }}>
+                        {telecaller.segments.map((color, idx) => (
+                          <Box
+                            key={idx}
+                            sx={{
+                              width: "28px",
+                              height: "8px",
+                              backgroundColor: color,
+                              borderRadius:
+                                idx === 0
+                                  ? "4px 0 0 4px"
+                                  : idx === 2
+                                  ? "0 4px 4px 0"
+                                  : "0",
+                            }}
+                          />
+                        ))}
+                      </Box>
+
+                      <Typography
+                        sx={{
+                          fontSize: "12px",
+                          fontWeight: 400,
+                          color: "#64748B",
+                          fontFamily: "Inter, sans-serif",
+                        }}
+                      >
+                        {telecaller.totalLeadsText}
+                      </Typography>
+                    </Box>
                   </Box>
-                </Box>
-              );
-            })}
+                );
+              })
+            )}
           </Box>
         </Box>
 
@@ -492,7 +519,7 @@ export default function TransferSingleLeadModal({
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               {selectedTelecallerIds.map((id, index) => {
-                const telecaller = initialTelecallers.find((t) => t.id === id);
+                const telecaller = telecallers.find((t) => t.id === id);
                 if (!telecaller) return null;
                 const allocated = allocations[id] || 0;
 

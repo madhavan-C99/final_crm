@@ -15,7 +15,6 @@ import checklist_img from "@/shared/assets/admin/icons/checklist.png";
 import { Close } from "@mui/icons-material";
 import {
     SettingsRounded,
-    HelpRounded,
 } from "@mui/icons-material";
 
 import { useLocation, useNavigate } from "react-router-dom";
@@ -80,12 +79,13 @@ function Sidebar() {
         {
             icon: <SettingsRounded />,
             path: "/admin/Settings",
-        },
-        {
-            icon: <HelpRounded />,
-            path: "/admin/help",
+            permission: "api_fetch_users_admin",
         },
     ];
+
+    const visibleBottomMenus = bottomMenus.filter(
+      (item) => !item.permission || hasPermission(item.permission)
+    );
 
     // 🔥 SIDEBAR CONTENT
     const sidebarContent = (
@@ -224,7 +224,7 @@ function Sidebar() {
                     p: 2,
                 }}
             >
-                {bottomMenus.map((item, index) => {
+                {visibleBottomMenus.map((item, index) => {
 
                     const isActive = location.pathname === item.path;
 

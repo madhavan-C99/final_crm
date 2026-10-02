@@ -14,21 +14,10 @@ const PlusIcon = () => (
   </svg>
 );
 
-const defaultRealTelecallers = ["telecaller", "poomani", "Bharath", "Prakash"];
-const defaultStageOptions = [
-  "new lead",
-  "follow up",
-  "won",
-  "loss",
-  "unreached",
-  "pending",
-  "contact_attempt",
-  "future",
-];
-
 function DispositionToolbar({
   search = "",
   onSearchChange = () => {},
+  onFetchOptions,
   filterDropdownOptions = {},
   telecallers = [],
   stagesOptions = [],
@@ -50,13 +39,10 @@ function DispositionToolbar({
 
   const activeTelecallersList =
     telecallers && telecallers.length > 0
-      ? telecallers.map((t) => (typeof t === "object" ? t.username : t))
-      : defaultRealTelecallers;
+      ? telecallers.map((t) => (typeof t === "object" ? (t.username || t.name || t.label || String(t.value ?? t.id)) : t))
+      : [];
 
-  const activeStagesList =
-    stagesOptions && stagesOptions.length > 0
-      ? stagesOptions
-      : defaultStageOptions;
+  const activeStagesList = stagesOptions || [];
 
   return (
     <Box
@@ -72,7 +58,7 @@ function DispositionToolbar({
     >
       {/* Left Filters Cluster */}
       <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", width: { xs: "100%", md: "auto" } }}>
-        <FilterButton label="Date" active={dateActive || Boolean(selectedDate)}>
+        <FilterButton label="Date" active={dateActive || Boolean(selectedDate)} onOpen={onFetchOptions}>
           {({ close }) => (
             <DateFilterPanel
               defaultValue={selectedDate || "Last 7 days"}
@@ -85,7 +71,7 @@ function DispositionToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Assigned to" active={userActive || selectedUsers.length > 0}>
+        <FilterButton label="Assigned to" active={userActive || selectedUsers.length > 0} onOpen={onFetchOptions}>
           {({ close }) => (
             <CheckboxFilterPanel
               title="Choose Assigned To"
@@ -100,7 +86,7 @@ function DispositionToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Stage" active={stageActive || selectedStages.length > 0}>
+        <FilterButton label="Stage" active={stageActive || selectedStages.length > 0} onOpen={onFetchOptions}>
           {({ close }) => (
             <CheckboxFilterPanel
               title="Choose Lead Stage"
@@ -115,7 +101,7 @@ function DispositionToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Filter" active={filterActive || Object.keys(appliedPanelFilters).length > 0} width={380}>
+        <FilterButton label="Filter" active={filterActive || Object.keys(appliedPanelFilters).length > 0} width={380} onOpen={onFetchOptions}>
           {({ close }) => (
             <FilterLeadsPanel
               closePanel={close}

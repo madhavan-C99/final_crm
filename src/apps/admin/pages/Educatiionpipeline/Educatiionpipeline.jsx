@@ -41,19 +41,21 @@ const Educatiionpipeline = () => {
             setUploadExcelModalOpen(true);
         } else if (label === "Add Lead") {
             setAddLeadModalOpen(true);
-        } else if (label === "Campaign Setting") {
-            navigate("/admin/edit-campaign?campaign_name=Samosa_mokka Lead");
-        } else {
-            console.log("Action selected:", label);
+        } else if (label === "Manage Pipeline" || label === "Campaign Setting") {
+            navigate("/admin/edit-campaign?campaign_name=Education");
         }
     };
 
     const handleToggleFavorite = (id) => {
-        console.log("Toggle favorite for campaign:", id);
+        // TODO(backend): Favorite API integration needed for campaign
     };
 
     const handleMenuAction = (id, label) => {
-        console.log("Menu action:", label, "on campaign:", id);
+        if (label === "Edit") {
+            navigate(`/admin/edit-campaign?campaign_id=${id}`);
+        } else {
+            // TODO(backend): Duplicate/Archive/Delete campaign APIs are not implemented in backend services
+        }
     };
 
     const handleViewDetails = (id) => {

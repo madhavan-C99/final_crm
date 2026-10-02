@@ -59,18 +59,20 @@ const LossLeadApprovalFilter = ({
   const [apiDropdowns, setApiDropdowns] = useState(null);
 
   useEffect(() => {
-    fetchLossLeadApprovalFilterDropdowns()
-      .then((res) => {
-        const data = res?.data?.data || res?.data || null;
-        if (data) setApiDropdowns(data);
-      })
-      .catch((err) => {
-        console.log(
-          "Loss Lead Approval Filter dropdowns API error, using fallback tableData options:",
-          err,
-        );
-      });
-  }, []);
+    if (Boolean(filterAnchor) && !apiDropdowns) {
+      fetchLossLeadApprovalFilterDropdowns()
+        .then((res) => {
+          const data = res?.data?.data || res?.data || null;
+          if (data) setApiDropdowns(data);
+        })
+        .catch((err) => {
+          console.log(
+            "Loss Lead Approval Filter dropdowns API error, using fallback tableData options:",
+            err,
+          );
+        });
+    }
+  }, [filterAnchor, apiDropdowns]);
 
   // Temp filters for Popover form draft state
   const [tempFilters, setTempFilters] = useState(
@@ -104,56 +106,65 @@ const LossLeadApprovalFilter = ({
     setFilterAnchor(null);
   };
 
-  // 1. Loss Reason Options (Strictly from API)
+  const parseOptionsArray = (raw) => {
+    if (!raw) return [];
+    let arr = [];
+    if (Array.isArray(raw)) {
+      arr = raw;
+    } else if (typeof raw === "object") {
+      const found = Object.values(raw).find((v) => Array.isArray(v));
+      if (found) arr = found;
+    }
+    if (!arr || arr.length === 0) return [];
+    const parsed = arr
+      .map((item) => {
+        if (item === null || item === undefined) return null;
+        if (typeof item === "string" || typeof item === "number") return String(item);
+        if (typeof item === "object") {
+          return (
+            item.label ||
+            item.name ||
+            item.title ||
+            item.loss_reason ||
+            item.reason ||
+            item.telecaller_name ||
+            item.user_name ||
+            item.course_name ||
+            item.course ||
+            item.source ||
+            item.lead_source ||
+            (item.value !== undefined ? String(item.value) : String(item.id || ""))
+          );
+        }
+        return String(item);
+      })
+      .filter(Boolean);
+    return Array.from(new Set(parsed));
+  };
+
+  // 1. Loss Reason Options (Strictly from Backend API)
   const lossReasonOptions = useMemo(() => {
-    const raw = apiDropdowns?.lost_reasons || apiDropdowns?.loss_reasons;
-    if (raw && Array.isArray(raw)) {
-      return raw
-        .map((item) => (typeof item === "object" ? item.name || item.loss_reason || item.reason : String(item)))
-        .filter(Boolean);
-    }
-    return [];
+    return parseOptionsArray(apiDropdowns?.lost_reasons || apiDropdowns?.loss_reasons || apiDropdowns?.reasons);
   }, [apiDropdowns]);
 
-  // 2. Telecaller Options (Strictly from API)
+  // 2. Telecaller Options (Strictly from Backend API)
   const telecallerOptions = useMemo(() => {
-    if (apiDropdowns?.telecallers && Array.isArray(apiDropdowns.telecallers)) {
-      return apiDropdowns.telecallers
-        .map((item) => (typeof item === "object" ? item.name || item.telecaller_name : String(item)))
-        .filter(Boolean);
-    }
-    return [];
+    return parseOptionsArray(apiDropdowns?.telecallers || apiDropdowns?.users || apiDropdowns?.assigned_to);
   }, [apiDropdowns]);
 
-  // 3. Course Options (Strictly from API)
+  // 3. Course Options (Strictly from Backend API)
   const courseOptions = useMemo(() => {
-    if (apiDropdowns?.courses && Array.isArray(apiDropdowns.courses)) {
-      return apiDropdowns.courses
-        .map((item) => (typeof item === "object" ? item.name || item.course_name : String(item)))
-        .filter(Boolean);
-    }
-    return [];
+    return parseOptionsArray(apiDropdowns?.courses || apiDropdowns?.course_names);
   }, [apiDropdowns]);
 
-  // 4. Lead Source Options (Strictly from API)
+  // 4. Lead Source Options (Strictly from Backend API)
   const leadSourceOptions = useMemo(() => {
-    const raw =
+    return parseOptionsArray(
       apiDropdowns?.lead_sources ||
       apiDropdowns?.sources ||
       apiDropdowns?.lead_source ||
-      apiDropdowns?.source;
-    if (Array.isArray(raw) && raw.length > 0) {
-      return Array.from(
-        new Set(
-          raw
-            .map((item) =>
-              typeof item === "object" ? item.name || item.source || item.lead_source : String(item)
-            )
-            .filter(Boolean)
-        )
-      );
-    }
-    return [];
+      apiDropdowns?.source
+    );
   }, [apiDropdowns]);
 
   const isFilterActive = useMemo(() => {

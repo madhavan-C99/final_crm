@@ -37,7 +37,7 @@ import {
 
 const ACCENT = "#90D916";
 
-export default function TransferLeadsView({ user, onBack }) {
+export default function TransferLeadsView({ user, onBack, onTransferComplete }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [isAllTransferOpen, setIsAllTransferOpen] = useState(false);
@@ -60,29 +60,42 @@ export default function TransferLeadsView({ user, onBack }) {
   const loadUserCampaigns = useCallback(async () => {
     try {
       setLoading(true);
-      const userId = user?.id || user?.user_id;
-      const res = await fetchUserCampaignsAdmin({ user_id: userId, id: userId });
+      const userId = user?.id || user?.user_id || user?.raw?.id || user?.raw?.user_id;
+      const empId = user?.emp_id && user?.emp_id !== "-" ? user.emp_id : user?.raw?.emp_id || user?.raw?.employee_id || user?.employee_id || "";
+      const res = await fetchUserCampaignsAdmin({ user_id: Number(userId), emp_id: String(empId) });
       const rawData = res?.data;
-      const data = rawData?.data || rawData || {};
 
-      if (data.user_name || data.total_campaigns !== undefined) {
-        setUserSummary({
-          user_id: userId,
-          user_name: data.user_name || user?.full_name || user?.name || "User",
-          total_campaigns: data.total_campaigns ?? 0,
-          total_leads: data.total_leads ?? 0,
-        });
+      // Support nested API response structures (e.g. res.data.data.data.campaigns)
+      const innerData = rawData?.data?.data || rawData?.data || rawData || {};
+
+      setUserSummary({
+        user_id: innerData.user_id || userId,
+        user_name: innerData.user_name || user?.full_name || user?.name || "User",
+        total_campaigns: innerData.total_campaigns ?? 0,
+        total_leads: innerData.total_leads ?? 0,
+      });
+
+      let list = [];
+      if (Array.isArray(innerData.campaigns)) {
+        list = innerData.campaigns;
+      } else if (Array.isArray(innerData.user_campaigns)) {
+        list = innerData.user_campaigns;
+      } else if (Array.isArray(innerData.campaign_list)) {
+        list = innerData.campaign_list;
+      } else if (Array.isArray(innerData.results)) {
+        list = innerData.results;
+      } else if (Array.isArray(innerData)) {
+        list = innerData;
+      } else if (Array.isArray(rawData?.data?.campaigns)) {
+        list = rawData.data.campaigns;
+      } else if (Array.isArray(rawData?.campaigns)) {
+        list = rawData.campaigns;
       }
 
-      if (Array.isArray(data.campaigns)) {
-        setCampaignsData(data.campaigns);
-      } else if (Array.isArray(data)) {
-        setCampaignsData(data);
-      } else {
-        setCampaignsData([]);
-      }
+      setCampaignsData(list);
     } catch (err) {
       console.error("Error loading user campaigns:", err);
+      setCampaignsData([]);
     } finally {
       setLoading(false);
     }
@@ -535,19 +548,25 @@ export default function TransferLeadsView({ user, onBack }) {
         open={isSingleTransferOpen}
         onClose={() => setIsSingleTransferOpen(false)}
         onTransferConfirm={handleSingleTransferConfirm}
+        campaignId={selectedRow?.id || selectedRow?.campaign_id}
         telecallersList={telecallersList}
         title="Transfer Leads"
-        subtitleText={`${selectedRow?.total_leads || 30} leads`}
+        subtitleText={`${selectedRow?.total_leads || 0} leads`}
         campaignValueText={selectedRow?.campaign_name || "Campaign"}
-        leadsCountValueText={`${selectedRow?.total_leads || 30} Leads`}
-        currentAssignee={userSummary.user_name || user?.full_name || user?.name || "Ezhil"}
-        totalLeadsCount={selectedRow?.total_leads || 30}
+        leadsCountValueText={`${selectedRow?.total_leads || 0} Leads`}
+        currentAssignee={userSummary.user_name || user?.full_name || user?.name || ""}
+        totalLeadsCount={selectedRow?.total_leads || 0}
       />
 
       {/* 3. Transfer Leads Success Modal */}
       <TransferLeadsSuccessModal
         open={isSuccessModalOpen}
-        onClose={() => setIsSuccessModalOpen(false)}
+        onClose={() => {
+          setIsSuccessModalOpen(false);
+          if (onTransferComplete) {
+            onTransferComplete(userSummary);
+          }
+        }}
         count={successCount}
         distributions={successDistributions}
       />

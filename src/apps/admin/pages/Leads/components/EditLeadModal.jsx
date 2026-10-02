@@ -143,7 +143,6 @@ const EditLeadModal = ({ open, onClose, lead, onSaveSuccess, existingLeads = [] 
     try {
       setLoading(true);
 
-      // 1. Extract dynamic unique values from live API lead records
       let apiPlans = [];
       let apiCourses = [];
       let apiTelecallers = [];
@@ -151,47 +150,36 @@ const EditLeadModal = ({ open, onClose, lead, onSaveSuccess, existingLeads = [] 
       let apiCampaigns = [];
       let apiTags = [];
 
-      if (Array.isArray(existingLeads) && existingLeads.length > 0) {
-        apiPlans = [...new Set(existingLeads.map((l) => l.course_plan || l.plan_name || l.plan).filter(Boolean))];
-        apiCourses = [...new Set(existingLeads.map((l) => l.course || l.course_name).filter(Boolean))];
-        apiTelecallers = [...new Set(existingLeads.map((l) => l.assigned_to || l.telecaller || l.user_name).filter(Boolean))];
-        apiPipelines = [...new Set(existingLeads.map((l) => l.pipeline || l.pipeline_name).filter(Boolean))];
-        apiCampaigns = [...new Set(existingLeads.map((l) => l.campaign || l.campaign_name).filter(Boolean))];
-        const extractedTags = [...new Set(existingLeads.map((l) => l.tag || l.lead_tag).filter(Boolean))];
-        if (extractedTags.length > 0) apiTags = extractedTags;
-      }
-
-      // 2. Fetch master select options API
       try {
         const response = await getLeadSelectOptions();
         const raw = response?.data?.data || response?.data?.result || response?.data;
         if (raw && typeof raw === "object") {
-          const plansList = raw.course_plans || raw.plans;
+          const plansList = raw.course_plans;
           if (Array.isArray(plansList) && plansList.length > 0) {
-            apiPlans = plansList.map((p) => typeof p === "object" ? (p.name || p.course_plan || String(p)) : String(p));
+            apiPlans = plansList.map((p) => typeof p === "object" ? (p.name || p.label || p.course_plan || String(p.value ?? p.id ?? "")) : String(p));
           }
 
-          const coursesList = raw.courses || raw.course_names;
+          const coursesList = raw.courses;
           if (Array.isArray(coursesList) && coursesList.length > 0) {
-            apiCourses = coursesList.map((c) => typeof c === "object" ? (c.name || c.course_name || String(c)) : String(c));
+            apiCourses = coursesList.map((c) => typeof c === "object" ? (c.name || c.label || c.course_name || String(c.value ?? c.id ?? "")) : String(c));
           }
 
-          const telecallersList = raw.telecallers || raw.users || raw.assigned_users;
+          const telecallersList = raw.telecallers;
           if (Array.isArray(telecallersList) && telecallersList.length > 0) {
-            apiTelecallers = telecallersList.map((t) => typeof t === "object" ? (t.name || t.user_name || String(t)) : String(t));
+            apiTelecallers = telecallersList.map((t) => typeof t === "object" ? (t.name || t.label || t.user_name || String(t.value ?? t.id ?? "")) : String(t));
           }
 
-          const stagesList = raw.pipeline_stages || raw.pipelines || raw.stages;
+          const stagesList = raw.stages;
           if (Array.isArray(stagesList) && stagesList.length > 0) {
-            apiPipelines = stagesList.map((pl) => typeof pl === "object" ? (pl.name || pl.stage_name || String(pl)) : String(pl));
+            apiPipelines = stagesList.map((pl) => typeof pl === "object" ? (pl.name || pl.label || pl.stage_name || String(pl.value ?? pl.id ?? "")) : String(pl));
           }
 
-          const campaignsList = raw.campaigns || raw.campaign_names;
+          const campaignsList = raw.campaigns;
           if (Array.isArray(campaignsList) && campaignsList.length > 0) {
-            apiCampaigns = campaignsList.map((cm) => typeof cm === "object" ? (cm.name || cm.campaign_name || String(cm)) : String(cm));
+            apiCampaigns = campaignsList.map((cm) => typeof cm === "object" ? (cm.name || cm.label || cm.campaign_name || String(cm.value ?? cm.id ?? "")) : String(cm));
           }
 
-          const tagsArray = raw.priority_tags || raw.tags || raw.lead_tags;
+          const tagsArray = raw.tags;
           if (Array.isArray(tagsArray) && tagsArray.length > 0) {
             apiTags = tagsArray.map((tg) => typeof tg === "object" ? (tg.name || tg.tag_name || String(tg)) : String(tg));
           }
@@ -291,11 +279,11 @@ const EditLeadModal = ({ open, onClose, lead, onSaveSuccess, existingLeads = [] 
         email_id: formData.emailId,
 
         // Integer IDs for Django/FastAPI ORM queries
-        campaign_id: typeof formData.campaign === "number" ? formData.campaign : (Number(formData.campaign) || 1),
-        lead_source_id: 1,
-        assigned_to_id: typeof formData.assignedTo === "number" ? formData.assignedTo : (Number(formData.assignedTo) || 1),
-        user_id: typeof formData.assignedTo === "number" ? formData.assignedTo : (Number(formData.assignedTo) || 1),
-        pipeline_stage_id: formData.pipeline === "Education" ? 1 : 2,
+        campaign_id: typeof formData.campaign === "number" ? formData.campaign : (Number(formData.campaign) || 0),
+        lead_source_id: typeof formData.sourceType === "number" ? formData.sourceType : (Number(formData.sourceType) || 0),
+        assigned_to_id: typeof formData.assignedTo === "number" ? formData.assignedTo : (Number(formData.assignedTo) || 0),
+        user_id: typeof formData.assignedTo === "number" ? formData.assignedTo : (Number(formData.assignedTo) || 0),
+        pipeline_stage_id: typeof formData.pipeline === "number" ? formData.pipeline : (Number(formData.pipeline) || 0),
 
         // String names for backwards compatibility
         campaign: String(formData.campaign || ""),

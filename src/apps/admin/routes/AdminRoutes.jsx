@@ -30,6 +30,7 @@ function AdminRoutes() {
           </ProtectedRoute>
         }
       >
+        <Route path="dashboard" element={<Educatiionpipeline />} />
         <Route path="Educatiionpipeline" element={<Educatiionpipeline />} />
         <Route path="enquiry-sheet/:campaignId" element={<EnquirySheet />} />
         <Route path="lead-summary-report" element={<LeadSummaryReport />} />

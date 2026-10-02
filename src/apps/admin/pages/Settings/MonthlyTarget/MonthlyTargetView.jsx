@@ -189,8 +189,11 @@ export default function MonthlyTargetView() {
     }
   }, [selectedMonthLabel, fromDate, toDate, hasCustomRange]);
 
+  const dropdownsFetchedRef = React.useRef(false);
   const loadDropdowns = useCallback(async () => {
+    if (dropdownsFetchedRef.current) return;
     try {
+      dropdownsFetchedRef.current = true;
       const res = await fetchTargetDropdownsAdmin();
       console.log("[MonthlyTargetView] fetchTargetDropdownsAdmin response:", res);
       const rawData = res?.data;
@@ -201,6 +204,7 @@ export default function MonthlyTargetView() {
       });
     } catch (err) {
       console.error("Error fetching target dropdowns:", err);
+      dropdownsFetchedRef.current = false;
     }
   }, []);
 
@@ -209,8 +213,10 @@ export default function MonthlyTargetView() {
   }, [loadMonthlyTargetData]);
 
   useEffect(() => {
-    loadDropdowns();
-  }, [loadDropdowns]);
+    if (isSetTargetOpen) {
+      loadDropdowns();
+    }
+  }, [isSetTargetOpen, loadDropdowns]);
 
   useEffect(() => {
     if (teamList.length === 0 && progressTab === "Team") {

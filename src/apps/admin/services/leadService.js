@@ -1,229 +1,177 @@
 import api from "@/shared/services/axios";
+import { getSelectOptions } from "./dropdownService";
 
 // 1. Fetch all leads & count stats
-
 export const getLeadData = (payload) => {
   return api.post("/adm/fetch_all_leads_admin", payload);
 };
 
 // 2. Fetch dropdown select options for admin filter popup (/adm/get_filter_dropdowns_admin)
+export const getLeadSelectOptions = async (optFilter = null) => {
+  const hasCourseSelected = Boolean(optFilter?.course_id || optFilter?.course || optFilter?.course_name);
+  const hasPlanSelected = Boolean(optFilter?.course_plan_id || optFilter?.plan_id || optFilter?.course_plan);
 
-export const getLeadSelectOptions = async () => {
-  return await api.get("/adm/get_filter_dropdowns_admin");
+  const [
+    stages,
+    sources,
+    campaigns,
+    courses,
+    plans,
+    telecallers,
+    courseTimes,
+    categories,
+  ] = await Promise.all([
+    getSelectOptions("L_STAGES", optFilter),
+    getSelectOptions("L_LEAD_SOURCES", optFilter),
+    getSelectOptions("L_CAMPAIGN_NAMES", optFilter),
+    getSelectOptions("L_COURSE_NAMES", optFilter),
+    hasCourseSelected ? getSelectOptions("L_COURSE_PLANS", optFilter) : Promise.resolve([]),
+    getSelectOptions("L_TELECALLERS", optFilter),
+    hasPlanSelected ? getSelectOptions("L_COURSE_TIMES", optFilter) : Promise.resolve([]),
+    getSelectOptions("L_CATEGORIES", optFilter),
+  ]);
+
+  let courseNames = courses.length > 0 ? courses : (hasCourseSelected ? await getSelectOptions("L_COURSES", optFilter).catch(() => []) : []);
+  let coursePlans = plans;
+
+  return {
+    data: {
+      stages,
+      categories,
+      sources,
+      campaigns,
+      courses: courseNames,
+      course_plans: coursePlans,
+      telecallers,
+      course_times: courseTimes,
+    },
+  };
 };
 
 // 3. Add new lead (Exact Endpoint: /adm/add_new_lead_admin)
-
 export const createLead = (payload) => {
   return api.post("/adm/add_new_lead_admin", payload);
 };
 
-// 4. Upload Excel / CSV file for bulk leads (with fallback prefix support)
-
+// 4. Upload Excel / CSV file for bulk leads
 export const uploadLeadsExcel = async (formData) => {
-  try {
-    return await api.post("/adm/upload_lead_excel_admin", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-  } catch (err) {
-    if (err?.response?.status === 404) {
-      return await api.post("/admin/upload_excel_leads", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-    }
-    throw err;
-  }
+  return await api.post("/adm/upload_lead_excel_admin", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
 };
 
-// 6. Fetch pipeline kanban board leads (/adm/fetch_pipeline_leads_admin)
-
+// 5. Fetch pipeline kanban board leads (/adm/fetch_pipeline_leads_admin)
 export const getPipelineLeads = async (payload) => {
-  try {
-    return await api.post("/adm/fetch_pipeline_leads_admin", payload);
-  } catch (err) {
-    if (err?.response?.status === 404) {
-      return await api.post("/adm/fetch_pipeline_leads", payload);
-    }
-    throw err;
-  }
+  return await api.post("/adm/fetch_pipeline_leads_admin", payload);
 };
 
-// 7. Update lead stage / status (with fallback prefix support)
-
+// 6. Update lead stage / status
 export const updateLeadStage = async (payload) => {
-  try {
-    return await api.post("/adm/update_lead_stage", payload);
-  } catch (err) {
-    if (err?.response?.status === 404) {
-      return await api.post("/admin/update_lead_stage", payload);
-    }
-    throw err;
-  }
+  return await api.post("/adm/update_lead_stage", payload);
 };
 
-// 8. Export leads Excel report (Exact Endpoint: /adm/export_all_leads_admin)
-
+// 7. Export leads Excel report (Exact Endpoint: /adm/export_all_leads_admin)
 export const exportLeads = (payload) => {
   return api.post("/adm/export_all_leads_admin", payload);
 };
 
-// 9. Fetch single lead details & timeline history (/adm/fetch_lead_details_admin)
-
+// 8. Fetch single lead details & timeline history (/adm/fetch_lead_details_admin)
 export const getLeadDetail = async (payload) => {
   const targetId = payload?.lead_id ?? payload?.id ?? payload;
   const formData = new FormData();
   formData.append("lead_id", targetId);
-
-  try {
-    return await api.post("/adm/fetch_lead_details_admin", formData);
-  } catch (err) {
-    if (err?.response?.status === 404) {
-      try {
-        return await api.post("/adm/fetch_lead_detail_admin", formData);
-      } catch (err2) {
-        return await api.post("/adm/fetch_lead_details_admin", { lead_id: targetId });
-      }
-    }
-    throw err;
-  }
+  return await api.post("/adm/fetch_lead_details_admin", formData);
 };
 
-// 10. Fetch Mark as Won Info for modal (/adm/get_mark_as_won_info_admin)
-
+// 9. Fetch Mark as Won Info for modal (/adm/get_mark_as_won_info_admin)
 export const getMarkAsWonInfo = async (payload) => {
-  try {
-    return await api.post("/adm/get_mark_as_won_info_admin", payload);
-  } catch (err) {
-    try {
-      const targetId = payload?.lead_id || payload?.id;
-      return await api.get(
-        `/adm/get_mark_as_won_info_admin?lead_id=${targetId}&id=${targetId}`,
-      );
-    } catch (fallbackErr) {
-      throw err;
-    }
-  }
+  return await api.post("/adm/get_mark_as_won_info_admin", payload);
 };
 
-// 11. Submit Mark as Won form data (/adm/mark_as_won_admin)
-
+// 10. Submit Mark as Won form data (/adm/mark_as_won_admin)
 export const submitMarkAsWon = async (payload) => {
   return await api.post("/adm/mark_as_won_admin", payload);
 };
 
-// 12. Fetch Mark as Loss Info for modal (/adm/get_mark_as_lost_info_admin)
-
+// 11. Fetch Mark as Loss Info for modal (/adm/get_mark_as_lost_info_admin)
 export const getMarkAsLostInfo = async (payload) => {
-  try {
-    return await api.post("/adm/get_mark_as_lost_info_admin", payload);
-  } catch (err) {
-    try {
-      const targetId = payload?.lead_id || payload?.id;
-      return await api.get(
-        `/adm/get_mark_as_lost_info_admin?lead_id=${targetId}&id=${targetId}`,
-      );
-    } catch (fallbackErr) {
-      throw err;
-    }
-  }
+  return await api.post("/adm/get_mark_as_lost_info_admin", payload);
 };
 
-// 13. Submit Mark as Loss form data (/adm/mark_as_lost_admin)
-
+// 12. Submit Mark as Loss form data (/adm/mark_as_lost_admin)
 export const submitMarkAsLost = async (payload) => {
   return await api.post("/adm/mark_as_lost_admin", payload);
 };
 
-// 14. Submit Edit Lead form data with URL fallbacks
-
+// 13. Submit Edit Lead form data
 export const editLead = async (payload) => {
-  try {
-    return await api.post("/adm/edit_lead_admin", payload);
-  } catch (err) {
-    if (err?.response?.status === 404) {
-      try {
-        return await api.post("/adm/edit_lead", payload);
-      } catch (err2) {
-        if (err2?.response?.status === 404) {
-          try {
-            return await api.post("/admin/edit_lead_admin", payload);
-          } catch (err3) {
-            if (err3?.response?.status === 404) {
-              return await api.post("/admin/edit_lead", payload);
-            }
-            throw err3;
-          }
-        }
-        throw err2;
-      }
-    }
-    throw err;
-  }
+  return await api.post("/adm/edit_lead_admin", payload);
 };
 
-// 15. Fetch Loss Lead Approval Requests (/adm/fetch_loss_lead_approval_requests_admin)
-
+// 14. Fetch Loss Lead Approval Requests (/adm/fetch_loss_lead_approval_requests_admin)
 export const fetchLossLeadApprovalRequests = async (payload = {}) => {
   return await api.post("/adm/fetch_loss_lead_approval_requests_admin", payload);
 };
 
-// 16. Export Loss Lead Approval Requests (/adm/export_loss_lead_approval_requests_admin)
-
+// 15. Export Loss Lead Approval Requests (/adm/export_loss_lead_approval_requests_admin)
 export const exportLossLeadApprovalRequests = async (payload = {}) => {
   return await api.post("/adm/export_loss_lead_approval_requests_admin", payload);
 };
 
-// 17. Fetch Loss Lead Approval Filter Dropdowns (/adm/get_filter_dropdowns_admin)
-
+// 16. Fetch Loss Lead Approval Filter Dropdowns (/adm/get_filter_dropdowns_admin)
 export const fetchLossLeadApprovalFilterDropdowns = async () => {
-  try {
-    return await api.get("/adm/get_filter_dropdowns_admin");
-  } catch (err) {
-    if (err?.response?.status === 404) {
-      return await api.get("/adm/get_loss_lead_approval_filter_dropdowns_admin");
-    }
-    throw err;
+  const [telecallers, reasons, courseNames, coursePlans, sources, courseTimes] = await Promise.all([
+    getSelectOptions("L_TELECALLERS"),
+    getSelectOptions("L_LOSS_REASONS"),
+    getSelectOptions("L_COURSE_NAMES"),
+    getSelectOptions("L_COURSE_PLANS"),
+    getSelectOptions("L_LEAD_SOURCES"),
+    getSelectOptions("L_COURSE_TIMES"),
+  ]);
+
+  let courses = courseNames;
+  let plans = coursePlans;
+
+  if (courses.length === 0) {
+    courses = await getSelectOptions("L_COURSES");
   }
+  if (plans.length === 0) {
+    plans = courses;
+  }
+
+  return {
+    data: {
+      telecallers,
+      reasons,
+      courses,
+      course_plans: plans,
+      sources,
+      course_times: courseTimes,
+    },
+  };
 };
 
-// 18. Action Loss Lead Approval (/adm/action_loss_lead_approval_admin) - Approve / Reject / Reassign
-
+// 17. Action Loss Lead Approval (/adm/action_loss_lead_approval_admin) - Approve / Reject / Reassign
 export const actionLossLeadApproval = async (payload = {}) => {
   return await api.post("/adm/action_loss_lead_approval_admin", payload);
 };
 
-// 19. Delete Lead Admin (/adm/delete_lead_admin)
-
+// 18. Delete Lead Admin (/adm/delete_lead_admin)
 export const deleteLead = async (payload) => {
-  const targetId = payload?.lead_id ?? payload?.id ?? payload;
-  const formData = new FormData();
-  formData.append("lead_id", targetId);
+  const targetId = Number(payload?.lead_id ?? payload?.id ?? payload);
+  const jsonPayload = {
+    lead_id: targetId,
+    id: targetId,
+    user_id: payload?.user_id || payload?.user || undefined,
+    user: payload?.user || payload?.user_id || undefined,
+  };
 
-  try {
-    return await api.post("/adm/delete_lead_admin", formData);
-  } catch (err) {
-    try {
-      return await api.post("/adm/delete_lead_admin", { lead_id: targetId, id: targetId });
-    } catch (err2) {
-      if (err?.response?.status === 404) {
-        try {
-          return await api.post("/admin/delete_lead_admin", formData);
-        } catch (err3) {
-          return await api.post("/adm/delete_lead", formData);
-        }
-      }
-      throw err;
-    }
-  }
+  return await api.post("/adm/delete_lead_admin", jsonPayload);
 };
 
-// 20. Reassign Lead Admin (/adm/reassign_lead_admin)
-
+// 19. Reassign Lead Admin (/adm/reassign_lead_admin)
 export const reassignLead = async (payload) => {
   return await api.post("/adm/reassign_lead_admin", payload);
 };
-

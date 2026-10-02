@@ -18,6 +18,7 @@ import MarkAsWonModal from "./components/MarkAsWonModal";       // 9. Mark As Wo
 import MarkAsLossModal from "./components/MarkAsLossModal";     // 10. Mark As Loss Modal Dialog
 import EditLeadModal from "./components/EditLeadModal";         // 11. Exact Figma Edit Lead Modal Dialog
 import ReassignLeadModal from "../LossLeadApproval/components/ReassignLeadModal"; // 12. Reassign Telecaller Modal Dialog
+import ExportColumnsModal from "./components/ExportColumnsModal";
 
 // =============================================================================
 // API SERVICE IMPORTS
@@ -34,70 +35,39 @@ import {
   reassignLead,
 } from "../../services/leadService";
 
-export const getStageCategory = (item) => {
-  if (!item) return "all";
-
-  // Backend stage_id (excluding pipeline_stage_id which represents pipeline category)
-  const stageId = Number(item.stage_id || item.status_id || item.lead_stage_id || 0);
-
-  // 1. Backend Boolean Flags or Stage ID 4 (Won)
-  if (item.is_won === true || item.won === true || stageId === 4) {
-    return "won";
-  }
-
-  // 2. Backend Boolean Flags or Stage ID 5 (Lost)
-  if (item.is_lost === true || item.is_loss === true || stageId === 5) {
-    return "loss";
-  }
-
-  // 3. Stage ID 1 (New Lead)
-  if (stageId === 1) {
-    return "new";
-  }
-
-  // 4. Stage ID 2 (Follow up)
-  if (stageId === 2) {
-    return "follow_up";
-  }
-
-  // 5. Stage ID 3 (Missed Follow up)
-  if (stageId === 3) {
-    return "pending_follow_up";
-  }
-
-  // 6. Dynamic Backend Stage Name Fallback
-  const stageName = String(
-    item.stage ||
-    item.pipeline_stage ||
-    item.tag ||
-    item.stage_name ||
-    item.status ||
-    item.lead_stage ||
-    ""
-  ).toLowerCase().trim();
-
-  if (stageName.includes("won") || stageName.includes("win") || stageName.includes("closed")) {
-    return "won";
-  }
-  if (stageName.includes("loss") || stageName.includes("lost") || stageName.includes("drop") || stageName.includes("reject")) {
-    return "loss";
-  }
-  if (stageName.includes("new") || stageName.includes("fresh") || stageName.includes("unassigned") || stageName.includes("enquiry") || stageName === "") {
-    return "new";
-  }
-  if (stageName.includes("pending") || stageName.includes("missed") || stageName.includes("unreach") || stageName.includes("not connect")) {
-    return "pending_follow_up";
-  }
-
-  return "follow_up";
-};
+import { isLeadInStageDynamic } from "./utils/leadUtils";
+import { getSelectOptions } from "../../services/dropdownService";
 
 const Leads = () => {
   // ---------------------------------------------------------------------------
-  // 1. STATE FOR LeadHeader COMPONENT
+  // 1. STATE FOR LeadHeader & DYNAMIC PIPELINES / CATEGORIES & STAGES
   // ---------------------------------------------------------------------------
-  // Category switcher: "education" (Active) vs "product" (Dummy placeholder)
-  const [pipelineCategory, setPipelineCategory] = useState("education");
+  const [pipelinesList, setPipelinesList] = useState([]);
+  const [selectedPipeline, setSelectedPipeline] = useState(null);
+  const [stagesList, setStagesList] = useState([]);
+
+  useEffect(() => {
+    getSelectOptions("L_CATEGORIES")
+      .then((cats) => {
+        if (Array.isArray(cats) && cats.length > 0) {
+          setPipelinesList(cats);
+          const initialId = cats[0].id ?? cats[0].value;
+          setSelectedPipeline(initialId);
+        }
+      })
+      .catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    const optFilter = selectedPipeline ? { category_id: selectedPipeline, pipeline_id: selectedPipeline } : null;
+    getSelectOptions("L_STAGES", optFilter)
+      .then((stgs) => {
+        if (Array.isArray(stgs) && stgs.length > 0) {
+          setStagesList(stgs);
+        }
+      })
+      .catch(() => null);
+  }, [selectedPipeline]);
 
   // ---------------------------------------------------------------------------
   // 2. STATE FOR LeadStats COMPONENT (Pill Badge Tabs)
@@ -141,6 +111,26 @@ const Leads = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);      // Edit Lead Modal Visibility
   const [selectedReassignLead, setSelectedReassignLead] = useState(null); // Selected lead for Reassign Modal
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);  // Reassign Modal Visibility
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  const leadExportColumns = [
+    { id: "s_no", label: "S.No" },
+    { id: "name", label: "Full Name" },
+    { id: "mobile", label: "Mobile No" },
+    { id: "assigned_to", label: "Assigned To" },
+    { id: "stage", label: "Stage" },
+    { id: "tag", label: "Tag" },
+    { id: "campaign", label: "Campaign" },
+    { id: "source", label: "Source" },
+    { id: "course_plan", label: "Course Plan" },
+    { id: "course", label: "Course" },
+    { id: "next_followup", label: "Next Followup" },
+    { id: "amount", label: "Course Fee" },
+    { id: "pending_amount", label: "Pending Amount" },
+    { id: "last_contacted", label: "Last Contacted" },
+    { id: "last_conv", label: "Last Conversation" },
+    { id: "created_date", label: "Created Date" },
+  ];
 
   const handleOpenLeadDetail = (lead) => {
     setSelectedDetailLead(lead);
@@ -281,7 +271,7 @@ const Leads = () => {
 
       if (downloadUrl) {
         if (!downloadUrl.startsWith("http://") && !downloadUrl.startsWith("https://")) {
-          const baseUrl = "https://autopilot-elude-ungloved.ngrok-free.dev";
+          const baseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
           downloadUrl = `${baseUrl}${downloadUrl.startsWith("/") ? "" : "/"}${downloadUrl}`;
         }
 
@@ -303,7 +293,7 @@ const Leads = () => {
     }
   };
 
-  const runClientCsvExport = () => {
+  const runClientCsvExport = (selectedColumnKeys) => {
     try {
       const exportRows = sortedTableData || [];
 
@@ -312,66 +302,33 @@ const Leads = () => {
         return;
       }
 
-      const headers = [
-        "S.No",
-        "Full Name",
-        "Mobile No",
-        "Assigned To",
-        "Stage",
-        "Tag",
-        "Campaign",
-        "Source",
-        "Course Plan",
-        "Course",
-        "Next Followup",
-        "Course Fee",
-        "Pending Amount",
-        "Last Contacted",
-        "Last Conversation",
-        "Created Date",
-      ];
+      const colMap = {
+        s_no: { label: "S.No", getValue: (item, index) => index + 1 },
+        name: { label: "Full Name", getValue: (lead) => `"${(lead.full_name || lead.name || `${lead.first_name || ""} ${lead.last_name || ""}`).trim().replace(/"/g, '""')}"` },
+        mobile: { label: "Mobile No", getValue: (lead) => `"${(lead.mobile_no || lead.phone_no || lead.phone || "").replace(/"/g, '""')}"` },
+        assigned_to: { label: "Assigned To", getValue: (lead) => `"${(lead.assigned_to || lead.user_name || lead.telecaller || "Unassigned").replace(/"/g, '""')}"` },
+        stage: { label: "Stage", getValue: (lead) => `"${(lead.stage || lead.pipeline_stage || "").replace(/"/g, '""')}"` },
+        tag: { label: "Tag", getValue: (lead) => `"${(lead.tag || lead.lead_tag || lead.tag_name || "-").replace(/"/g, '""')}"` },
+        campaign: { label: "Campaign", getValue: (lead) => `"${(lead.campaign || lead.campaign_name || "").replace(/"/g, '""')}"` },
+        source: { label: "Source", getValue: (lead) => `"${(lead.source || lead.lead_source || "").replace(/"/g, '""')}"` },
+        course_plan: { label: "Course Plan", getValue: (lead) => `"${(lead.course_plan || "-").replace(/"/g, '""')}"` },
+        course: { label: "Course", getValue: (lead) => `"${(lead.course || lead.course_name || "-").replace(/"/g, '""')}"` },
+        next_followup: { label: "Next Followup", getValue: (lead) => `"${(lead.next_follow_up || lead.next_followup || "-").replace(/"/g, '""')}"` },
+        amount: { label: "Course Fee", getValue: (lead) => `"${lead.amount || lead.course_fee || 0}"` },
+        pending_amount: { label: "Pending Amount", getValue: (lead) => `"${lead.pending_amount || 0}"` },
+        last_contacted: { label: "Last Contacted", getValue: (lead) => `"${(lead.last_contacted || "-").replace(/"/g, '""')}"` },
+        last_conv: { label: "Last Conversation", getValue: (lead) => `"${(lead.last_conversation_outcome || "-").replace(/"/g, '""')}"` },
+        created_date: { label: "Created Date", getValue: (lead) => `"${(lead.created_at || lead.created || "-").replace(/"/g, '""')}"` },
+      };
 
-      const csvRows = [headers.join(",")];
+      const activeKeys = selectedColumnKeys && selectedColumnKeys.length > 0 ? selectedColumnKeys : Object.keys(colMap);
+      const headers = activeKeys.map((key) => colMap[key]?.label || key);
 
-      exportRows.forEach((lead, index) => {
-        const name = `"${(lead.full_name || lead.name || `${lead.first_name || ""} ${lead.last_name || ""}`).trim().replace(/"/g, '""')}"`;
-        const mobile = `"${(lead.mobile_no || lead.phone_no || lead.phone || "").replace(/"/g, '""')}"`;
-        const assigned = `"${(lead.assigned_to || lead.user_name || lead.telecaller || "Unassigned").replace(/"/g, '""')}"`;
-        const stage = `"${(lead.stage || lead.pipeline_stage || "").replace(/"/g, '""')}"`;
-        const tag = `"${(lead.tag || lead.lead_tag || lead.tag_name || "-").replace(/"/g, '""')}"`;
-        const campaign = `"${(lead.campaign || lead.campaign_name || "").replace(/"/g, '""')}"`;
-        const source = `"${(lead.source || lead.lead_source || "").replace(/"/g, '""')}"`;
-        const coursePlan = `"${(lead.course_plan || "-").replace(/"/g, '""')}"`;
-        const course = `"${(lead.course || lead.course_name || "-").replace(/"/g, '""')}"`;
-        const nextFollowup = `"${(lead.next_follow_up || lead.next_followup || "-").replace(/"/g, '""')}"`;
-        const amount = `"${lead.amount || lead.course_fee || 0}"`;
-        const pendingAmount = `"${lead.pending_amount || 0}"`;
-        const lastContacted = `"${(lead.last_contacted || "-").replace(/"/g, '""')}"`;
-        const lastConv = `"${(lead.last_conversation_outcome || "-").replace(/"/g, '""')}"`;
-        const createdDate = `"${(lead.created_at || lead.created || "-").replace(/"/g, '""')}"`;
+      const rows = exportRows.map((lead, index) =>
+        activeKeys.map((key) => (colMap[key] ? colMap[key].getValue(lead, index) : '""'))
+      );
 
-        const row = [
-          index + 1,
-          name,
-          mobile,
-          assigned,
-          stage,
-          tag,
-          campaign,
-          source,
-          coursePlan,
-          course,
-          nextFollowup,
-          amount,
-          pendingAmount,
-          lastContacted,
-          lastConv,
-          createdDate,
-        ];
-        csvRows.push(row.join(","));
-      });
-
-      const csvString = csvRows.join("\n");
+      const csvString = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
       const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -394,9 +351,17 @@ const Leads = () => {
   // 8. API PAYLOAD BUILDER & BACKEND DATA FETCHING (getLeadData)
   // ===========================================================================
   const buildPayload = (filters = selectedFilters) => {
-    const pId = pipelineCategory === "product" ? 2 : 1;
+    const pId = Number(
+      selectedPipeline?.id ??
+        selectedPipeline?.value ??
+        selectedPipeline ??
+        pipelinesList?.[0]?.id ??
+        pipelinesList?.[0]?.value ??
+        0
+    );
     const payload = {
       pipeline_id: filters?.pipeline_stage_id ? Number(filters.pipeline_stage_id) || pId : pId,
+      pipeline: pId,
       ...filters,
       search: searchTerm || "",
       limit: 1000,
@@ -438,6 +403,7 @@ const Leads = () => {
 
   // Calls getLeadData API service & parses response for LeadTable & LeadStats
   const fetchLeadData = async (filters = selectedFilters) => {
+    if (!selectedPipeline) return;
     try {
       setLoading(true);
       const response = await getLeadData(buildPayload(filters));
@@ -488,15 +454,17 @@ const Leads = () => {
     }
   };
 
+  const selectedFiltersStr = JSON.stringify(selectedFilters);
+
   useEffect(() => {
     fetchLeadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    pipelineCategory,
+    selectedPipeline,
     dateFilterType,
     fromDate,
     toDate,
-    selectedFilters,
+    selectedFiltersStr,
   ]);
 
   // ===========================================================================
@@ -504,9 +472,10 @@ const Leads = () => {
   // ===========================================================================
   // Category filter: Education Pipeline vs Product Pipeline
   const activeLeadsList = useMemo(() => {
-    if (pipelineCategory === "product") return [];
+    const pStr = String(selectedPipeline || "").toLowerCase();
+    if (pStr === "product" || pStr === "2") return [];
     return Array.isArray(tableData) ? tableData : [];
-  }, [pipelineCategory, tableData]);
+  }, [selectedPipeline, tableData]);
 
   // Base list of leads matching all active filter panel, date, & search filters (WITHOUT status tab filter)
   // Passed to LeadStats so badge counts (All Leads, New, Followup, Missed, Won, Lost) update dynamically per Assigned User & other filters
@@ -515,27 +484,19 @@ const Leads = () => {
 
     let list = activeLeadsList;
 
-    // 1. Filter Field: Pipeline Stage (Education vs Product)
+    // 1. Filter Field: Pipeline Stage
     if (selectedFilters?.pipeline_stage_id && selectedFilters.pipeline_stage_id !== 0 && selectedFilters.pipeline_stage_id !== "all") {
       const pVal = String(selectedFilters.pipeline_stage_id).toLowerCase().trim();
       const pLabel = String(selectedFilters.pipeline_stage_label || selectedFilters.pipeline_stage_name || "").toLowerCase().trim();
-      const isProduct = pVal === "2" || pVal.includes("product") || pLabel.includes("product");
-      const isEducation = pVal === "1" || pVal.includes("education") || pLabel.includes("education");
 
       list = list.filter((item) => {
-        const itemPId = String(item.pipeline_id || item.pipeline_stage_id || item.stage_id || "");
-        const itemPName = String(item.pipeline || item.pipeline_name || item.pipeline_stage || "").toLowerCase();
-        if (isProduct) {
-          return itemPId === "2" || itemPName.includes("product");
-        }
-        if (isEducation) {
-          return itemPId === "1" || itemPName.includes("education") || (!itemPId && !itemPName);
-        }
-        return (
-          itemPId === pVal ||
-          (pLabel && itemPName.includes(pLabel)) ||
-          itemPName.includes(pVal)
-        );
+        const itemPId = String(item.pipeline_id || item.pipeline_stage_id || item.stage_id || "").toLowerCase().trim();
+        const itemPName = String(item.pipeline || item.pipeline_name || item.pipeline_stage || item.stage || "").toLowerCase().trim();
+
+        if (itemPId && itemPId === pVal) return true;
+        if (itemPName && (itemPName === pVal || itemPName.includes(pVal) || pVal.includes(itemPName))) return true;
+        if (pLabel && itemPName && (itemPName === pLabel || itemPName.includes(pLabel) || pLabel.includes(itemPName))) return true;
+        return false;
       });
     }
 
@@ -677,10 +638,10 @@ const Leads = () => {
     let list = leadsMatchingFilters;
 
     if (selectedLeadType && selectedLeadType !== "all") {
-      list = list.filter((item) => getStageCategory(item) === selectedLeadType);
+      list = list.filter((item) => isLeadInStageDynamic(item, selectedLeadType, stagesList));
     }
     return list;
-  }, [leadsMatchingFilters, selectedLeadType]);
+  }, [leadsMatchingFilters, selectedLeadType, stagesList]);
 
   // Sorting (Newest First vs Oldest First)
   const sortedTableData = useMemo(() => {
@@ -714,7 +675,7 @@ const Leads = () => {
   // 10. JSX COMPONENT TREE RENDER
   // ===========================================================================
   return (
-    <Box sx={{ pb: 3 ,}}>
+    <Box sx={{ pb: 3 ,pr:3}}>
       {/* Toast Notification Pop-Up matching UI/UX Screenshot */}
       <Snackbar
         open={toastState.open}
@@ -751,9 +712,12 @@ const Leads = () => {
       <LeadHeader
         onAddNew={handleOpenAddModal}
         onUpload={() => setIsUploadModalOpen(true)}
-        onExport={handleExportLeads}
-        pipelineCategory={pipelineCategory}
-        onPipelineCategoryChange={setPipelineCategory}
+        onExport={() => setIsExportModalOpen(true)}
+        pipelinesList={pipelinesList}
+        selectedPipeline={selectedPipeline}
+        onPipelineCategoryChange={(pipeId) => {
+          setSelectedPipeline(pipeId);
+        }}
       />
 
       {/* --------------------------------------------------------------------- */}
@@ -765,6 +729,7 @@ const Leads = () => {
           tableData={leadsMatchingFilters}
           selectedLeadType={selectedLeadType}
           setSelectedLeadType={setSelectedLeadType}
+          stagesList={stagesList}
           loading={loading}
         />
       )}
@@ -797,25 +762,7 @@ const Leads = () => {
       {/* --------------------------------------------------------------------- */}
       {/* COMPONENT 4 & 5: LeadTable (Data Grid View) OR LeadPipeLine (Kanban Board View) */}
       {/* --------------------------------------------------------------------- */}
-      {pipelineCategory === "product" ? (
-        <Box
-          sx={{
-            textAlign: "center",
-            py: 8,
-            backgroundColor: "#FFFFFF",
-            borderRadius: "12px",
-            mt: 3,
-            border: "1px solid #E2E8F0",
-          }}
-        >
-          <Typography sx={{ fontSize: "14px", fontWeight: 400, color: "#1E293B" }}>
-            Product Pipeline (Dummy)
-          </Typography>
-          <Typography sx={{ fontSize: "14px", color: "#64748B", mt: 1 }}>
-            No leads available for Product Pipeline. Select "Education Pipeline" to view active leads.
-          </Typography>
-        </Box>
-      ) : viewType === "pipeline" ? (
+      {viewType === "pipeline" ? (
         /* COMPONENT 5: LeadPipeLine (Kanban Board View) */
         <LeadPipeLine
           tableData={sortedTableData}
@@ -825,6 +772,8 @@ const Leads = () => {
           toDate={toDate}
           selectedFilters={selectedFilters}
           selectedLeadType={selectedLeadType}
+          stagesList={stagesList}
+          selectedPipeline={selectedPipeline}
           onCardClick={handleOpenLeadDetail}
           onMarkAsWon={handleOpenWonModal}
         />
@@ -839,21 +788,32 @@ const Leads = () => {
           onReassignLead={handleOpenReassignModal}
           onDeleteLead={async (lead) => {
             const targetId = lead.id || lead.lead_id;
+            const userId = lead.assigned_to_id || lead.user_id || lead.telecaller_id;
             try {
-              await deleteLead({ lead_id: targetId, id: targetId });
+              const res = await deleteLead({ lead_id: targetId, id: targetId, user_id: userId, user: userId });
+              const resData = res?.data;
+
+              if (resData?.status === "failed" || resData?.success === false) {
+                showToast(resData?.message || resData?.detail || "Failed to delete lead");
+                return;
+              }
+
+              const message = resData?.message || resData?.detail || "The lead is successfully Deleted";
               setTableData((prev) => prev.filter((item) => (item.id || item.lead_id) !== targetId));
               setStatsData((prev) => ({
                 ...prev,
                 total_count: Math.max(0, (prev.total_count ?? prev.total ?? 0) - 1),
               }));
-              showToast("The lead is successfully Deleted");
+              showToast(message);
               fetchLeadData();
             } catch (error) {
               console.error("deleteLead error:", error);
-              // Fallback optimistic removal so UI stays responsive
-              setTableData((prev) => prev.filter((item) => (item.id || item.lead_id) !== targetId));
-              showToast("The lead is successfully Deleted");
-              fetchLeadData();
+              const errMsg =
+                error?.response?.data?.message ||
+                error?.response?.data?.detail ||
+                error?.message ||
+                "Failed to delete lead";
+              showToast(errMsg);
             }
           }}
           onRefreshLead={() => fetchLeadData()}
@@ -1013,6 +973,13 @@ const Leads = () => {
             throw err;
           }
         }}
+      />
+
+      <ExportColumnsModal
+        open={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        columns={leadExportColumns}
+        onExport={runClientCsvExport}
       />
     </Box>
   );

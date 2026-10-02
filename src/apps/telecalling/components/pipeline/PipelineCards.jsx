@@ -46,9 +46,11 @@ const PipelineCards = ({ payload, refresh }) => {
 
   const [loading, setLoading] = useState(true);
 
+  const payloadStr = JSON.stringify(payload);
+
   useEffect(() => {
     fetchPipelineCardData(payload);
-  }, [payload, refresh]);
+  }, [payloadStr, refresh]);
 
   const fetchPipelineCardData = async (payload) => {
     try {

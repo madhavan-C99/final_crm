@@ -5,6 +5,7 @@ import PerformanceFilter from "./components/PerformanceFilter";
 import PerformanceTable from "./components/PerformanceTable";
 import TopPerformersCard from "./components/TopPerformersCard";
 import OtherTopPerformers from "./components/OtherTopPerformers";
+import ExportColumnsModal from "../Leads/components/ExportColumnsModal";
 import {
   fetchAdminPerformanceOverview,
   fetchPerformanceFilterDropdowns,
@@ -25,39 +26,15 @@ export default function Performance() {
   const [exporting, setExporting] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
 
-  // Dynamic filter dropdowns from API
+  // Dynamic filter dropdowns state initialized empty (loaded lazily in PerformanceFilter)
   const [teamsDropdown, setTeamsDropdown] = useState([]);
-  const [dateFiltersDropdown, setDateFiltersDropdown] = useState([]);
 
-  // Fetch filter dropdown options on mount
-  useEffect(() => {
-    const loadDropdowns = async () => {
-      if (!hasPermission("api_get_performance_filter_dropdowns_admin")) {
-        return;
-      }
-      try {
-        const res = await fetchPerformanceFilterDropdowns();
-        if (res?.data?.data) {
-          if (res.data.data.teams) setTeamsDropdown(res.data.data.teams);
-          if (res.data.data.date_filters) setDateFiltersDropdown(res.data.data.date_filters);
-        }
-      } catch (err) {
-        console.error("Error loading performance filter dropdowns:", err);
-      }
-    };
-    loadDropdowns();
-  }, []);
-
-  // Helper to map team string to team_id integer for API
+  // Helper to map team value to team_id integer for API
   const getTeamId = (team) => {
     if (typeof team === "number") return team;
     if (!team || team === "all" || team === "0") return 0;
     const num = Number(team);
-    if (!isNaN(num)) return num;
-    if (team === "alpha") return 1;
-    if (team === "beta") return 2;
-    if (team === "gamma") return 3;
-    return 0; // "all"
+    return isNaN(num) ? 0 : num;
   };
 
   // Helper to compute exact from_date and to_date like Pending Payments
@@ -370,6 +347,59 @@ export default function Performance() {
     loadPerformanceData();
   }, [loadPerformanceData]);
 
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  const performanceExportColumns = [
+    { id: "rank", label: "Rank" },
+    { id: "telecaller", label: "Telecaller Name" },
+    { id: "team", label: "Team" },
+    { id: "leads_assigned", label: "Leads Assigned" },
+    { id: "calls_made", label: "Calls Made" },
+    { id: "followups_done", label: "Follow-Ups Done" },
+    { id: "admissions", label: "Admissions" },
+    { id: "pending_followups", label: "Pending Follow-Ups" },
+    { id: "performance_score", label: "Performance Score" },
+    { id: "rating", label: "Rating" },
+    { id: "avg_calling_time", label: "Avg Calling Time" },
+  ];
+
+  const handleExportWithColumns = (selectedKeys) => {
+    const safeTableData = Array.isArray(tableData) ? tableData : [];
+    if (safeTableData.length === 0) return;
+
+    const colMap = {
+      rank: { label: "Rank", getValue: (row, idx) => row.rank ?? (idx + 1) },
+      telecaller: { label: "Telecaller Name", getValue: (row) => `"${(row.telecaller || row.telecaller_name || row.name || "-").replace(/"/g, '""')}"` },
+      team: { label: "Team", getValue: (row) => `"${(row.team || row.team_name || "-").replace(/"/g, '""')}"` },
+      leads_assigned: { label: "Leads Assigned", getValue: (row) => row.leads_assigned ?? 0 },
+      calls_made: { label: "Calls Made", getValue: (row) => row.calls_made ?? 0 },
+      followups_done: { label: "Follow-Ups Done", getValue: (row) => row.followups_done ?? 0 },
+      admissions: { label: "Admissions", getValue: (row) => row.admissions ?? 0 },
+      pending_followups: { label: "Pending Follow-Ups", getValue: (row) => row.pending_followups ?? 0 },
+      performance_score: { label: "Performance Score", getValue: (row) => row.score ?? row.performance_score ?? 0 },
+      rating: { label: "Rating", getValue: (row) => `"${(row.rating || row.rating_label || "-").replace(/"/g, '""')}"` },
+      avg_calling_time: { label: "Avg Calling Time", getValue: (row) => `"${(row.avg_calling_time || row.avg_calling_duration || "00:00:00").replace(/"/g, '""')}"` },
+    };
+
+    const activeKeys = selectedKeys && selectedKeys.length > 0 ? selectedKeys : Object.keys(colMap);
+    const headers = activeKeys.map((key) => colMap[key]?.label || key);
+    const rows = safeTableData.map((row, idx) =>
+      activeKeys.map((key) => (colMap[key] ? colMap[key].getValue(row, idx) : '""'))
+    );
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    const dateStr = new Date().toISOString().split("T")[0];
+    link.setAttribute("download", `Performance_Overview_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Export Performance Report API Call
   const handleExport = async () => {
     try {
@@ -399,7 +429,8 @@ export default function Performance() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("Error exporting performance overview:", err);
+      console.error("Error exporting performance overview, falling back to CSV:", err);
+      handleExportWithColumns();
     } finally {
       setExporting(false);
     }
@@ -407,7 +438,7 @@ export default function Performance() {
 
   return (
     <>
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 4 ,pr:3}}>
         <PerformanceHeader />
         <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
           <PerformanceFilter
@@ -420,8 +451,7 @@ export default function Performance() {
             selectedTeam={selectedTeam}
             setSelectedTeam={setSelectedTeam}
             teams={teamsDropdown}
-            dateFilters={dateFiltersDropdown}
-            onExport={handleExport}
+            onExport={() => setIsExportModalOpen(true)}
             exporting={exporting}
           />
         </Box>
@@ -436,6 +466,13 @@ export default function Performance() {
           <OtherTopPerformers performers={otherPerformers} />
         </Box>
       </Box>
+
+      <ExportColumnsModal
+        open={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        columns={performanceExportColumns}
+        onExport={handleExportWithColumns}
+      />
     </>
   );
 }

@@ -110,16 +110,6 @@ const LeadDetailsPage = () => {
 
     }, [id]);
 
-    useEffect(() => {
-        if (
-            activeTab === "lead_view" ||
-            activeTab === "lead_form" ||
-            activeTab === "call_details"
-        ) {
-            getLeadDetails();
-        }
-    }, [activeTab]);
-
     const getLeadDetails = async () => {
         setLoading(true);
 

@@ -93,18 +93,49 @@ export default function EditUserModal({
 
   useEffect(() => {
     if (user && open) {
+      const rawRepTo =
+        user.reporting_to_id ??
+        user.raw?.reporting_to_id ??
+        user.reporting_to ??
+        user.reportingTo ??
+        user.raw?.reporting_to ??
+        "";
+
+      let matchedRepTo = rawRepTo;
+      if (managersList.length > 0) {
+        const found = managersList.find(
+          (m) =>
+            String(m.id || m.value) === String(rawRepTo) ||
+            String(m.name || m.label || m.full_name || "").toLowerCase() === String(user.reporting_to || rawRepTo).toLowerCase()
+        );
+        if (found) {
+          matchedRepTo = found.id ?? found.value ?? rawRepTo;
+        }
+      }
+
+      const rawJoinedDate =
+        user.joined_date ||
+        user.joinedDate ||
+        user.raw?.joined_date ||
+        user.raw?.joinedDate ||
+        "";
+
+      const formattedJoinedDate = rawJoinedDate
+        ? String(rawJoinedDate).slice(0, 10)
+        : "";
+
       setForm({
-        fullName: user.name || user.fullName || user.full_name || "",
-        contactNo: user.mobile_no || user.contactNo || user.contact_no || "",
-        email: user.email || "",
-        role: (typeof user.role === "object" ? user.role?.name || user.role?.role_name : user.role) || user.role_name || "",
-        reportingTo: (typeof user.reporting_to === "object" ? user.reporting_to?.name || user.reporting_to?.full_name : user.reporting_to) || user.reportingTo || "",
-        location: user.location || "",
-        joinedDate: user.joined_date || user.joinedDate || "",
-        employeeId: user.emp_id || user.employeeId || user.employee_id || "",
+        fullName: user.name || user.fullName || user.full_name || user.raw?.name || "",
+        contactNo: user.mobile_no || user.contactNo || user.contact_no || user.raw?.mobile_no || "",
+        email: user.email || user.raw?.email || "",
+        role: (typeof user.role === "object" ? user.role?.name || user.role?.role_name : user.role) || user.role_name || user.raw?.role || "",
+        reportingTo: matchedRepTo,
+        location: user.location || user.raw?.location || "",
+        joinedDate: formattedJoinedDate,
+        employeeId: user.emp_id || user.employeeId || user.employee_id || user.raw?.emp_id || "",
       });
     }
-  }, [user, open]);
+  }, [user, open, managersList]);
 
   const handleChange = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
@@ -219,8 +250,8 @@ export default function EditUserModal({
               >
                 {rolesList.length > 0 ? (
                   rolesList.map((r, idx) => {
-                    const val = typeof r === "object" ? r.name || r.role_name || r.id : r;
-                    const label = typeof r === "object" ? r.name || r.role_name : r;
+                    const val = typeof r === "object" ? r.label || r.name || r.role_name || r.value || r.id : r;
+                    const label = typeof r === "object" ? r.label || r.name || r.role_name || String(val) : String(r);
                     return (
                       <MenuItem key={idx} value={val}>
                         {label}
@@ -249,8 +280,8 @@ export default function EditUserModal({
               >
                 {managersList.length > 0 ? (
                   managersList.map((m, idx) => {
-                    const val = typeof m === "object" ? m.name || m.full_name || m.id : m;
-                    const label = typeof m === "object" ? m.name || m.full_name : m;
+                    const val = typeof m === "object" ? m.id || m.value || m.name || m.full_name : m;
+                    const label = typeof m === "object" ? m.label || m.name || m.full_name || String(val) : String(m);
                     return (
                       <MenuItem key={idx} value={val}>
                         {label}
@@ -285,6 +316,7 @@ export default function EditUserModal({
                 value={form.joinedDate}
                 onChange={handleChange("joinedDate")}
                 sx={fieldStyles}
+                disabled
               />
             </Box>
             <Box sx={{ flex: 1 }}>
@@ -295,6 +327,7 @@ export default function EditUserModal({
                 value={form.employeeId}
                 onChange={handleChange("employeeId")}
                 sx={fieldStyles}
+                disabled
               />
             </Box>
           </Stack>

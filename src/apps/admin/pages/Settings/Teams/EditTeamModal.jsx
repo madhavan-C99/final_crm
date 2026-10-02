@@ -87,11 +87,15 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
   const [leadId, setLeadId] = useState("");
   const [memberIds, setMemberIds] = useState([]);
   const [fetchedTeamUsers, setFetchedTeamUsers] = useState(null);
+  const [fetchedTeamLeads, setFetchedTeamLeads] = useState(null);
 
   const leadsOptions = leadsList.length > 0 ? leadsList : usersList;
 
-  // Use backend returned team-specific users if fetched, otherwise fallback to prop usersList
+  // Use backend returned team-specific users/leads if fetched, otherwise fallback to props
   const rawUsersToUse = fetchedTeamUsers !== null ? fetchedTeamUsers : usersList;
+  const rawLeadsToUse = fetchedTeamLeads !== null ? fetchedTeamLeads : leadsOptions;
+
+  const hasFetchedRef = React.useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -103,17 +107,17 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
       let detectedLeadId = "";
       if (team.lead_id) {
         detectedLeadId = team.lead_id;
-      } else if (team.rawLead && typeof team.rawLead === "object" && team.rawLead.id) {
-        detectedLeadId = team.rawLead.id;
-      } else if (team.lead && typeof team.lead === "object" && team.lead.id) {
-        detectedLeadId = team.lead.id;
+      } else if (team.rawLead && typeof team.rawLead === "object" && (team.rawLead.id || team.rawLead.value)) {
+        detectedLeadId = team.rawLead.id || team.rawLead.value;
+      } else if (team.lead && typeof team.lead === "object" && (team.lead.id || team.lead.value)) {
+        detectedLeadId = team.lead.id || team.lead.value;
       } else if (typeof team.lead === "number") {
         detectedLeadId = team.lead;
       } else if (typeof team.lead === "string") {
         const found = leadsOptions.find(
-          (u) => (u.name || u.full_name || "").toLowerCase() === team.lead.toLowerCase()
+          (u) => (u.name || u.full_name || u.label || "").toLowerCase() === team.lead.toLowerCase()
         );
-        if (found) detectedLeadId = found.id;
+        if (found) detectedLeadId = found.id ?? found.value;
       }
       setLeadId(detectedLeadId || "");
 
@@ -124,40 +128,62 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
         rawMem.forEach((m) => {
           if (typeof m === "number") {
             extractedMemberIds.push(m);
-          } else if (typeof m === "object" && m !== null && m.id) {
-            extractedMemberIds.push(m.id);
+          } else if (typeof m === "object" && m !== null && (m.id || m.value)) {
+            extractedMemberIds.push(m.id || m.value);
           } else if (typeof m === "string" && usersList.length > 0) {
             const found = usersList.find(
-              (u) => (u.name || u.full_name || "").toLowerCase() === m.toLowerCase()
+              (u) => (u.name || u.full_name || u.label || "").toLowerCase() === m.toLowerCase()
             );
-            if (found) extractedMemberIds.push(found.id);
+            if (found) extractedMemberIds.push(found.id ?? found.value);
           }
         });
       }
       setMemberIds(extractedMemberIds);
 
       // Fetch team-specific dropdowns by passing team_id to backend API
-      fetchTeamDropdownsAdmin({ team_id: team.id })
-        ? fetchTeamDropdownsAdmin({ team_id: team.id })
-            .then((res) => {
-              if (!isMounted) return;
-              const dropData = res?.data?.data || res?.data || {};
-              const rawUsers = Array.isArray(dropData.users) ? dropData.users : null;
-              if (rawUsers) {
-                setFetchedTeamUsers(
-                  rawUsers.map((u) => ({
-                    id: u.id || u.user_id,
-                    name: u.name || u.full_name || "User",
-                  }))
-                );
-              }
-            })
-            .catch((err) => {
-              console.error("Error fetching team specific dropdowns:", err);
-            })
-        : null;
+      if (!hasFetchedRef.current) {
+        hasFetchedRef.current = true;
+        fetchTeamDropdownsAdmin({ team_id: team.id })
+          .then((res) => {
+            if (!isMounted) return;
+            const dropData = res?.data?.data || res?.data || {};
+            const rawLeads = Array.isArray(dropData.leads) ? dropData.leads : null;
+            const rawUsers = Array.isArray(dropData.users)
+              ? dropData.users
+              : Array.isArray(dropData.telecallers)
+              ? dropData.telecallers
+              : null;
+
+            if (rawLeads) {
+              setFetchedTeamLeads(
+                rawLeads.map((u) => ({
+                  id: u.id ?? u.value ?? u.user_id,
+                  value: u.value ?? u.id ?? u.user_id,
+                  name: u.name || u.full_name || u.label || "Lead",
+                  label: u.label || u.name || u.full_name || "Lead",
+                }))
+              );
+            }
+            if (rawUsers) {
+              setFetchedTeamUsers(
+                rawUsers.map((u) => ({
+                  id: u.id ?? u.value ?? u.user_id,
+                  value: u.value ?? u.id ?? u.user_id,
+                  name: u.name || u.full_name || u.label || "User",
+                  label: u.label || u.name || u.full_name || "User",
+                }))
+              );
+            }
+          })
+          .catch((err) => {
+            console.error("Error fetching team specific dropdowns:", err);
+            hasFetchedRef.current = false;
+          });
+      }
     } else {
+      hasFetchedRef.current = false;
       setFetchedTeamUsers(null);
+      setFetchedTeamLeads(null);
     }
 
     return () => {
@@ -297,31 +323,55 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
 
           <Box sx={{ flex: 1 }}>
             <Typography sx={labelStyles}>Team Lead</Typography>
-            <Select
-              fullWidth
-              displayEmpty
-              value={leadId}
-              onChange={(e) => setLeadId(e.target.value)}
-              IconComponent={KeyboardArrowDownIcon}
-              renderValue={(selected) => {
-                if (!selected) {
-                  return (
-                    <Typography sx={{ color: "#9CA3AF", fontSize: "13.5px" }}>
-                      Select Team Lead
-                    </Typography>
-                  );
-                }
-                const found = leadsOptions.find((u) => String(u.id) === String(selected));
-                return found ? found.name || found.full_name : selected;
-              }}
-              sx={selectFieldStyles}
-            >
-              {leadsOptions.map((u) => (
-                <MenuItem key={u.id} value={u.id}>
-                  {u.name || u.full_name}
-                </MenuItem>
-              ))}
-            </Select>
+            {(() => {
+              const currentLeadIdVal = leadId || team?.lead_id || (typeof team?.rawLead === "object" ? team?.rawLead?.id || team?.rawLead?.value : null);
+              const currentLeadNameVal = team?.lead_name || (typeof team?.rawLead === "object" ? team?.rawLead?.name || team?.rawLead?.full_name : null) || (typeof team?.lead === "string" ? team?.lead : null) || "Team Lead";
+
+              const combinedLeadsOptions = [...rawLeadsToUse];
+              if (currentLeadIdVal && !combinedLeadsOptions.some((u) => String(u.id ?? u.value) === String(currentLeadIdVal))) {
+                combinedLeadsOptions.unshift({
+                  id: currentLeadIdVal,
+                  value: currentLeadIdVal,
+                  name: currentLeadNameVal,
+                  label: currentLeadNameVal,
+                });
+              }
+
+              return (
+                <Select
+                  fullWidth
+                  displayEmpty
+                  value={leadId}
+                  onChange={(e) => setLeadId(e.target.value)}
+                  IconComponent={KeyboardArrowDownIcon}
+                  renderValue={(selected) => {
+                    if (!selected) {
+                      return (
+                        <Typography sx={{ color: "#9CA3AF", fontSize: "13.5px" }}>
+                          Select Team Lead
+                        </Typography>
+                      );
+                    }
+                    const found =
+                      combinedLeadsOptions.find((u) => String(u.id ?? u.value) === String(selected)) ||
+                      rawUsersToUse.find((u) => String(u.id ?? u.value) === String(selected));
+
+                    if (found) return found.name || found.full_name || found.label;
+                    if (team?.lead_name) return team.lead_name;
+                    if (typeof team?.lead === "string") return team.lead;
+                    if (typeof team?.rawLead === "object") return team.rawLead.name || team.rawLead.full_name || selected;
+                    return selected;
+                  }}
+                  sx={selectFieldStyles}
+                >
+                  {combinedLeadsOptions.map((u) => (
+                    <MenuItem key={u.id ?? u.value} value={u.id ?? u.value}>
+                      {u.name || u.full_name || u.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              );
+            })()}
           </Box>
         </Box>
 
@@ -345,8 +395,8 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
                   );
                 }
                 const selectedNames = rawUsersToUse
-                  .filter((u) => selected.includes(u.id))
-                  .map((u) => u.name || u.full_name);
+                  .filter((u) => selected.includes(u.id ?? u.value))
+                  .map((u) => u.name || u.full_name || u.label);
                 return selectedNames.length > 0
                   ? selectedNames.join(", ")
                   : `${selected.length} members selected`;
@@ -354,9 +404,9 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
               sx={{ ...selectFieldStyles, flex: 1 }}
             >
               {rawUsersToUse.map((u) => (
-                <MenuItem key={u.id} value={u.id}>
-                  <Checkbox checked={memberIds.includes(u.id)} size="small" />
-                  <ListItemText primary={u.name || u.full_name} />
+                <MenuItem key={u.id ?? u.value} value={u.id ?? u.value}>
+                  <Checkbox checked={memberIds.includes(u.id ?? u.value)} size="small" />
+                  <ListItemText primary={u.name || u.full_name || u.label} />
                 </MenuItem>
               ))}
             </Select>

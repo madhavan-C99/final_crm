@@ -7,13 +7,30 @@ import LossLeadApprovalTable from "./components/LossLeadApprovalTable";
 import RejectLossRequestModal from "./components/RejectLossRequestModal";
 import ApproveLossRequestModal from "./components/ApproveLossRequestModal";
 import ReassignLeadModal from "./components/ReassignLeadModal";
+import ExportColumnsModal from "../Leads/components/ExportColumnsModal";
 import {
   fetchLossLeadApprovalRequests,
   exportLossLeadApprovalRequests,
 } from "@/apps/admin/services/leadService";
 
+import { getSelectOptions } from "@/apps/admin/services/dropdownService";
+
 export default function LossLeadApproval() {
-  const [selectedPipeline, setSelectedPipeline] = useState("education");
+  const [pipelinesList, setPipelinesList] = useState([]);
+  const [selectedPipeline, setSelectedPipeline] = useState(null);
+
+  useEffect(() => {
+    getSelectOptions("L_CATEGORIES")
+      .then((cats) => {
+        if (Array.isArray(cats) && cats.length > 0) {
+          setPipelinesList(cats);
+          const initialId = cats[0].id ?? cats[0].value;
+          setSelectedPipeline(initialId);
+        }
+      })
+      .catch(() => null);
+  }, []);
+
   const [tableData, setTableData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -86,15 +103,12 @@ export default function LossLeadApproval() {
   };
 
   const loadData = async () => {
-    if (selectedPipeline === "product") {
-      setTableData([]);
-      return;
-    }
+    if (!selectedPipeline) return;
     try {
       setLoading(true);
       const dates = getComputedDates(filterType, fromDate, toDate);
       const res = await fetchLossLeadApprovalRequests({
-        pipeline_id: 1,
+        pipeline_id: Number(selectedPipeline),
         date_filter_type: filterType,
         from_date: dates.from || "",
         to_date: dates.to || "",
@@ -115,11 +129,67 @@ export default function LossLeadApproval() {
     loadData();
   }, [filterType, fromDate, toDate, selectedPipeline, searchTerm]);
 
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  const lossLeadExportColumns = [
+    { id: "s_no", label: "S.No" },
+    { id: "name", label: "Lead Name" },
+    { id: "contact", label: "Contact No" },
+    { id: "assigned_to", label: "Assigned To" },
+    { id: "effort_summary", label: "Effort Summary" },
+    { id: "loss_reason", label: "Loss Reason" },
+    { id: "last_conversation_outcome", label: "Last Conversation Outcome" },
+    { id: "last_contacted", label: "Last Contacted" },
+    { id: "inquiry_date", label: "Inquiry Date" },
+    { id: "lead_age", label: "Lead Age" },
+  ];
+
+  const handleExportWithColumns = (selectedKeys) => {
+    const safeTableData = Array.isArray(tableData) ? tableData : [];
+    if (safeTableData.length === 0) {
+      showToast("No loss lead approval requests to export");
+      return;
+    }
+
+    const colMap = {
+      s_no: { label: "S.No", getValue: (row, idx) => idx + 1 },
+      name: { label: "Lead Name", getValue: (row) => `"${(row.name || row.full_name || "").replace(/"/g, '""')}"` },
+      contact: { label: "Contact No", getValue: (row) => `"${(row.contact || row.mobile_no || "").replace(/"/g, '""')}"` },
+      assigned_to: { label: "Assigned To", getValue: (row) => `"${(row.assigned_to || row.user_name || row.telecaller || "-").replace(/"/g, '""')}"` },
+      effort_summary: { label: "Effort Summary", getValue: (row) => `"${(row.effort_summary || row.calls_count || "12 Calls Done").replace(/"/g, '""')}"` },
+      loss_reason: { label: "Loss Reason", getValue: (row) => `"${(row.loss_reason || row.main_reason || row.reason || "-").replace(/"/g, '""')}"` },
+      last_conversation_outcome: { label: "Last Conversation Outcome", getValue: (row) => `"${(row.last_conversation_outcome || row.last_conversation || row.outcome || "-").replace(/"/g, '""')}"` },
+      last_contacted: { label: "Last Contacted", getValue: (row) => `"${(row.last_contacted || row.last_call_date || "-").replace(/"/g, '""')}"` },
+      inquiry_date: { label: "Inquiry Date", getValue: (row) => `"${(row.inquiry_date || row.created_at || row.joining_date || "-").replace(/"/g, '""')}"` },
+      lead_age: { label: "Lead Age", getValue: (row) => `"${(row.lead_age || row.age || "-").replace(/"/g, '""')}"` },
+    };
+
+    const activeKeys = selectedKeys && selectedKeys.length > 0 ? selectedKeys : Object.keys(colMap);
+    const headers = activeKeys.map((key) => colMap[key]?.label || key);
+    const rows = safeTableData.map((row, idx) =>
+      activeKeys.map((key) => (colMap[key] ? colMap[key].getValue(row, idx) : '""'))
+    );
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    const dateStr = new Date().toISOString().split("T")[0];
+    link.setAttribute("download", `Loss_Lead_Approval_Requests_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast("The loss lead approval data is successfully exported");
+  };
+
   const handleExport = async () => {
     try {
       const dates = getComputedDates(filterType, fromDate, toDate);
       const res = await exportLossLeadApprovalRequests({
-        pipeline_id: 1,
+        pipeline_id: Number(selectedPipeline || 1),
         date_filter_type: filterType,
         from_date: dates.from || "",
         to_date: dates.to || "",
@@ -128,26 +198,28 @@ export default function LossLeadApproval() {
       });
       const data = res?.data || {};
       if (data?.download_url) {
+        const baseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
         const fullUrl = data.download_url.startsWith("http")
           ? data.download_url
-          : `https://autopilot-elude-ungloved.ngrok-free.dev${data.download_url}`;
+          : `${baseUrl}${data.download_url.startsWith("/") ? "" : "/"}${data.download_url}`;
         window.open(fullUrl, "_blank");
       }
       showToast(
         data?.message || "The loss lead approval data is successfully exported"
       );
     } catch (err) {
-      console.error("Export error:", err);
-      showToast("Failed to export loss lead approval requests.");
+      console.error("Export error, falling back to CSV export:", err);
+      handleExportWithColumns();
     }
   };
 
   return (
-    <>
+    <Box sx={{pr:3}}>
       <LossLeadApprovalHeader
+        pipelines={pipelinesList}
         selectedPipeline={selectedPipeline}
         onPipelineChange={setSelectedPipeline}
-        onExport={handleExport}
+        onExport={() => setIsExportModalOpen(true)}
       />
       <LossLeadApprovalFilter
         searchTerm={searchTerm}
@@ -190,7 +262,6 @@ export default function LossLeadApproval() {
         onClose={() => setRejectModalOpen(false)}
         lead={selectedRejectLead}
         onSubmitSuccess={async (payload) => {
-          console.log("Reject response:", payload);
           showToast(payload?.message || "The loss lead request is successfully rejected!");
           loadData();
         }}
@@ -201,7 +272,6 @@ export default function LossLeadApproval() {
         onClose={() => setApproveModalOpen(false)}
         lead={selectedApproveLead}
         onSubmitSuccess={async (payload) => {
-          console.log("Approve response:", payload);
           showToast(payload?.message || "The lead is successfully marked as lost!");
           loadData();
         }}
@@ -212,7 +282,6 @@ export default function LossLeadApproval() {
         onClose={() => setReassignModalOpen(false)}
         lead={selectedReassignLead}
         onSubmitSuccess={async (payload) => {
-          console.log("Reassign response:", payload);
           showToast(payload?.message || "The lead is successfully reassigned!");
           loadData();
         }}
@@ -256,6 +325,13 @@ export default function LossLeadApproval() {
           </Typography>
         </Box>
       )}
-    </>
+
+      <ExportColumnsModal
+        open={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        columns={lossLeadExportColumns}
+        onExport={handleExportWithColumns}
+      />
+    </Box>
   );
 }

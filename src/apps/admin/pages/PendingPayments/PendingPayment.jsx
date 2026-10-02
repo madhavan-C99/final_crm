@@ -5,14 +5,30 @@ import PendingPaymentHeader from "./components/PendingPaymentHeader";
 import PendingPaymentStats from "./components/PendingPaymentStats";
 import PendingPaymentFilters from "./components/PendingPaymentFilters";
 import PendingPaymentTable from "./components/PendingPaymentTable";
+import ExportColumnsModal from "../Leads/components/ExportColumnsModal";
 import {
     fetchAdminPendingPayments,
     exportAdminPendingPaymentsFile,
     exportToCSV
 } from "@/apps/admin/services/pendingPaymentAdminService";
 
+import { getSelectOptions } from "@/apps/admin/services/dropdownService";
+
 export default function PendingPayment() {
-    const [selectedPipeline, setSelectedPipeline] = useState("education");
+    const [pipelinesList, setPipelinesList] = useState([]);
+    const [selectedPipeline, setSelectedPipeline] = useState(null);
+
+    useEffect(() => {
+        getSelectOptions("L_CATEGORIES")
+            .then((cats) => {
+                if (Array.isArray(cats) && cats.length > 0) {
+                    setPipelinesList(cats);
+                    const initialId = cats[0].id ?? cats[0].value;
+                    setSelectedPipeline(initialId);
+                }
+            })
+            .catch(() => null);
+    }, []);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState("today");
@@ -82,6 +98,7 @@ export default function PendingPayment() {
     };
 
     const fetchTableData = async () => {
+        if (!selectedPipeline) return;
         try {
             setLoading(true);
             const stageNormalized = String(selectedFilters?.payment_stage || "").toLowerCase().replace(/\s+/g, "");
@@ -96,6 +113,7 @@ export default function PendingPayment() {
                 : currentFilterType;
 
             const response = await fetchAdminPendingPayments({
+                pipeline_id: selectedPipeline,
                 pipeline: selectedPipeline,
                 search: searchTerm || "",
                 date_filter_type: payloadDateFilter,
@@ -146,6 +164,70 @@ export default function PendingPayment() {
         fetchTableData();
     }, [selectedPipeline, filterType, sortType, fromDate, toDate, selectedFilters]);
 
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+    const pendingPaymentExportColumns = [
+        { id: "s_no", label: "S.No" },
+        { id: "name", label: "Lead Name" },
+        { id: "contact", label: "Contact No" },
+        { id: "assigned_to", label: "Assigned To" },
+        { id: "campaign", label: "Campaign" },
+        { id: "course_plan", label: "Course Plan" },
+        { id: "course", label: "Course" },
+        { id: "joining_date", label: "Joining Date" },
+        { id: "batch_timing", label: "Batch & Timing" },
+        { id: "amount_paid", label: "Amount Paid" },
+        { id: "pending_amount", label: "Pending Amount" },
+        { id: "status", label: "Status" },
+        { id: "next_followup", label: "Next Follow up" },
+    ];
+
+    const handleExportWithColumns = (selectedKeys) => {
+        const safeTableData = Array.isArray(tableData) ? tableData : [];
+        if (safeTableData.length === 0) {
+            setToastState({ open: true, message: "No pending payment records to export" });
+            return;
+        }
+
+        const colMap = {
+            s_no: { label: "S.No", getValue: (row, idx) => idx + 1 },
+            name: { label: "Lead Name", getValue: (row) => `"${(row.name || row.full_name || "").replace(/"/g, '""')}"` },
+            contact: { label: "Contact No", getValue: (row) => `"${(row.contact || row.mobile_no || "").replace(/"/g, '""')}"` },
+            assigned_to: { label: "Assigned To", getValue: (row) => `"${(row.assigned_to || "-").replace(/"/g, '""')}"` },
+            campaign: { label: "Campaign", getValue: (row) => `"${(row.campaign || "-").replace(/"/g, '""')}"` },
+            course_plan: { label: "Course Plan", getValue: (row) => `"${(row.course_plan || "-").replace(/"/g, '""')}"` },
+            course: { label: "Course", getValue: (row) => `"${(row.course || row.course_name || "-").replace(/"/g, '""')}"` },
+            joining_date: { label: "Joining Date", getValue: (row) => `"${(row.joining_date || row.enquiry_date || "-").replace(/"/g, '""')}"` },
+            batch_timing: { label: "Batch & Timing", getValue: (row) => `"${(row.batch_timing || row.course_timing || "-").replace(/"/g, '""')}"` },
+            amount_paid: { label: "Amount Paid", getValue: (row) => `"${parseFloat(row.amount_paid) || 0}"` },
+            pending_amount: { label: "Pending Amount", getValue: (row) => `"${parseFloat(row.pending_amount ?? row.payment_amount) || 0}"` },
+            status: { label: "Status", getValue: (row) => `"${(row.status || row.due_status || "Active").replace(/"/g, '""')}"` },
+            next_followup: { label: "Next Follow up", getValue: (row) => `"${(row.next_followup || row.next_follow_up || "-").replace(/"/g, '""')}"` },
+        };
+
+        const activeKeys = selectedKeys && selectedKeys.length > 0 ? selectedKeys : Object.keys(colMap);
+        const headers = activeKeys.map((key) => colMap[key]?.label || key);
+        const rows = safeTableData.map((row, idx) =>
+            activeKeys.map((key) => (colMap[key] ? colMap[key].getValue(row, idx) : '""'))
+        );
+
+        const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Pending_Payments_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        setToastState({
+            open: true,
+            message: "Pending payment leads exported successfully",
+        });
+    };
+
     // EXPORT HANDLER WITH INDEPENDENT BACKGROUND STATE
     const handleExport = async () => {
         try {
@@ -180,26 +262,30 @@ export default function PendingPayment() {
             });
         } catch (error) {
             console.error("Backend export error, fallback to CSV:", error);
-            exportToCSV(tableData, `Pending_Payments_${new Date().toISOString().slice(0, 10)}.csv`);
-            setToastState({
-                open: true,
-                message: "Pending payment leads exported successfully"
-            });
+            handleExportWithColumns();
         } finally {
             setExportLoading(false);
         }
     };
 
     return (
-        <>
+        <Box sx={{pr:3}}>
             <PendingPaymentHeader
+                pipelinesList={pipelinesList}
                 selectedPipeline={selectedPipeline}
                 onPipelineChange={(val) => setSelectedPipeline(val)}
-                onExport={handleExport}
+                onExport={() => setIsExportModalOpen(true)}
                 exportLoading={exportLoading}
             />
 
-            {selectedPipeline === "education" ? (
+            {(() => {
+                const currentPipelineObj = (Array.isArray(pipelinesList) ? pipelinesList : []).find(
+                    (p) => (p.id ?? p.value) === selectedPipeline || p === selectedPipeline
+                );
+                const pName = String(currentPipelineObj?.name || currentPipelineObj?.label || selectedPipeline || "").toLowerCase();
+                const isProduct = pName.includes("product") || pName === "2";
+                
+                return !isProduct ? (
                 <>
                     <PendingPaymentStats summaryCards={summaryCards} tableData={tableData} loading={loading} />
                     <PendingPaymentFilters
@@ -241,7 +327,8 @@ export default function PendingPayment() {
                         No pending payment data available for Product. Select Education to view pending payments.
                     </Typography>
                 </Box>
-            )}
+            );
+            })()}
 
             {/* Toast Notification Pop-Up matching UI/UX Screenshot */}
             <Snackbar
@@ -272,6 +359,13 @@ export default function PendingPayment() {
                     </Typography>
                 </Box>
             </Snackbar>
-        </>
+
+            <ExportColumnsModal
+                open={isExportModalOpen}
+                onClose={() => setIsExportModalOpen(false)}
+                columns={pendingPaymentExportColumns}
+                onExport={handleExportWithColumns}
+            />
+        </Box>
     );
 }

@@ -187,7 +187,7 @@ const LeadTable = ({
       headerName: "Stage",
       minWidth: 110,
       renderCell: (row) => {
-        const stageStr = row.stage || row.pipeline_stage || row.tag || "new";
+        const stageStr = row.stage || row.pipeline_stage || row.tag || row.status || "-";
         const badgeStyle = getStageBadgeStyle(stageStr);
         return (
           <Box

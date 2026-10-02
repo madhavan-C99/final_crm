@@ -4,7 +4,7 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import { useAuth } from "@/shared/context/AuthContext";
 
-const LossLeadApprovalHeader = ({ onExport, selectedPipeline = "education", onPipelineChange }) => {
+const LossLeadApprovalHeader = ({ onExport, pipelines = [], selectedPipeline, onPipelineChange }) => {
   let hasPermission = () => true;
   try {
     const auth = useAuth();
@@ -20,6 +20,10 @@ const LossLeadApprovalHeader = ({ onExport, selectedPipeline = "education", onPi
       onPipelineChange(e.target.value);
     }
   };
+
+  const currentPipelineObj = (Array.isArray(pipelines) ? pipelines : []).find(
+    (p) => (p.id ?? p.value) === selectedPipeline || p === selectedPipeline
+  );
 
   return (
     <Box
@@ -76,13 +80,19 @@ const LossLeadApprovalHeader = ({ onExport, selectedPipeline = "education", onPi
         {/* PIPELINE DROPDOWN */}
         <FormControl size="small">
           <Select
-            value={selectedPipeline}
+            value={selectedPipeline || ""}
             onChange={handlePipelineSelect}
             displayEmpty
             IconComponent={KeyboardArrowDownIcon}
+            renderValue={(selected) => {
+              if (!selected) {
+                return <span style={{ color: "#9CA3AF" }}>Select Pipeline</span>;
+              }
+              return currentPipelineObj?.name || currentPipelineObj?.label || (typeof selected === "string" ? selected : String(selected));
+            }}
             sx={{
               height: "36px",
-              minWidth: "120px",
+              minWidth: "140px",
               borderRadius: "8px",
               background: "#fff",
               fontSize: "14px",
@@ -96,8 +106,24 @@ const LossLeadApprovalHeader = ({ onExport, selectedPipeline = "education", onPi
               },
             }}
           >
-            <MenuItem value="education">Education</MenuItem>
-            <MenuItem value="product">Product</MenuItem>
+            <MenuItem value="" disabled sx={{ color: "#9CA3AF" }}>
+              Select Pipeline
+            </MenuItem>
+            {Array.isArray(pipelines) && pipelines.length > 0 ? (
+              pipelines.map((pipe) => {
+                const val = pipe.id ?? pipe.value;
+                const label = pipe.name || pipe.label || String(val);
+                return (
+                  <MenuItem key={val} value={val}>
+                    {label}
+                  </MenuItem>
+                );
+              })
+            ) : (
+              <MenuItem value="" disabled>
+                No Pipelines Available
+              </MenuItem>
+            )}
           </Select>
         </FormControl>
 

@@ -11,7 +11,8 @@ const LeadHeader = ({
   onUpload,
   onAddNew,
   onExport,
-  pipelineCategory = "education",
+  pipelinesList = [],
+  selectedPipeline,
   onPipelineCategoryChange,
 }) => {
   const { hasPermission } = useAuth();
@@ -25,12 +26,22 @@ const LeadHeader = ({
     setAnchorEl(null);
   };
 
-  const handleSelectCategory = (category) => {
+  const handleSelectCategory = (pipeId, pipeObj) => {
     if (onPipelineCategoryChange) {
-      onPipelineCategoryChange(category);
+      onPipelineCategoryChange(pipeId, pipeObj);
     }
     handleCloseMenu();
   };
+
+  const currentPipelineObj = (Array.isArray(pipelinesList) ? pipelinesList : []).find(
+    (p) => (p.id ?? p.value) === selectedPipeline || p === selectedPipeline
+  );
+  const selectedDisplayName =
+    currentPipelineObj?.name ||
+    currentPipelineObj?.label ||
+    currentPipelineObj?.category_name ||
+    (typeof selectedPipeline === "string" ? selectedPipeline : "") ||
+    "Select Pipeline";
 
   return (
     <Box
@@ -84,14 +95,14 @@ const LeadHeader = ({
           flexWrap: "wrap",
         }}
       >
-        {/* Pipeline Dropdown (Education / Product) */}
+        {/* Pipeline Dropdown (Dynamic L_CATEGORIES) */}
         <Button
           variant="outlined"
           endIcon={<KeyboardArrowDownIcon sx={{ fontSize: 16 }} />}
           onClick={handleOpenMenu}
           sx={{
             borderColor: "#D1D5DB",
-            color: "#374151",
+            color: selectedDisplayName === "Select Pipeline" ? "#9CA3AF" : "#374151",
             textTransform: "none",
             borderRadius: "8px",
             height: "36px",
@@ -101,9 +112,7 @@ const LeadHeader = ({
             backgroundColor: "#FFFFFF",
           }}
         >
-          {pipelineCategory === "product"
-            ? "Product Pipeline"
-            : "Pipeline"}
+          {selectedDisplayName}
         </Button>
 
         <Menu
@@ -119,34 +128,34 @@ const LeadHeader = ({
             },
           }}
         >
-          <MenuItem
-            selected={pipelineCategory === "education"}
-            onClick={() => handleSelectCategory("education")}
-            sx={{
-              fontSize: "14px",
-              fontWeight: 600,
-              "&.Mui-selected": {
-                backgroundColor: "#84CC16 !important",
-                color: "#FFFFFF",
-              },
-            }}
-          >
-            Education
-          </MenuItem>
-          <MenuItem
-            selected={pipelineCategory === "product"}
-            onClick={() => handleSelectCategory("product")}
-            sx={{
-              fontSize: "14px",
-              fontWeight: 600,
-              "&.Mui-selected": {
-                backgroundColor: "#84CC16 !important",
-                color: "#FFFFFF",
-              },
-            }}
-          >
-            Product (Dummy)
-          </MenuItem>
+          {Array.isArray(pipelinesList) && pipelinesList.length > 0 ? (
+            pipelinesList.map((pipe) => {
+              const pipeId = pipe.id ?? pipe.value;
+              const pipeName = pipe.name || pipe.label || String(pipeId);
+              const isSelected = selectedPipeline === pipeId || selectedPipeline === pipe;
+              return (
+                <MenuItem
+                  key={pipeId}
+                  selected={isSelected}
+                  onClick={() => handleSelectCategory(pipeId, pipe)}
+                  sx={{
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    "&.Mui-selected": {
+                      backgroundColor: "#84CC16 !important",
+                      color: "#FFFFFF",
+                    },
+                  }}
+                >
+                  {pipeName}
+                </MenuItem>
+              );
+            })
+          ) : (
+            <MenuItem disabled sx={{ fontSize: "14px" }}>
+              No Pipelines Available
+            </MenuItem>
+          )}
         </Menu>
 
         {hasPermission("api_upload_lead_excel_admin") && (

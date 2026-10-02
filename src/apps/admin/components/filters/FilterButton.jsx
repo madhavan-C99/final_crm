@@ -3,10 +3,15 @@ import { Button, Popover } from "@mui/material";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
-function FilterButton({ label, active, children, width = 260 }) {
+function FilterButton({ label, active, children, width = 260, onOpen }) {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
   const close = () => setAnchorEl(null);
+
+  const handleClick = (e) => {
+    setAnchorEl(e.currentTarget);
+    if (onOpen) onOpen();
+  };
 
   return (
     <>
@@ -15,7 +20,7 @@ function FilterButton({ label, active, children, width = 260 }) {
         size="small"
         startIcon={<SwapVertIcon fontSize="small" sx={{ color: "#333" }} />}
         endIcon={<KeyboardArrowDownIcon fontSize="small" sx={{ color: "#333" }} />}
-        onClick={(e) => setAnchorEl(e.currentTarget)}
+        onClick={handleClick}
         sx={{
           textTransform: "none",
           

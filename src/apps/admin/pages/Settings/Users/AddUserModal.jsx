@@ -263,8 +263,8 @@ export default function AddUserModal({
               >
                 {rolesList.length > 0 ? (
                   rolesList.map((r, idx) => {
-                    const val = typeof r === "object" ? r.name || r.role_name || r.id : r;
-                    const label = typeof r === "object" ? r.name || r.role_name : r;
+                    const val = typeof r === "object" ? r.label || r.name || r.role_name || r.value || r.id : r;
+                    const label = typeof r === "object" ? r.label || r.name || r.role_name || String(val) : String(r);
                     return (
                       <MenuItem key={idx} value={val}>
                         {label}
@@ -293,8 +293,8 @@ export default function AddUserModal({
                 </MenuItem>
                 {managersList.length > 0 ? (
                   managersList.map((m, idx) => {
-                    const val = typeof m === "object" ? m.name || m.full_name || m.id : m;
-                    const label = typeof m === "object" ? m.name || m.full_name : m;
+                    const val = typeof m === "object" ? m.id || m.value || m.name || m.full_name : m;
+                    const label = typeof m === "object" ? m.label || m.name || m.full_name || String(val) : String(m);
                     return (
                       <MenuItem key={idx} value={val}>
                         {label}
@@ -360,8 +360,8 @@ export default function AddUserModal({
               >
                 {teamsList.length > 0 ? (
                   teamsList.map((t, idx) => {
-                    const val = typeof t === "object" ? t.name || t.team_name || t.id : t;
-                    const label = typeof t === "object" ? t.name || t.team_name : t;
+                    const val = typeof t === "object" ? t.label || t.name || t.team_name || t.value || t.id : t;
+                    const label = typeof t === "object" ? t.label || t.name || t.team_name || String(val) : String(t);
                     return (
                       <MenuItem key={idx} value={val}>
                         {label}

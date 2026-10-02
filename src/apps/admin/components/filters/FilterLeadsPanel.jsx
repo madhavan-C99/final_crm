@@ -11,12 +11,12 @@ import {
 
 function FilterLeadsPanel({
   initialFilters = {},
-  campaignOptions = ["All", "Live Call Lead", "500 Enquiry Sheet"],
-  courseOptions = ["All", "Full Stack Development", "Data Science"],
-  coursePlanOptions = ["All", "Master Program", "Regular"],
-  sourceOptions = ["All", "Direct Walk-in", "Facebook Ads", "Instagram"],
-  paymentStatusOptions = ["All", "Paid", "Pending", "Partial"],
-  priorityOptions = ["All", "High", "Medium", "Low"],
+  campaignOptions = ["All"],
+  courseOptions = ["All"],
+  coursePlanOptions = ["All"],
+  sourceOptions = ["All"],
+  paymentStatusOptions = ["All"],
+  priorityOptions = ["All"],
   onApply,
   onReset,
   closePanel,

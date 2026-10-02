@@ -84,32 +84,33 @@ function LeadSummaryReport() {
     telecallers: [],
   });
 
-  // 1. 🌟 CALLING SERVICE METHOD FOR FILTER OPTIONS
-  useEffect(() => {
-    async function loadSelectOptions() {
-      try {
-        const response = await getFilterOptions();
-        if (response.data && response.data.data) {
-          const apiData = response.data.data;
+  // 1. 🌟 CALLING SERVICE METHOD FOR FILTER OPTIONS (Lazily on filter open)
+  const optionsFetchedRef = useRef(false);
+  const loadSelectOptions = async () => {
+    if (optionsFetchedRef.current) return;
+    try {
+      optionsFetchedRef.current = true;
+      const response = await getFilterOptions();
+      if (response.data && response.data.data) {
+        const apiData = response.data.data;
 
-          setFilterOptionsData({
-            campaigns: apiData.campaigns || ["All"],
-            courses: apiData.courses || ["All"],
-            coursePlans: apiData.course_plans || ["All"],
-            sources: apiData.lead_sources || ["All"],
-            paymentStatuses: apiData.payment_statuses || ["All"],
-            priorities: apiData.priorities || ["All"],
-            stages: apiData.stages || [],
-            stageTagsMap: apiData.stage_tags_map || {},
-            telecallers: apiData.telecallers || [],
-          });
-        }
-      } catch (error) {
-        console.error("Filter options load error:", error);
+        setFilterOptionsData({
+          campaigns: apiData.campaigns || ["All"],
+          courses: apiData.courses || ["All"],
+          coursePlans: apiData.course_plans || ["All"],
+          sources: apiData.lead_sources || ["All"],
+          paymentStatuses: apiData.payment_statuses || ["All"],
+          priorities: apiData.priorities || ["All"],
+          stages: apiData.stages || [],
+          stageTagsMap: apiData.stage_tags_map || {},
+          telecallers: apiData.telecallers || [],
+        });
       }
+    } catch (error) {
+      console.error("Filter options load error:", error);
+      optionsFetchedRef.current = false;
     }
-    loadSelectOptions();
-  }, []);
+  };
 
   // 2. 🌟 CALLING SERVICE METHOD FOR SUMMARY REPORT DATA
   useEffect(() => {
@@ -259,6 +260,7 @@ function LeadSummaryReport() {
       <LeadSummaryToolbar
         search={search}
         onSearchChange={setSearch}
+        onFetchOptions={loadSelectOptions}
         selectedCount={selectedIds.length}
         filterDropdownOptions={filterOptionsData}
         telecallers={filterOptionsData.telecallers}

@@ -13,19 +13,24 @@ export const fetchMonthlyTargetAdmin = async (params = {}) => {
   return await api.post("/adm/fetch_monthly_target_admin", payload);
 };
 
+import dropdownService from "./dropdownService";
+
 /**
  * Fetch dropdown options for Set Target modal (teams & employees)
  * Endpoint: GET /adm/fetch_target_dropdowns_admin
  */
 export const fetchTargetDropdownsAdmin = async () => {
-  try {
-    return await api.get("/adm/fetch_target_dropdowns_admin");
-  } catch (err) {
-    if (err?.response?.status === 405 || err?.response?.status === 404) {
-      return await api.post("/adm/fetch_target_dropdowns_admin");
-    }
-    throw err;
-  }
+  const [teams, employees] = await Promise.all([
+    dropdownService.getSelectOptions("L_TEAMS"),
+    dropdownService.getSelectOptions("L_TELECALLERS"),
+  ]);
+
+  return {
+    data: {
+      teams,
+      employees,
+    },
+  };
 };
 
 /**

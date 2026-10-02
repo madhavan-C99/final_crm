@@ -241,14 +241,14 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
                     </Typography>
                   );
                 }
-                const found = leadsOptions.find((u) => String(u.id) === String(selected));
-                return found ? found.name || found.full_name : selected;
+                const found = leadsOptions.find((u) => String(u.id ?? u.value) === String(selected));
+                return found ? (found.name || found.full_name || found.label) : selected;
               }}
               sx={selectFieldStyles}
             >
               {leadsOptions.map((u) => (
-                <MenuItem key={u.id} value={u.id}>
-                  {u.name || u.full_name}
+                <MenuItem key={u.id ?? u.value} value={u.id ?? u.value}>
+                  {u.name || u.full_name || u.label}
                 </MenuItem>
               ))}
             </Select>
@@ -275,16 +275,16 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
                   );
                 }
                 const selectedNames = usersList
-                  .filter((u) => selected.includes(u.id))
-                  .map((u) => u.name || u.full_name);
+                  .filter((u) => selected.includes(u.id ?? u.value))
+                  .map((u) => u.name || u.full_name || u.label);
                 return selectedNames.length > 0 ? selectedNames.join(", ") : `${selected.length} members selected`;
               }}
               sx={{ ...selectFieldStyles, flex: 1 }}
             >
               {usersList.map((u) => (
-                <MenuItem key={u.id} value={u.id}>
-                  <Checkbox checked={memberIds.includes(u.id)} size="small" />
-                  <ListItemText primary={u.name || u.full_name} />
+                <MenuItem key={u.id ?? u.value} value={u.id ?? u.value}>
+                  <Checkbox checked={memberIds.includes(u.id ?? u.value)} size="small" />
+                  <ListItemText primary={u.name || u.full_name || u.label} />
                 </MenuItem>
               ))}
             </Select>

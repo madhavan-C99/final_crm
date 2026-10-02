@@ -28,42 +28,43 @@ function CallLogReport() {
   const [panelFilters, setPanelFilters] = useState({});
 
   const [filterOptionsData, setFilterOptionsData] = useState({
-    telecallers: ["mayil", "newtelecaller", "poomani", "prakash", "telecaller", "vineetha"],
-    callStatuses: ["Connected", "Disconnected", "Busy", "No Answer"],
-    callDirections: ["Incoming", "Outgoing"],
-    campaigns: ["All", "just dail lead", "live call lead", "samosa mokka lead"],
-    courses: ["All", "Full Stack Development", "Data Science"],
-    coursePlans: ["All", "Regular", "Master Program"],
-    sources: ["All", "Direct Walk In", "Direct Live Call", "Facebook", "Instagram"],
-    paymentStatuses: ["All", "Paid", "Pending", "Partial"],
-    priorities: ["All", "High", "Medium", "Low"],
+    telecallers: [],
+    callStatuses: [],
+    callDirections: [],
+    campaigns: [],
+    courses: [],
+    coursePlans: [],
+    sources: [],
+    paymentStatuses: [],
+    priorities: [],
   });
 
-  // 1. LOAD FILTER OPTIONS
-  useEffect(() => {
-    async function loadSelectOptions() {
-      try {
-        const response = await getCallLogFilterOptions();
-        if (response.data && response.data.data) {
-          const apiData = response.data.data;
-          setFilterOptionsData({
-            telecallers: apiData.telecallers || ["Gokil Gokil", "Bharath"],
-            callStatuses: apiData.call_statuses || ["Connected", "Disconnected", "Busy", "No Answer"],
-            callDirections: apiData.call_directions || ["Incoming", "Outgoing"],
-            campaigns: apiData.campaigns || [],
-            courses: apiData.courses || [],
-            coursePlans: apiData.course_plans || apiData.plans || [],
-            sources: apiData.lead_sources || [],
-            paymentStatuses: apiData.payment_statuses || [],
-            priorities: apiData.priorities || [],
-          });
-        }
-      } catch (error) {
-        console.error("Call log filter options load error:", error);
+  // 1. LOAD FILTER OPTIONS (Lazily on filter open)
+  const optionsFetchedRef = useRef(false);
+  const loadSelectOptions = async () => {
+    if (optionsFetchedRef.current) return;
+    try {
+      optionsFetchedRef.current = true;
+      const response = await getCallLogFilterOptions();
+      if (response.data && response.data.data) {
+        const apiData = response.data.data;
+        setFilterOptionsData({
+          telecallers: apiData.telecallers || [],
+          callStatuses: apiData.call_statuses || [],
+          callDirections: apiData.call_directions || [],
+          campaigns: apiData.campaigns || [],
+          courses: apiData.courses || [],
+          coursePlans: apiData.course_plans || apiData.plans || [],
+          sources: apiData.lead_sources || [],
+          paymentStatuses: apiData.payment_statuses || [],
+          priorities: apiData.priorities || [],
+        });
       }
+    } catch (error) {
+      console.error("Call log filter options load error:", error);
+      optionsFetchedRef.current = false;
     }
-    loadSelectOptions();
-  }, []);
+  };
 
   // 2. LOAD CALL LOG DATA
   useEffect(() => {
@@ -123,6 +124,7 @@ function CallLogReport() {
       <CallLogToolbar
         search={search}
         onSearchChange={setSearch}
+        onFetchOptions={loadSelectOptions}
         filterDropdownOptions={filterOptionsData}
         telecallers={filterOptionsData.telecallers}
         callStatusOptions={filterOptionsData.callStatuses}

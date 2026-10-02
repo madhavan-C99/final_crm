@@ -74,14 +74,7 @@ const buildOrgFormData = (data = {}) => {
  * Endpoint: GET /adm/get_organization_profile_admin
  */
 export const getOrganizationProfileAdmin = async () => {
-  try {
-    return await api.get("/adm/get_organization_profile_admin");
-  } catch (err) {
-    if (err?.response?.status === 405 || err?.response?.status === 404) {
-      return await api.post("/adm/get_organization_profile_admin");
-    }
-    throw err;
-  }
+  return await api.get("/adm/get_organization_profile_admin");
 };
 
 /**

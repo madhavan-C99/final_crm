@@ -140,126 +140,8 @@ const navigate = useNavigate();
 
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    // notificationSocketRef.current = new WebSocket(
-    //   `${import.meta.env.VITE_WS_BASE_URL}/ws/notification/?token=${token}`
-
-    // );
-
-    // notificationSocketRef.current.onopen = () => {
-    //   console.log("Notification connected");
-
-    //   notificationSocketRef.current.send(
-    //     JSON.stringify({ action: "notification" })
-    //   );
-    // };
-
-    // reminderSocketRef.current = new WebSocket(
-    // `${import.meta.env.VITE_WS_BASE_URL}/ws/reminder/?token=${token}`
-    // );
-
-    // reminderSocketRef.current.onopen = () => {
-    //   console.log("Reminder connected");
-
-    //   reminderSocketRef.current.send(
-    //     JSON.stringify({ action: "reminder_notification" })
-    //   );
-    // };
-
-    // notificationSocketRef.current.onmessage = (event) => {
-    //   const res = JSON.parse(event.data);
-
-    //   console.log("Notification WS:", res);
-
-    //   // ✅ Refresh event - backend anuppura fresh unread list
-    //   // (mark as read pannina apparam automatic ah varum)
-    //   if (res.action === "refresh" && Array.isArray(res.payload)) {
-    //     setNotifications(res.payload);
-    //     return;
-    //   }
-
-    //   // History response (initial load)
-    //   if (Array.isArray(res.payload)) {
-    //     setNotifications(res.payload);
-    //     return;
-    //   }
-
-    //   // ✅ FIX: Live notification (new one pushed from server).
-    //   // Backend actually sends notification_type = "lead_notification"
-    //   // or "daily_followup_count" (see send_lead_assigned_notification /
-    //   // send_daily_followup_notification in notification_task.py).
-    //   // The old check "res.notification_type === 'notification'" never
-    //   // matched anything real, so live pushes were silently dropped and
-    //   // only the reconnect/refresh fetch ever populated the list.
-    //   if (
-    //     res.notification_type === "lead_notification" ||
-    //     res.notification_type === "daily_followup_count"
-    //   ) {
-    //     const item = {
-    //       id: res.data?.id ?? Date.now(),
-    //       title: res.title,
-    //       message: res.message,
-    //       date: res.data?.created_at || new Date().toISOString(),
-    //       notification_type: res.notification_type,
-    //       read: false,
-    //     };
-
-    //     setNotifications((prev) => [item, ...prev]);
-    //   }
-    // };
-
-    // reminderSocketRef.current.onmessage = (event) => {
-    //   const res = JSON.parse(event.data);
-
-    //   console.log("Reminder WS:", res);
-
-    //   // ✅ Refresh event
-    //   if (res.action === "refresh" && Array.isArray(res.payload)) {
-    //     setReminders(res.payload);
-    //     return;
-    //   }
-
-    //   // History
-    //   if (Array.isArray(res.payload)) {
-    //     setReminders(res.payload);
-    //     return;
-    //   }
-
-    //   // ✅ FIX: Live reminder push.
-    //   // Backend actually sends notification_type = "followup_reminder"
-    //   // or "missed_followup" (see send_followup_reminder /
-    //   // send_missed_followup_notification in reminder_task.py).
-    //   // The old check ("reminder" / "daily_followup_count") never
-    //   // matched either value, so live reminder pushes were silently
-    //   // dropped - only the reconnect/refresh fetch showed them.
-    //   if (
-    //     res.notification_type === "followup_reminder" ||
-    //     res.notification_type === "missed_followup"
-    //   ) {
-    //     setReminders((prev) => [
-    //       {
-    //         id: res.data?.id || Date.now(),
-    //         title: res.title,
-    //         message: res.message,
-    //         date: res.data?.created_at || new Date().toISOString(),
-    //         notification_type: res.notification_type,
-    //         read: false,
-    //       },
-    //       ...prev,
-    //     ]);
-    //   }
-    // };
-
-    // return () => {
-    //   notificationSocketRef.current?.close();
-    //   reminderSocketRef.current?.close();
-    // };
+    // Notifications initial sync logic
   }, []);
-
-  useEffect(() => {
-    console.log("Notifications State:", notifications);
-  }, [notifications]);
 
   const handleNotificationClick = (e) => {
     setNotificationAnchor(e.currentTarget);
@@ -284,7 +166,6 @@ const navigate = useNavigate();
   const handleMarkAsRead = async (notificationId) => {
     try {
       await markNotificationRead(notificationId);
-      console.log("✅ Marked as read:", notificationId);
 
       // reflect locally so the UI (bg / dot) updates immediately
       setNotifications((prev) =>
@@ -294,7 +175,7 @@ const navigate = useNavigate();
         prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
       );
     } catch (err) {
-      console.log(err);
+      console.error("Error while marking notification as read:", err);
       alert("Error while marking notification as read");
     }
   };

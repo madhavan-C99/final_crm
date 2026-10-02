@@ -77,20 +77,24 @@ const labelStyles = {
   mb: 0.6,
 };
 
-const MONTHS = [
-  { label: "September 2026", value: "Sept", full: "September 2026" },
-  { label: "October 2026", value: "Oct", full: "October 2026" },
-  { label: "November 2026", value: "Nov", full: "November 2026" },
-  { label: "December 2026", value: "Dec", full: "December 2026" },
-  { label: "January 2027", value: "Jan", full: "January 2027" },
-  { label: "February 2027", value: "Feb", full: "February 2027" },
-  { label: "March 2027", value: "Mar", full: "March 2027" },
-  { label: "April 2027", value: "Apr", full: "April 2027" },
-  { label: "May 2027", value: "May", full: "May 2027" },
-  { label: "June 2027", value: "Jun", full: "June 2027" },
-  { label: "July 2027", value: "Jul", full: "July 2027" },
-  { label: "August 2027", value: "Aug", full: "August 2027" },
-];
+const generateDynamicMonths = () => {
+  const months = [];
+  const now = new Date();
+  const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"];
+  const monthNamesLong = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const mIdx = d.getMonth();
+    const year = d.getFullYear();
+    const label = `${monthNamesLong[mIdx]} ${year}`;
+    const value = monthNamesShort[mIdx];
+    months.push({ label, value, full: label });
+  }
+  return months;
+};
+
+const MONTHS = generateDynamicMonths();
 
 export default function SetTargetModal({
   open,
@@ -175,15 +179,12 @@ export default function SetTargetModal({
           return false;
         });
       }
-      if (members.length === 0) {
-        members = [{ name: "Priya Shankar" }, { name: "Arun Kumar" }];
-      }
-
       const numericLead = Number(leadTarget) || 0;
       const memberCount = members.length || 1;
       const baseSplit = Math.floor(numericLead / memberCount);
       const remainder = numericLead % memberCount;
 
+      let totalDistributedSum = 0;
       individualAllocations = members.map((m, idx) => {
         const memberName =
           typeof m === "object"
@@ -195,6 +196,7 @@ export default function SetTargetModal({
           customMemberAllocations[memberName] !== undefined
             ? customMemberAllocations[memberName]
             : defaultLeads;
+        totalDistributedSum += Number(assignedLeads);
 
         return {
           employee_id: empId || null,
@@ -204,6 +206,11 @@ export default function SetTargetModal({
           target_calls: 0,
         };
       });
+
+      if (leadTarget && totalDistributedSum !== numericLead) {
+        toast.error(`Total distributed leads (${totalDistributedSum}) must equal Lead Target (${numericLead})`);
+        return;
+      }
     }
 
     const apiTargetFor = targetFor === "Team" ? "Team" : "Employee";
@@ -509,63 +516,48 @@ export default function SetTargetModal({
               });
             }
 
-            // Fallback sample members if backend dropdown doesn't contain members array yet
-            if (members.length === 0 && team) {
-              members = [
-                { name: "Priya Shankar" },
-                { name: "Arun Kumar" }
-              ];
-            }
-
             const numericLead = Number(leadTarget) || 0;
             const memberCount = members.length || 1;
             const baseSplit = Math.floor(numericLead / memberCount);
             const remainder = numericLead % memberCount;
 
-            const handleIncrementMember = (memberName) => {
-              setCustomMemberAllocations((prev) => {
-                const currentAlloc = {};
-                members.forEach((m, idx) => {
-                  const key = typeof m === "object" ? m.name || m.full_name || m.username || m.employee || `Member ${idx + 1}` : String(m);
-                  currentAlloc[key] = prev[key] !== undefined ? prev[key] : (baseSplit + (idx < remainder ? 1 : 0));
-                });
-
-                // Find a donor member (other member with > 0 leads)
-                const donorKey = Object.keys(currentAlloc).find(
-                  (k) => k !== memberName && currentAlloc[k] > 0
-                );
-
-                if (!donorKey) return prev;
-
-                return {
-                  ...currentAlloc,
-                  [memberName]: currentAlloc[memberName] + 1,
-                  [donorKey]: currentAlloc[donorKey] - 1,
-                };
-              });
+            const getMemberCurrentLead = (m, idx) => {
+              const memberName =
+                typeof m === "object"
+                  ? m.name || m.full_name || m.username || m.employee || `Member ${idx + 1}`
+                  : String(m);
+              const defaultLeads = baseSplit + (idx < remainder ? 1 : 0);
+              return customMemberAllocations[memberName] !== undefined
+                ? customMemberAllocations[memberName]
+                : defaultLeads;
             };
 
-            const handleDecrementMember = (memberName) => {
-              setCustomMemberAllocations((prev) => {
-                const currentAlloc = {};
-                members.forEach((m, idx) => {
-                  const key = typeof m === "object" ? m.name || m.full_name || m.username || m.employee || `Member ${idx + 1}` : String(m);
-                  currentAlloc[key] = prev[key] !== undefined ? prev[key] : (baseSplit + (idx < remainder ? 1 : 0));
-                });
+            const totalDistributed = members.reduce((sum, m, idx) => {
+              return sum + Number(getMemberCurrentLead(m, idx) || 0);
+            }, 0);
 
-                if ((currentAlloc[memberName] || 0) <= 0) return prev;
+            const diff = totalDistributed - numericLead;
 
-                // Find a recipient member to receive the decremented lead
-                const recipientKey = Object.keys(currentAlloc).find((k) => k !== memberName);
+            const handleIncrementMember = (memberName, currentVal) => {
+              setCustomMemberAllocations((prev) => ({
+                ...prev,
+                [memberName]: Math.max(0, Number(currentVal) + 1),
+              }));
+            };
 
-                if (!recipientKey) return prev;
+            const handleDecrementMember = (memberName, currentVal) => {
+              setCustomMemberAllocations((prev) => ({
+                ...prev,
+                [memberName]: Math.max(0, Number(currentVal) - 1),
+              }));
+            };
 
-                return {
-                  ...currentAlloc,
-                  [memberName]: currentAlloc[memberName] - 1,
-                  [recipientKey]: currentAlloc[recipientKey] + 1,
-                };
-              });
+            const handleInputChangeMember = (memberName, rawVal) => {
+              const parsed = rawVal === "" ? 0 : Math.max(0, parseInt(rawVal, 10) || 0);
+              setCustomMemberAllocations((prev) => ({
+                ...prev,
+                [memberName]: parsed,
+              }));
             };
 
             return (
@@ -579,17 +571,72 @@ export default function SetTargetModal({
                   mt: 1,
                 }}
               >
-                <Typography
+                {/* Header with Title and Total Allocated Badge */}
+                <Box
                   sx={{
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    color: "#1E293B",
-                    fontFamily: "Inter, sans-serif",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                     mb: 1.5,
                   }}
                 >
-                  Distribution Summary
-                </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      color: "#1E293B",
+                      fontFamily: "Inter, sans-serif",
+                    }}
+                  >
+                    Distribution Summary
+                  </Typography>
+
+                  {numericLead > 0 && (
+                    <Typography
+                      sx={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        fontFamily: "Inter, sans-serif",
+                        px: 1.2,
+                        py: 0.3,
+                        borderRadius: "12px",
+                        backgroundColor: totalDistributed === numericLead ? "#DCFCE7" : "#FEF3C7",
+                        color: totalDistributed === numericLead ? "#15803D" : "#B45309",
+                        border: totalDistributed === numericLead ? "1px solid #86EFAC" : "1px solid #FCD34D",
+                      }}
+                    >
+                      Total: {totalDistributed} / {numericLead}
+                    </Typography>
+                  )}
+                </Box>
+
+                {/* Warning Banner Alert if Total Distributed != Lead Target */}
+                {numericLead > 0 && totalDistributed !== numericLead && (
+                  <Box
+                    sx={{
+                      backgroundColor: "#FEF2F2",
+                      border: "1px solid #FCA5A5",
+                      borderRadius: "6px",
+                      p: 1.2,
+                      mb: 1.5,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: "12.5px",
+                        color: "#991B1B",
+                        fontFamily: "Inter, sans-serif",
+                        fontWeight: 500,
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      ⚠️ Total distributed ({totalDistributed}) does not match Lead Target ({numericLead}). {diff > 0 ? `Exceeds target by ${diff}` : `Short by ${Math.abs(diff)}`}.
+                    </Typography>
+                  </Box>
+                )}
 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.2 }}>
                   {members.map((m, idx) => {
@@ -598,11 +645,7 @@ export default function SetTargetModal({
                         ? m.name || m.full_name || m.username || m.employee || `Member ${idx + 1}`
                         : String(m);
 
-                    const defaultLeads = baseSplit + (idx < remainder ? 1 : 0);
-                    const assignedLeads =
-                      customMemberAllocations[memberName] !== undefined
-                        ? customMemberAllocations[memberName]
-                        : defaultLeads;
+                    const assignedLeads = getMemberCurrentLead(m, idx);
 
                     return (
                       <Box
@@ -640,7 +683,7 @@ export default function SetTargetModal({
                           </Typography>
                         </Box>
 
-                        {/* Interactive Stepper Widget [ - | count | + ] matching Image 2 */}
+                        {/* Interactive Stepper Widget [ - | Input Text Field | + ] */}
                         <Box
                           sx={{
                             display: "flex",
@@ -650,11 +693,14 @@ export default function SetTargetModal({
                             backgroundColor: "#FFFFFF",
                             height: "30px",
                             overflow: "hidden",
+                            "&:focus-within": {
+                              borderColor: ACCENT,
+                            },
                           }}
                         >
                           <IconButton
                             size="small"
-                            onClick={() => handleDecrementMember(memberName)}
+                            onClick={() => handleDecrementMember(memberName, assignedLeads)}
                             sx={{
                               borderRadius: 0,
                               width: "30px",
@@ -668,23 +714,34 @@ export default function SetTargetModal({
                             <RemoveIcon sx={{ fontSize: 16 }} />
                           </IconButton>
 
-                          <Typography
+                          <Box
+                            component="input"
+                            type="number"
+                            value={assignedLeads}
+                            onChange={(e) => handleInputChangeMember(memberName, e.target.value)}
                             sx={{
-                              minWidth: "36px",
+                              width: "46px",
                               textAlign: "center",
                               fontSize: "13.5px",
                               fontWeight: 600,
                               color: "#334155",
                               fontFamily: "Inter, sans-serif",
-                              px: 1,
+                              border: "none",
+                              outline: "none",
+                              backgroundColor: "transparent",
+                              p: 0,
+                              margin: 0,
+                              "&::-webkit-inner-spin-button, &::-webkit-outer-spin-button": {
+                                "-webkit-appearance": "none",
+                                margin: 0,
+                              },
+                              "-moz-appearance": "textfield",
                             }}
-                          >
-                            {assignedLeads}
-                          </Typography>
+                          />
 
                           <IconButton
                             size="small"
-                            onClick={() => handleIncrementMember(memberName)}
+                            onClick={() => handleIncrementMember(memberName, assignedLeads)}
                             sx={{
                               borderRadius: 0,
                               width: "30px",

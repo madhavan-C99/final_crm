@@ -14,19 +14,12 @@ const PlusIcon = () => (
   </svg>
 );
 
-const defaultRealTelecallers = ["Gokil Gokil", "Bharath"];
-const defaultCallStatusOptions = ["Connected", "Not Connected", "Busy", "No Answer"];
-const defaultCallDirectionOptions = ["Incoming", "Outgoing"];
-
-// 🌟 SAME STRUCTURE AS LeadSummaryToolbar — content changed:
-// "Stage" filter replaced with "Call Status" + "Call Direction" filters
-// (matches Call Log toolbar in the screenshot). No Save Filter / Bulk
-// Actions buttons here since the screenshot doesn't show them for this page.
 function CallLogToolbar({
   search,
   onSearchChange,
   onDownload,
   onSort,
+  onFetchOptions,
   filterDropdownOptions = {},
   telecallers = [],
   callStatusOptions = [],
@@ -48,14 +41,9 @@ function CallLogToolbar({
   const [directionActive, setDirectionActive] = useState(false);
   const [filterActive, setFilterActive] = useState(false);
 
-  const activeTelecallersList =
-    telecallers && telecallers.length > 0 ? telecallers : defaultRealTelecallers;
-
-  const activeCallStatusList =
-    callStatusOptions && callStatusOptions.length > 0 ? callStatusOptions : defaultCallStatusOptions;
-
-  const activeCallDirectionList =
-    callDirectionOptions && callDirectionOptions.length > 0 ? callDirectionOptions : defaultCallDirectionOptions;
+  const activeTelecallersList = telecallers || [];
+  const activeCallStatusList = callStatusOptions || [];
+  const activeCallDirectionList = callDirectionOptions || [];
 
   return (
     <Box
@@ -70,7 +58,7 @@ function CallLogToolbar({
       }}
     >
       <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", width: { xs: "100%", md: "auto" } }}>
-        <FilterButton label="Date" active={dateActive || Boolean(selectedDate)}>
+        <FilterButton label="Date" active={dateActive || Boolean(selectedDate)} onOpen={onFetchOptions}>
           {({ close }) => (
             <DateFilterPanel
               defaultValue={selectedDate || "Last 7 days"}
@@ -83,7 +71,7 @@ function CallLogToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Assigned To" active={userActive || selectedUsers.length > 0}>
+        <FilterButton label="Assigned To" active={userActive || selectedUsers.length > 0} onOpen={onFetchOptions}>
           {({ close }) => (
             <CheckboxFilterPanel
               title="Choose Assigned To"
@@ -98,7 +86,7 @@ function CallLogToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Call Status" active={statusActive || selectedCallStatus.length > 0}>
+        <FilterButton label="Call Status" active={statusActive || selectedCallStatus.length > 0} onOpen={onFetchOptions}>
           {({ close }) => (
             <CheckboxFilterPanel
               title="Choose Call Status"
@@ -113,7 +101,7 @@ function CallLogToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Call Direction" active={directionActive || selectedCallDirection.length > 0}>
+        <FilterButton label="Call Direction" active={directionActive || selectedCallDirection.length > 0} onOpen={onFetchOptions}>
           {({ close }) => (
             <CheckboxFilterPanel
               title="Choose Call Direction"
@@ -128,7 +116,7 @@ function CallLogToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Filter" active={filterActive || Object.keys(appliedPanelFilters).length > 0} width={380}>
+        <FilterButton label="Filter" active={filterActive || Object.keys(appliedPanelFilters).length > 0} width={380} onOpen={onFetchOptions}>
           {({ close }) => (
             <FilterLeadsPanel
               closePanel={close}

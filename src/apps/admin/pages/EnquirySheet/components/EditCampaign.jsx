@@ -398,9 +398,9 @@ export const EditCampaign = () => {
                 {loading ? (
                   [1, 2, 3].map((n) => (
                     <TableRow key={n}>
-                      <TableCell pl={3.5}><Skeleton width={20} /></TableCell>
+                      <TableCell sx={{ pl: 3.5 }}><Skeleton width={20} /></TableCell>
                       <TableCell><Skeleton width={140} /></TableCell>
-                      <TableCell align="right" pr={4}><Skeleton variant="rectangular" width={34} height={20} /></TableCell>
+                      <TableCell align="right" sx={{ pr: 4 }}><Skeleton variant="rectangular" width={34} height={20} /></TableCell>
                     </TableRow>
                   ))
                 ) : filteredAgents.length === 0 ? (

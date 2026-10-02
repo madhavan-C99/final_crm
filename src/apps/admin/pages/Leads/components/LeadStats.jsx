@@ -1,93 +1,59 @@
 import React, { useMemo } from "react";
 import { Box, Typography, Button, Skeleton } from "@mui/material";
-import dayjs from "dayjs";
-import { getStageCategory } from "../Leads";
+import { isLeadInStageDynamic } from "../utils/leadUtils";
 
 const LeadStats = ({
   statsData = {},
   tableData = [],
   selectedLeadType,
   setSelectedLeadType,
+  stagesList = [],
   loading = false,
 }) => {
-  const leadOptions = [
-    { countKey: "total_count", value: "all", label: "All Leads" },
-    { countKey: "new_count", value: "new", label: "New Lead" },
-    { countKey: "follow_up_count", value: "follow_up", label: "Follow up" },
-    {
-      countKey: "pending_follow_up_count",
-      value: "pending_follow_up",
-      label: "Missed Follow up",
-    },
-    { countKey: "won_count", value: "won", label: "Won" },
-    { countKey: "loss_count", value: "loss", label: "Lost" },
-  ];
+  const leadOptions = useMemo(() => {
+    const baseOptions = [{ countKey: "total_count", value: "all", label: "All Leads" }];
+    if (Array.isArray(stagesList) && stagesList.length > 0) {
+      stagesList.forEach((stg) => {
+        const label = stg.label || stg.name || stg.stage_name || String(stg);
+        const val = String(stg.id ?? stg.value ?? label);
+        baseOptions.push({
+          countKey: `${val}_count`,
+          value: val,
+          label: label,
+          stageObj: stg,
+        });
+      });
+      return baseOptions;
+    }
+    return baseOptions;
+  }, [stagesList]);
 
-  // Compute stats object dynamically from tableData using exact getStageCategory matching
+  // Compute stats object dynamically from tableData using isLeadInStageDynamic
   // This guarantees 100% synchronization between Badge counts and Table row counts
   const activeStats = useMemo(() => {
     const total = tableData.length;
-    let newCount = 0;
-    let followUpCount = 0;
-    let pendingFollowUpCount = 0;
-    let wonCount = 0;
-    let lossCount = 0;
+    const counts = { all: total };
 
-    tableData.forEach((row) => {
-      const category = getStageCategory(row);
-      if (category === "new") {
-        newCount++;
-      } else if (category === "won") {
-        wonCount++;
-      } else if (category === "loss") {
-        lossCount++;
-      } else if (category === "pending_follow_up") {
-        pendingFollowUpCount++;
-      } else if (category === "follow_up") {
-        followUpCount++;
-      } else {
-        followUpCount++;
-      }
+    leadOptions.forEach((opt) => {
+      if (opt.value === "all") return;
+
+      let count = 0;
+      tableData.forEach((row) => {
+        if (isLeadInStageDynamic(row, opt.value, stagesList)) {
+          count++;
+        }
+      });
+
+      counts[opt.value] = count;
     });
 
-    return {
-      total_count: total,
-      new_count: newCount,
-      follow_up_count: followUpCount,
-      pending_follow_up_count: pendingFollowUpCount,
-      won_count: wonCount,
-      loss_count: lossCount,
-    };
-  }, [tableData]);
+    return counts;
+  }, [tableData, leadOptions, stagesList]);
 
   const getCount = (item) => {
     if (!activeStats) return 0;
-
-    // Direct key check
-    if (activeStats[item.countKey] !== undefined && activeStats[item.countKey] !== null) {
-      return activeStats[item.countKey];
-    }
-
-    // Key fallbacks for alternative backend API naming formats
-    if (item.value === "all" || item.value === "") {
-      return activeStats.total_count ?? activeStats.total ?? activeStats.total_leads ?? activeStats.all ?? 0;
-    }
-    if (item.value === "new") {
-      return activeStats.new_count ?? activeStats.new ?? activeStats.new_leads ?? 0;
-    }
-    if (item.value === "follow_up") {
-      return activeStats.follow_up_count ?? activeStats.follow_up ?? activeStats.followup ?? 0;
-    }
-    if (item.value === "pending_follow_up") {
-      return activeStats.pending_follow_up_count ?? activeStats.missed_follow_up ?? activeStats.pending ?? 0;
-    }
-    if (item.value === "won") {
-      return activeStats.won_count ?? activeStats.won ?? activeStats.won_leads ?? activeStats.closed_won ?? 0;
-    }
-    if (item.value === "loss") {
-      return activeStats.loss_count ?? activeStats.lost_count ?? activeStats.lost ?? activeStats.loss ?? activeStats.closed_lost ?? 0;
-    }
-    return 0;
+    if (item.value === "all") return activeStats.all || 0;
+    return activeStats[item.value] ?? 0;
   };
 
   if (loading) {

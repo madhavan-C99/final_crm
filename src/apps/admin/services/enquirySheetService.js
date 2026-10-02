@@ -8,5 +8,5 @@ export const getCampaignEnquirySheet = async (campaignId, campaignName) => {
     if (campaignId) payload.campaign_id = campaignId;
     if (campaignName) payload.campaign_name = campaignName;
   }
-  return api.post("adm/campaign_enquiry_sheet", payload);
+  return api.post("/adm/campaign_enquiry_sheet", payload);
 };

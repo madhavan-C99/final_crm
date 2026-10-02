@@ -13,7 +13,6 @@ import {
   deleteTeamAdmin,
   fetchTeamDropdownsAdmin,
 } from "@/apps/admin/services/teamService";
-import { fetchUsersAdmin } from "@/apps/admin/services/userService";
 import { toast } from "react-toastify";
 
 function TeamPeopleIcon({ color = "#6366F1" }) {
@@ -64,101 +63,117 @@ export default function TeamsView() {
   const [editingTeam, setEditingTeam] = useState(null);
   const [deletingTeam, setDeletingTeam] = useState(null);
 
-  // Load Teams and Dropdowns from Backend API
+  const dropFetchedRef = React.useRef(false);
+  // Fetch Team Dropdowns (Leads, Users) lazily on modal open
+  const loadDropdowns = useCallback(async () => {
+    if (dropFetchedRef.current) return;
+    try {
+      dropFetchedRef.current = true;
+      const dropRes = await fetchTeamDropdownsAdmin();
+      const dropData = dropRes?.data?.data || dropRes?.data || {};
+
+      const rawLeads = Array.isArray(dropData.leads)
+        ? dropData.leads
+        : Array.isArray(dropData.telecallers)
+        ? dropData.telecallers
+        : [];
+      const rawUsers = Array.isArray(dropData.users)
+        ? dropData.users
+        : Array.isArray(dropData.members)
+        ? dropData.members
+        : [];
+
+      const formattedLeads = rawLeads.map((u) => ({
+        id: u.id ?? u.value,
+        value: u.value ?? u.id,
+        name: u.name || u.full_name || u.label || "Lead",
+        label: u.label || u.name || u.full_name || "Lead",
+      }));
+
+      const formattedUsers = rawUsers.map((u) => ({
+        id: u.id ?? u.value,
+        value: u.value ?? u.id,
+        name: u.name || u.full_name || u.label || "User",
+        label: u.label || u.name || u.full_name || "User",
+      }));
+
+      setLeadsList(formattedLeads);
+      setUsersList(formattedUsers);
+    } catch (dErr) {
+      console.error("Error fetching team dropdowns:", dErr);
+      dropFetchedRef.current = false;
+      setLeadsList([]);
+      setUsersList([]);
+    }
+  }, []);
+
+  // Load Teams from Backend API
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
 
-      // Fetch Team Dropdowns (Leads, Users)
-      try {
-        const dropRes = await fetchTeamDropdownsAdmin();
-        const dropData = dropRes?.data?.data || dropRes?.data || {};
-
-        const rawLeads = Array.isArray(dropData.leads) ? dropData.leads : [];
-        const rawUsers = Array.isArray(dropData.users) ? dropData.users : [];
-
-        setLeadsList(
-          rawLeads.map((u) => ({
-            id: u.id,
-            name: u.name || u.full_name || "Lead",
-          }))
-        );
-
-        setUsersList(
-          rawUsers.map((u) => ({
-            id: u.id,
-            name: u.name || u.full_name || "User",
-          }))
-        );
-      } catch (dErr) {
-        console.error("Error fetching team dropdowns:", dErr);
-        // Fallback to fetchUsersAdmin
-        try {
-          const usersRes = await fetchUsersAdmin({ page_size: 100 });
-          const rawUsers =
-            usersRes?.data?.data?.users ||
-            usersRes?.data?.data?.user_list ||
-            usersRes?.data?.data ||
-            usersRes?.data?.users ||
-            (Array.isArray(usersRes?.data) ? usersRes?.data : []);
-
-          const formattedUsers = Array.isArray(rawUsers)
-            ? rawUsers.map((u) => ({
-                id: u.id || u.user_id,
-                name: u.name || u.full_name || u.fullName || u.username || "User",
-              }))
-            : [];
-          setUsersList(formattedUsers);
-          setLeadsList(formattedUsers);
-        } catch (uErr) {
-          console.error("Error fetching users fallback:", uErr);
-        }
-      }
-
       // Fetch Teams from backend
       const teamsRes = await fetchAllTeamsAdmin();
-      const rawTeams =
-        teamsRes?.data?.data ||
-        teamsRes?.data?.teams ||
-        teamsRes?.data?.team_list ||
-        (Array.isArray(teamsRes?.data) ? teamsRes?.data : []);
+      const rawRes = teamsRes?.data;
+      const innerData = rawRes?.data || rawRes || {};
 
-      const formattedTeams = Array.isArray(rawTeams)
-        ? rawTeams.map((item) => {
-            // Lead display
-            let leadName = "Unassigned";
-            if (item.lead && typeof item.lead === "object" && item.lead.name) {
-              leadName = item.lead.name;
-            } else if (typeof item.lead === "string") {
-              leadName = item.lead;
-            }
+      let list = [];
+      if (Array.isArray(innerData)) {
+        list = innerData;
+      } else if (Array.isArray(innerData.data)) {
+        list = innerData.data;
+      } else if (Array.isArray(innerData.teams)) {
+        list = innerData.teams;
+      } else if (Array.isArray(innerData.team_list)) {
+        list = innerData.team_list;
+      } else if (Array.isArray(innerData.results)) {
+        list = innerData.results;
+      } else if (Array.isArray(rawRes?.data)) {
+        list = rawRes.data;
+      } else if (Array.isArray(rawRes?.teams)) {
+        list = rawRes.teams;
+      } else if (Array.isArray(rawRes)) {
+        list = rawRes;
+      }
 
-            // Members array
-            let memberNames = [];
-            if (Array.isArray(item.members)) {
-              memberNames = item.members.map((m) =>
-                typeof m === "object" && m !== null ? m.name || m.full_name || "-" : String(m)
-              );
-            }
+      const formattedTeams = list.map((item) => {
+        // Lead display
+        let leadName = "Unassigned";
+        if (item.lead_name) {
+          leadName = item.lead_name;
+        } else if (item.lead_obj && typeof item.lead_obj === "object" && item.lead_obj.name) {
+          leadName = item.lead_obj.name;
+        } else if (item.lead && typeof item.lead === "object" && item.lead.name) {
+          leadName = item.lead.name;
+        } else if (typeof item.lead === "string") {
+          leadName = item.lead;
+        }
 
-            // Icon BG & Color from backend API hex string
-            const { iconBg, iconColor } = getIconColors(item.color);
+        // Members array
+        let memberNames = [];
+        if (Array.isArray(item.members)) {
+          memberNames = item.members.map((m) =>
+            typeof m === "object" && m !== null ? m.name || m.full_name || "-" : String(m)
+          );
+        }
 
-            return {
-              id: item.id,
-              name: item.name || "Unnamed Team",
-              region: item.region || "North Region",
-              lead: leadName,
-              rawLead: item.lead,
-              membersCount: item.membersCount !== undefined ? item.membersCount : memberNames.length,
-              members: memberNames,
-              rawMembers: item.members,
-              color: item.color || "#6366F1",
-              iconBg,
-              iconColor,
-            };
-          })
-        : [];
+        // Icon BG & Color from backend API hex string
+        const { iconBg, iconColor } = getIconColors(item.color);
+
+        return {
+          id: item.id,
+          name: item.name || "Unnamed Team",
+          region: item.region || "North Region",
+          lead: leadName,
+          rawLead: item.lead_obj || item.lead,
+          membersCount: item.membersCount !== undefined ? item.membersCount : memberNames.length,
+          members: memberNames,
+          rawMembers: item.members,
+          color: item.color || "#6366F1",
+          iconBg,
+          iconColor,
+        };
+      });
 
       setTeamsList(formattedTeams);
     } catch (err) {
@@ -172,6 +187,12 @@ export default function TeamsView() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (isCreateModalOpen) {
+      loadDropdowns();
+    }
+  }, [isCreateModalOpen, loadDropdowns]);
 
   const handleOpenDeleteTeam = (team) => {
     setDeletingTeam(team);

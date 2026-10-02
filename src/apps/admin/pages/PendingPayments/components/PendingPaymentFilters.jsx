@@ -59,15 +59,17 @@ const PendingPaymentFilters = ({
     const [apiDropdowns, setApiDropdowns] = useState(null);
 
     useEffect(() => {
-        fetchPendingPaymentFilterDropdowns()
-            .then(res => {
-                const data = res?.data?.data || res?.data || null;
-                if (data) setApiDropdowns(data);
-            })
-            .catch(err => {
-                console.log("Filter dropdowns API error, using fallback tableData options:", err);
-            });
-    }, []);
+        if (Boolean(filterAnchor) && !apiDropdowns) {
+            fetchPendingPaymentFilterDropdowns()
+                .then(res => {
+                    const data = res?.data?.data || res?.data || null;
+                    if (data) setApiDropdowns(data);
+                })
+                .catch(err => {
+                    console.log("Filter dropdowns API error, using fallback tableData options:", err);
+                });
+        }
+    }, [filterAnchor, apiDropdowns]);
 
     // Temp filters for Popover form draft state
     const [tempFilters, setTempFilters] = useState(selectedFilters || {
@@ -115,7 +117,7 @@ const PendingPaymentFilters = ({
                 const parsed = rawCourses.map(item => {
                     if (typeof item === "string") return item;
                     if (typeof item === "object" && item !== null) {
-                        return item.course_name || item.course || item.name || item.title || item.label || String(item);
+                        return item.label || item.name || item.course_name || item.course || item.title || item.value || String(item);
                     }
                     return String(item);
                 }).filter(Boolean);
@@ -134,9 +136,9 @@ const PendingPaymentFilters = ({
 
     const planOptions = useMemo(() => {
         if (apiDropdowns) {
-            const raw = apiDropdowns.course_plans || apiDropdowns.course_plan || apiDropdowns.plans || apiDropdowns.plan;
+            const raw = apiDropdowns.course_plans || apiDropdowns.course_plan || apiDropdowns.plans || apiDropdowns.plan || apiDropdowns.courses;
             if (Array.isArray(raw) && raw.length > 0) {
-                return Array.from(new Set(raw.map(item => typeof item === "object" ? (item.course_plan || item.name || String(item)) : String(item)).filter(Boolean)));
+                return Array.from(new Set(raw.map(item => typeof item === "object" && item !== null ? (item.label || item.name || item.course_plan || item.value || String(item)) : String(item)).filter(Boolean)));
             }
         }
         const set = new Set();
@@ -151,7 +153,7 @@ const PendingPaymentFilters = ({
         if (apiDropdowns) {
             const raw = apiDropdowns.course_times || apiDropdowns.course_time || apiDropdowns.timings || apiDropdowns.timing || apiDropdowns.batch_timing;
             if (Array.isArray(raw) && raw.length > 0) {
-                return Array.from(new Set(raw.map(item => typeof item === "object" ? (item.course_time || item.timing || String(item)) : String(item)).filter(Boolean)));
+                return Array.from(new Set(raw.map(item => typeof item === "object" && item !== null ? (item.label || item.name || item.course_time || item.timing || item.value || String(item)) : String(item)).filter(Boolean)));
             }
         }
         const set = new Set();
@@ -164,9 +166,9 @@ const PendingPaymentFilters = ({
 
     const stageOptions = useMemo(() => {
         if (apiDropdowns) {
-            const raw = apiDropdowns.payment_stages || apiDropdowns.payment_stage || apiDropdowns.stages || apiDropdowns.statuses;
+            const raw = apiDropdowns.payment_stages || apiDropdowns.payment_stage || apiDropdowns.stages || apiDropdowns.statuses || apiDropdowns.payment_statuses;
             if (Array.isArray(raw) && raw.length > 0) {
-                return Array.from(new Set(raw.map(item => typeof item === "object" ? (item.payment_stage || item.name || String(item)) : String(item)).filter(Boolean)));
+                return Array.from(new Set(raw.map(item => typeof item === "object" && item !== null ? (item.label || item.name || item.payment_stage || item.value || String(item)) : String(item)).filter(Boolean)));
             }
         }
         const set = new Set();
@@ -179,9 +181,9 @@ const PendingPaymentFilters = ({
 
     const amountOptions = useMemo(() => {
         if (apiDropdowns) {
-            const raw = apiDropdowns.pending_amounts || apiDropdowns.pending_amount || apiDropdowns.amounts;
+            const raw = apiDropdowns.pending_amounts || apiDropdowns.pending_amount || apiDropdowns.amounts || apiDropdowns.amount_stages;
             if (Array.isArray(raw) && raw.length > 0) {
-                return Array.from(new Set(raw.map(item => typeof item === "object" ? (item.pending_amount || item.label || String(item)) : String(item)).filter(Boolean)));
+                return Array.from(new Set(raw.map(item => typeof item === "object" && item !== null ? (item.label || item.name || item.pending_amount || item.value || String(item)) : String(item)).filter(Boolean)));
             }
         }
         const set = new Set();

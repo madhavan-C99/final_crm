@@ -15,25 +15,13 @@ const PlusIcon = () => (
   </svg>
 );
 
-const defaultRealTelecallers = ["telecaller", "poomani", "Bharath", "Prakash"];
-
-const defaultStageOptions = [
-  "new lead",
-  "follow up",
-  "won",
-  "loss",
-  "unreached",
-  "pending",
-  "contact_attempt",
-  "future",
-];
-
 function LeadSummaryToolbar({
   search,
   onSearchChange,
   onSaveFilter,
   onDownload,
   onSort,
+  onFetchOptions,
   selectedCount = 0,
   filterDropdownOptions = {},
   telecallers = [],
@@ -52,15 +40,10 @@ function LeadSummaryToolbar({
   const [stageActive, setStageActive] = useState(false);
   const [filterActive, setFilterActive] = useState(false);
 
-  const activeTelecallersList =
-    telecallers && telecallers.length > 0
-      ? telecallers
-      : defaultRealTelecallers;
+  const activeTelecallersList = telecallers || [];
 
   const activeStagesList =
-    filterDropdownOptions && filterDropdownOptions.stages && filterDropdownOptions.stages.length > 0
-      ? filterDropdownOptions.stages
-      : defaultStageOptions;
+    filterDropdownOptions && filterDropdownOptions.stages ? filterDropdownOptions.stages : [];
 
   return (
     <Box
@@ -75,7 +58,7 @@ function LeadSummaryToolbar({
       }}
     >
       <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", width: { xs: "100%", md: "auto" } }}>
-        <FilterButton label="Date" active={dateActive || Boolean(selectedDate)}>
+        <FilterButton label="Date" active={dateActive || Boolean(selectedDate)} onOpen={onFetchOptions}>
           {({ close }) => (
             <DateFilterPanel
               defaultValue={selectedDate || "Last 7 days"}
@@ -88,7 +71,7 @@ function LeadSummaryToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Assigned to" active={userActive || selectedUsers.length > 0}>
+        <FilterButton label="Assigned to" active={userActive || selectedUsers.length > 0} onOpen={onFetchOptions}>
           {({ close }) => (
             <CheckboxFilterPanel
               title="Choose Assigned To"
@@ -103,7 +86,7 @@ function LeadSummaryToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Stage" active={stageActive || selectedStages.length > 0}>
+        <FilterButton label="Stage" active={stageActive || selectedStages.length > 0} onOpen={onFetchOptions}>
           {({ close }) => (
             <CheckboxFilterPanel
               title="Choose Lead Stage"
@@ -118,7 +101,7 @@ function LeadSummaryToolbar({
           )}
         </FilterButton>
 
-        <FilterButton label="Filter" active={filterActive || Object.keys(appliedPanelFilters).length > 0} width={380}>
+        <FilterButton label="Filter" active={filterActive || Object.keys(appliedPanelFilters).length > 0} width={380} onOpen={onFetchOptions}>
           {({ close }) => (
             <FilterLeadsPanel
               closePanel={close}

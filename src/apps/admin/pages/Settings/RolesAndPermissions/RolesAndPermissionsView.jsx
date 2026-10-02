@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -12,11 +12,7 @@ import {
   TableRow,
   IconButton,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
+  CircularProgress,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
@@ -24,85 +20,93 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import AddIcon from "@mui/icons-material/Add";
-import CloseIcon from "@mui/icons-material/Close";
 import { toast } from "react-toastify";
+import CreateRoleModal from "./CreateRoleModal";
+import {
+  fetchRolesAndPermissionsAdmin,
+  createRoleAdmin,
+  updateRolePermissionAdmin,
+} from "@/apps/admin/services/roleService";
 
-// Default Roles
-const ROLES = [
-  { id: "org_admin", name: "Org Admin" },
-  { id: "manager", name: "Manager" },
-  { id: "asst_manager", name: "Asst Manager" },
-  { id: "executive", name: "Executive" },
-];
+// TODO(backend): Verify exact /adm/get_roles_and_permissions API response payload structure with backend docs
+const mapRolesAndPermissionsResponse = (response) => {
+  const data = response?.data?.data || response?.data || {};
 
-// Initial Permissions Categories Data matching Figma design
-const INITIAL_PERMISSION_CATEGORIES = [
-  {
-    id: "contacts",
-    name: "Contacts",
-    permissions: [
-      { id: "view_contacts", name: "View Contacts", info: "Allows viewing contacts list", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "add_contact", name: "Add New Contact", info: "Allows creating a new contact", values: { org_admin: true, manager: true, asst_manager: true, executive: true } },
-      { id: "modify_contact", name: "Modify Contact", info: "Allows editing contact details", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "delete_contact", name: "Delete Contact", info: "Allows removing a contact", values: { org_admin: true, manager: true, asst_manager: false, executive: false } },
-      { id: "upload_contacts", name: "Upload Contacts/Leads", info: "Allows bulk upload of contacts", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-      { id: "download_contacts", name: "Download Contacts", info: "Allows exporting contacts", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "view_contact_history", name: "View Contact History", info: "Allows viewing call/activity history", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "assign_contact", name: "Assign Contact", info: "Allows assigning contact to telecallers", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-      { id: "reassign_contact", name: "Reassign Contact", info: "Allows transferring contacts between users", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-    ],
-  },
-  {
-    id: "walkin_lead_form",
-    name: "Walk-In Lead Form",
-    permissions: [
-      { id: "view_walkin_form", name: "View Walk-In Lead Form", info: "Allows viewing walk-in form", values: { org_admin: true, manager: true, asst_manager: true, executive: true } },
-      { id: "modify_walkin_form", name: "Modify Walk-In Lead Form", info: "Allows editing walk-in form fields", values: { org_admin: true, manager: true, asst_manager: false, executive: false } },
-      { id: "submit_walkin_lead", name: "Submit Walk-In Lead", info: "Allows creating walk-in lead entries", values: { org_admin: true, manager: true, asst_manager: true, executive: true } },
-      { id: "view_walkin_lead", name: "View Walk-In Lead", info: "Allows viewing walk-in lead details", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "assign_walkin_lead", name: "Assign Walk-In Lead", info: "Allows assigning walk-in leads", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-      { id: "modify_walkin_lead", name: "Modify Walk-In Lead", info: "Allows editing walk-in lead data", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-    ],
-  },
-  {
-    id: "pipeline",
-    name: "Pipeline",
-    permissions: [
-      { id: "view_pipeline", name: "View Pipeline", info: "Allows viewing kanban pipeline board", values: { org_admin: true, manager: true, asst_manager: true, executive: true } },
-      { id: "add_pipeline", name: "Add Pipeline", info: "Allows creating new pipeline stages", values: { org_admin: true, manager: true, asst_manager: false, executive: false } },
-      { id: "modify_pipeline", name: "Modify Pipeline", info: "Allows modifying pipeline configurations", values: { org_admin: true, manager: true, asst_manager: false, executive: false } },
-      { id: "delete_pipeline", name: "Delete Pipeline", info: "Allows removing pipeline stages", values: { org_admin: true, manager: false, asst_manager: false, executive: false } },
-      { id: "view_pipeline_leads", name: "View Pipeline Leads", info: "Allows viewing leads in pipeline", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "move_lead_stages", name: "Move Lead Between Stages", info: "Allows dragging leads across stages", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "assign_leads", name: "Assign Leads", info: "Allows allocating leads to telecallers", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-      { id: "reassign_leads", name: "Reassign Leads", info: "Allows reallocating leads", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-      { id: "view_pipeline_call_logs", name: "View Pipeline Call Logs", info: "Allows viewing call logs in pipeline", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "download_pipeline_call_logs", name: "Download Pipeline Call Logs", info: "Allows exporting call logs", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-    ],
-  },
-  {
-    id: "campaign",
-    name: "Campaign",
-    permissions: [
-      { id: "add_campaign", name: "Add Campaign", info: "Allows creating new campaigns", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-      { id: "modify_campaign", name: "Modify Campaign", info: "Allows editing existing campaigns", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-      { id: "delete_campaign", name: "Delete Campaign", info: "Allows deleting campaigns", values: { org_admin: true, manager: true, asst_manager: false, executive: false } },
-      { id: "view_all_campaigns", name: "View All Campaigns", info: "Allows viewing all campaign lists", values: { org_admin: true, manager: true, asst_manager: false, executive: false } },
-      { id: "campaign_view_pipeline_leads", name: "View Pipeline Leads", info: "Allows viewing campaign pipeline leads", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "campaign_move_lead_stages", name: "Move Lead Between Stages", info: "Allows dragging campaign leads", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "campaign_assign_leads", name: "Assign Leads", info: "Allows assigning campaign leads", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-      { id: "campaign_reassign_leads", name: "Reassign Leads", info: "Allows reassigning campaign leads", values: { org_admin: true, manager: true, asst_manager: true, executive: false } },
-      { id: "campaign_view_call_logs", name: "View Pipeline Call Logs", info: "Allows viewing campaign call logs", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-      { id: "campaign_download_call_logs", name: "Download Pipeline Call Logs", info: "Allows exporting campaign call logs", values: { org_admin: true, manager: true, asst_manager: true, executive: "own" } },
-    ],
-  },
-];
+  const rawRoles = data.roles || data.roles_list || data.role_matrix?.roles || [];
+  const rawCategories = data.categories || data.permission_categories || data.categories_list || data.role_matrix?.categories || [];
+
+  const roles = Array.isArray(rawRoles)
+    ? rawRoles.map((r, idx) => ({
+        id: String(r.id ?? r.role_id ?? r.value ?? idx + 1),
+        name: r.name || r.role_name || r.label || String(r.id ?? r.value ?? `Role ${idx + 1}`),
+        isExecutive: Boolean(r.is_executive || r.isExecutive || r.scope === "own" || String(r.name || r.id || "").toLowerCase().includes("executive")),
+      }))
+    : [];
+
+  const categories = Array.isArray(rawCategories)
+    ? rawCategories.map((cat, catIdx) => ({
+        id: String(cat.id ?? cat.category_id ?? `cat_${catIdx}`),
+        name: cat.name || cat.category_name || cat.label || `Category ${catIdx + 1}`,
+        permissions: Array.isArray(cat.permissions)
+          ? cat.permissions.map((perm, permIdx) => {
+              const permId = String(perm.id ?? perm.permission_id ?? `perm_${permIdx}`);
+              const permValues = {};
+
+              if (perm.values && typeof perm.values === "object") {
+                Object.keys(perm.values).forEach((rKey) => {
+                  permValues[rKey] = perm.values[rKey];
+                });
+              } else if (Array.isArray(perm.roles)) {
+                perm.roles.forEach((r) => {
+                  if (typeof r === "object") {
+                    permValues[r.role_id || r.id] = r.has_permission ?? r.value ?? true;
+                  } else {
+                    permValues[r] = true;
+                  }
+                });
+              }
+
+              return {
+                id: permId,
+                name: perm.name || perm.permission_name || perm.label || permId,
+                info: perm.info || perm.description || perm.tooltip || "",
+                values: permValues,
+              };
+            })
+          : [],
+      }))
+    : [];
+
+  return { roles, categories };
+};
 
 export default function RolesAndPermissionsView() {
-  const [categoriesData, setCategoriesData] = useState(INITIAL_PERMISSION_CATEGORIES);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [rolesList, setRolesList] = useState([]);
+  const [categoriesData, setCategoriesData] = useState([]);
   const [collapsedCategories, setCollapsedCategories] = useState({});
   const [isCreateRoleOpen, setIsCreateRoleOpen] = useState(false);
-  const [newRoleName, setNewRoleName] = useState("");
+
+  const loadRolesAndPermissions = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetchRolesAndPermissionsAdmin();
+      const mapped = mapRolesAndPermissionsResponse(res);
+      setRolesList(mapped.roles);
+      setCategoriesData(mapped.categories);
+    } catch (err) {
+      console.error("Failed to load roles and permissions:", err);
+      setError("Failed to load roles and permissions data.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRolesAndPermissions();
+  }, [loadRolesAndPermissions]);
 
   const toggleCategory = (categoryId) => {
     setCollapsedCategories((prev) => ({
@@ -111,52 +115,72 @@ export default function RolesAndPermissionsView() {
     }));
   };
 
-  const handleTogglePermission = (categoryId, permId, roleId, permName, roleName) => {
-    setCategoriesData((prevCategories) =>
-      prevCategories.map((cat) => {
-        if (cat.id !== categoryId) return cat;
-        return {
-          ...cat,
-          permissions: cat.permissions.map((perm) => {
-            if (perm.id !== permId) return perm;
-            const currentValue = perm.values[roleId];
+  const handleTogglePermission = async (categoryId, permId, roleId, permName, roleName) => {
+    const targetRole = rolesList.find((r) => String(r.id) === String(roleId));
+    const isExecutiveRole = Boolean(targetRole?.isExecutive || targetRole?.scope === "own");
 
-            let nextValue;
-            if (currentValue === true) {
-              nextValue = roleId === "executive" ? "own" : false;
-            } else if (currentValue === "own") {
-              nextValue = false;
-            } else {
-              nextValue = true;
-            }
+    const catObj = categoriesData.find((c) => String(c.id) === String(categoryId));
+    const permObj = catObj?.permissions?.find((p) => String(p.id) === String(permId));
+    const currentValue = permObj?.values?.[roleId];
 
-            return {
-              ...perm,
-              values: {
-                ...perm.values,
-                [roleId]: nextValue,
-              },
-            };
-          }),
-        };
-      })
-    );
+    let nextValue;
+    if (currentValue === true) {
+      nextValue = isExecutiveRole ? "own" : false;
+    } else if (currentValue === "own") {
+      nextValue = false;
+    } else {
+      nextValue = true;
+    }
 
-    const statusLabel =
-      roleId === "executive"
-        ? "updated"
-        : "toggled";
-    toast.success(`Permission "${permName}" for ${roleName} ${statusLabel}!`);
+    const hasPermissionBool = nextValue === true || nextValue === "own";
+
+    try {
+      await updateRolePermissionAdmin({
+        role_id: roleId,
+        category_id: categoryId,
+        permission_id: permId,
+        has_permission: hasPermissionBool,
+        value: nextValue,
+      });
+
+      setCategoriesData((prevCategories) =>
+        prevCategories.map((cat) => {
+          if (String(cat.id) !== String(categoryId)) return cat;
+          return {
+            ...cat,
+            permissions: cat.permissions.map((perm) => {
+              if (String(perm.id) !== String(permId)) return perm;
+              return {
+                ...perm,
+                values: {
+                  ...perm.values,
+                  [roleId]: nextValue,
+                },
+              };
+            }),
+          };
+        })
+      );
+
+      toast.success(`Permission "${permName}" for ${roleName} updated successfully!`);
+    } catch (err) {
+      console.error("Failed to update role permission:", err);
+      toast.error(`Failed to update permission "${permName}" for ${roleName}`);
+    }
   };
 
-  const handleCreateRoleSave = () => {
-    if (!newRoleName.trim()) {
-      toast.error("Please enter a role name");
-      return;
+  const handleCreateRoleSave = async ({ name, duplicateFrom }) => {
+    try {
+      await createRoleAdmin({
+        name,
+        duplicate_from: duplicateFrom,
+      });
+      toast.success(`Role "${name}" created successfully!`);
+      await loadRolesAndPermissions();
+    } catch (err) {
+      console.error("Failed to create role:", err);
+      toast.error(err?.response?.data?.message || err?.message || "Failed to create role");
     }
-    toast.success(`Role "${newRoleName.trim()}" created successfully!`);
-    setNewRoleName("");
-    setIsCreateRoleOpen(false);
   };
 
   const renderValueCell = (val) => {
@@ -213,6 +237,35 @@ export default function RolesAndPermissionsView() {
       />
     );
   };
+
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "400px",
+          width: "100%",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 4, textAlign: "center" }}>
+        <Typography color="error" sx={{ mb: 2, fontFamily: "Inter, sans-serif" }}>
+          {error}
+        </Typography>
+        <Button variant="outlined" onClick={loadRolesAndPermissions}>
+          Retry
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -311,7 +364,7 @@ export default function RolesAndPermissionsView() {
               >
                 Permission
               </TableCell>
-              {ROLES.map((role) => (
+              {rolesList.map((role) => (
                 <TableCell
                   key={role.id}
                   align="center"
@@ -320,7 +373,6 @@ export default function RolesAndPermissionsView() {
                     fontSize: "14px",
                     color: "#1E293B",
                     fontFamily: "Inter, sans-serif",
-                    width: "17.5%",
                     py: 1.5,
                     borderBottom: "1px solid #E2E8F0",
                   }}
@@ -345,10 +397,9 @@ export default function RolesAndPermissionsView() {
                       "&:hover": { backgroundColor: "#D1FAE5" },
                       transition: "background-color 0.15s ease",
                     }}
-                    
                   >
                     <TableCell
-                      colSpan={5}
+                      colSpan={rolesList.length + 1}
                       sx={{
                         py: 1.2,
                         px: 3,
@@ -434,7 +485,7 @@ export default function RolesAndPermissionsView() {
                         </TableCell>
 
                         {/* Interactive Role Permission Checkbox Cells */}
-                        {ROLES.map((role) => (
+                        {rolesList.map((role) => (
                           <TableCell
                             key={role.id}
                             align="center"
@@ -477,70 +528,13 @@ export default function RolesAndPermissionsView() {
         </Table>
       </TableContainer>
 
-      {/* Create Role Dialog */}
-      <Dialog
+      {/* Create Role Modal */}
+      <CreateRoleModal
         open={isCreateRoleOpen}
         onClose={() => setIsCreateRoleOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        sx={{
-          "& .MuiDialog-paper": {
-            borderRadius: "12px",
-            p: 1,
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontWeight: 700,
-            fontSize: "17px",
-          }}
-        >
-          Create New Role
-          <IconButton size="small" onClick={() => setIsCreateRoleOpen(false)}>
-            <CloseIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          <Typography sx={{ fontSize: "13.5px", color: "#64748B", mb: 2 }}>
-            Enter the title for the new role to configure permissions.
-          </Typography>
-          <TextField
-            autoFocus
-            fullWidth
-            size="small"
-            label="Role Name"
-            value={newRoleName}
-            onChange={(e) => setNewRoleName(e.target.value)}
-            placeholder="e.g. Senior Executive"
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => setIsCreateRoleOpen(false)}
-            sx={{ textTransform: "none", color: "#64748B" }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleCreateRoleSave}
-            sx={{
-              backgroundColor: "#84CC16",
-              color: "#FFFFFF",
-              textTransform: "none",
-              fontWeight: 600,
-              boxShadow: "none",
-              "&:hover": { backgroundColor: "#65A30D" },
-            }}
-          >
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onSave={handleCreateRoleSave}
+        existingRoles={rolesList}
+      />
     </Box>
   );
 }

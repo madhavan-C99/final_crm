@@ -12,6 +12,7 @@ const INITIAL_DROPDOWN_STATE = {
   pipeline_stage_id: [{ label: "All", value: 0 }],
   lead_source_id: [{ label: "All", value: 0 }],
   campaign_name_id: [{ label: "All", value: 0 }],
+  course_id: [{ label: "All", value: 0 }],
   course_plan_id: [{ label: "All", value: 0 }],
   assigned_to_id: [{ label: "All", value: 0 }],
 };
@@ -20,6 +21,7 @@ const FILTER_FIELDS = [
   { key: "pipeline_stage_id", label: "Pipeline Stage" },
   { key: "lead_source_id", label: "Lead Source" },
   { key: "campaign_name_id", label: "Campaign Name" },
+  { key: "course_id", label: "Course" },
   { key: "course_plan_id", label: "Course Plan" },
   { key: "assigned_to_id", label: "Assigned User" },
 ];
@@ -36,15 +38,13 @@ const AdminLeadFilterPopup = ({
   const [loadingOptions, setLoadingOptions] = useState(false);
 
   useEffect(() => {
-    loadAdminSelectOptions();
-  }, []);
-
-  useEffect(() => {
     if (open) {
       setTempFilters(selectedFilters || {});
-      loadAdminSelectOptions();
+      if (dropdownOptions.pipeline_stage_id.length <= 1) {
+        loadAdminSelectOptions();
+      }
     }
-  }, [open, selectedFilters]);
+  }, [open]);
 
   const loadAdminSelectOptions = async () => {
     try {
@@ -97,24 +97,18 @@ const AdminLeadFilterPopup = ({
         });
       };
 
-      const stages = formatList(data.stages || data.pipeline_stages || data.pipelines);
-      const sources = formatList(data.lead_sources || data.sources);
-      const campaigns = formatList(data.campaigns || data.campaign_names);
-      const plans = formatList(data.course_plans || data.plans);
-      const telecallers = formatList(
-        data.telecallers ||
-        data.users ||
-        data.assigned_users ||
-        data.assigned_to ||
-        data.telecaller_list ||
-        data.user_list ||
-        data.users_list
-      );
+      const stages = formatList(data.stages);
+      const sources = formatList(data.sources);
+      const campaigns = formatList(data.campaigns);
+      const courses = formatList(data.courses);
+      const plans = formatList(data.course_plans);
+      const telecallers = formatList(data.telecallers);
 
       setDropdownOptions({
         pipeline_stage_id: stages ? [{ label: "All", value: 0 }, ...stages] : [{ label: "All", value: 0 }],
         lead_source_id: sources ? [{ label: "All", value: 0 }, ...sources] : [{ label: "All", value: 0 }],
         campaign_name_id: campaigns ? [{ label: "All", value: 0 }, ...campaigns] : [{ label: "All", value: 0 }],
+        course_id: courses ? [{ label: "All", value: 0 }, ...courses] : [{ label: "All", value: 0 }],
         course_plan_id: plans ? [{ label: "All", value: 0 }, ...plans] : [{ label: "All", value: 0 }],
         assigned_to_id: telecallers ? [{ label: "All", value: 0 }, ...telecallers] : [{ label: "All", value: 0 }],
       });
@@ -152,6 +146,7 @@ const AdminLeadFilterPopup = ({
       pipeline_stage_id: 0,
       lead_source_id: 0,
       campaign_name_id: 0,
+      course_id: 0,
       course_plan_id: 0,
       assigned_to_id: 0,
     };

@@ -72,8 +72,8 @@ const UploadLeadsModal = ({ open, onClose, onUpload, existingLeads = [] }) => {
   const handleDownloadSampleFile = () => {
     const csvContent =
       "First Name,Last Name,Mobile No,Email ID,Pipeline,Campaign,Source,User,Inquiry Date\n" +
-      "Rahul,Sharma,9876543210,rahul.sharma@example.com,Education,samosa mokka lead,instagram,Gokil,2026-07-31\n" +
-      "Priya,Patel,9123456789,priya.patel@example.com,Education,just dail lead,facebook,Bharath,2026-07-31\n";
+      "John,Doe,9876543210,john.doe@example.com,Pipeline 1,Campaign 1,Website,Agent 1,2026-07-31\n" +
+      "Jane,Smith,9123456789,jane.smith@example.com,Pipeline 1,Campaign 2,Social Media,Agent 2,2026-07-31\n";
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);

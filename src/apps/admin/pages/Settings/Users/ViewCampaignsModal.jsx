@@ -17,8 +17,9 @@ const ACCENT = "#90D916";
 export default function ViewCampaignsModal({ open, onClose, user, campaignsData }) {
   const [campaignsList, setCampaignsList] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [fetchedUserName, setFetchedUserName] = useState("");
 
-  const userName = user?.name || user?.full_name || "User";
+  const userName = fetchedUserName || user?.name || user?.full_name || "User";
   const titleText = `${userName} - Campaign Details`;
 
   useEffect(() => {
@@ -38,24 +39,37 @@ export default function ViewCampaignsModal({ open, onClose, user, campaignsData 
         });
         console.log("[ViewCampaignsModal] Response:", res);
         const rawData = res?.data;
-        const list =
-          rawData?.data?.campaigns ||
-          rawData?.data?.user_campaigns ||
-          rawData?.data?.campaign_list ||
-          rawData?.data?.results ||
-          (Array.isArray(rawData?.data) ? rawData?.data : null) ||
-          rawData?.campaigns ||
-          rawData?.user_campaigns ||
-          rawData?.campaign_list ||
-          rawData?.results ||
-          (Array.isArray(rawData) ? rawData : []);
+
+        // Support nested API response structures (e.g. res.data.data.data.campaigns)
+        const innerData = rawData?.data?.data || rawData?.data || rawData || {};
+        if (innerData.user_name) {
+          setFetchedUserName(innerData.user_name);
+        }
+
+        let list = [];
+        if (Array.isArray(innerData.campaigns)) {
+          list = innerData.campaigns;
+        } else if (Array.isArray(innerData.user_campaigns)) {
+          list = innerData.user_campaigns;
+        } else if (Array.isArray(innerData.campaign_list)) {
+          list = innerData.campaign_list;
+        } else if (Array.isArray(innerData.results)) {
+          list = innerData.results;
+        } else if (Array.isArray(innerData)) {
+          list = innerData;
+        } else if (Array.isArray(rawData?.data?.campaigns)) {
+          list = rawData.data.campaigns;
+        } else if (Array.isArray(rawData?.campaigns)) {
+          list = rawData.campaigns;
+        }
 
         const formatted = Array.isArray(list)
           ? list.map((item, idx) => ({
               id: item.id || item.campaign_id || idx + 1,
-              s_no: idx + 1,
-              name: item.name || item.campaign_name || item.title || "-",
-              assigned_leads: item.assigned_leads ?? item.assigned_leads_count ?? item.total_leads ?? 0,
+              s_no: item.s_no ?? idx + 1,
+              name: item.campaign_name || item.name || item.title || "-",
+              pipeline_name: item.pipeline_name || item.pipeline || "-",
+              assigned_leads: item.total_leads ?? item.assigned_leads ?? item.assigned_leads_count ?? 0,
               unassigned_leads: item.unassigned_leads ?? item.unassigned_leads_count ?? 0,
               called_leads: item.called_leads ?? item.called_leads_count ?? 0,
               rescheduled_leads: item.rescheduled_leads ?? item.rescheduled_leads_count ?? 0,
@@ -123,17 +137,7 @@ export default function ViewCampaignsModal({ open, onClose, user, campaignsData 
         </Typography>
       ),
     },
-    {
-      field: "unassigned_leads",
-      headerName: "Un assigned Leads",
-      minWidth: 150,
-      align: "center",
-      renderCell: (row) => (
-        <Typography sx={{ fontSize: "14px", fontWeight: 400, color: "#374151", fontFamily: "Inter, sans-serif" }}>
-          {row.unassigned_leads ?? 0}
-        </Typography>
-      ),
-    },
+
     {
       field: "called_leads",
       headerName: "Called Leads",

@@ -33,22 +33,23 @@ export default function DispositionLog() {
     stagesOptions: [],
   });
 
-  useEffect(() => {
-    async function loadOptions() {
-      try {
-        const res = await getFilterOptions();
-        if (res.data && res.data.data) {
-          setFilterOptionsData({
-            telecallers: res.data.data.telecallers || [],
-            stagesOptions: res.data.data.pipeline_stages || [],
-          });
-        }
-      } catch (err) {
-        console.error("Failed to fetch filter options:", err);
+  const optionsFetchedRef = useRef(false);
+  const loadOptions = async () => {
+    if (optionsFetchedRef.current) return;
+    try {
+      optionsFetchedRef.current = true;
+      const res = await getFilterOptions();
+      if (res.data && res.data.data) {
+        setFilterOptionsData({
+          telecallers: res.data.data.telecallers || [],
+          stagesOptions: res.data.data.pipeline_stages || [],
+        });
       }
+    } catch (err) {
+      console.error("Failed to fetch filter options:", err);
+      optionsFetchedRef.current = false;
     }
-    loadOptions();
-  }, []);
+  };
 
   useEffect(() => {
     async function loadDispositionData() {
@@ -97,6 +98,7 @@ export default function DispositionLog() {
       <DispositionToolbar
         search={search}
         onSearchChange={setSearch}
+        onFetchOptions={loadOptions}
         filterDropdownOptions={filterOptionsData}
         telecallers={filterOptionsData.telecallers}
         stagesOptions={filterOptionsData.stagesOptions}

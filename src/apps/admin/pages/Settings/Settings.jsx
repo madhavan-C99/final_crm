@@ -11,6 +11,7 @@ import ViewCampaignsModal from "./Users/ViewCampaignsModal";
 import DeleteUserModal from "./Users/DeleteUserModal";
 import TransferLeadsView from "./Users/TransferLeadsView";
 import OrganizationView from "./Organization/OrganizationView";
+import PipelineView from "./Pipeline/PipelineView";
 import TeamsView from "./Teams/TeamsView";
 import MonthlyTargetView from "./MonthlyTarget/MonthlyTargetView";
 import RolesAndPermissionsView from "./RolesAndPermissions/RolesAndPermissionsView";
@@ -49,25 +50,32 @@ export default function Settings() {
     teamsList: [],
   });
 
-  // Load User Dropdowns (Roles, Managers, Teams) from Backend API
+  const dropdownsFetchedRef = React.useRef(false);
+  // Load User Dropdowns (Roles, Managers, Teams) from Backend API lazily on modal open
   const loadDropdowns = useCallback(async () => {
+    if (dropdownsFetchedRef.current) return;
     try {
+      dropdownsFetchedRef.current = true;
       const response = await fetchUserDropdownsAdmin();
-      console.log("[Settings] fetchUserDropdownsAdmin response:", response);
       const rawData = response?.data;
       const data = rawData?.data || rawData || {};
 
-      const roles = data.roles || data.roles_list || data.role_list || data.user_roles || [];
-      const managers = data.managers || data.managers_list || data.reporting_to_list || data.reporting_managers || [];
-      const teams = data.teams || data.teams_list || data.team_list || data.user_teams || [];
+      let roles = data.roles || data.roles_list || data.role_list || data.user_roles;
+      let managers = data.managers || data.managers_list || data.reporting_users || data.reporting_to_list || data.reporting_managers;
+      let teams = data.teams || data.teams_list || data.team_list || data.user_teams;
+
+      const rolesArr = Array.isArray(roles) ? roles : [];
+      const managersArr = Array.isArray(managers) ? managers : [];
+      const teamsArr = Array.isArray(teams) ? teams : [];
 
       setDropdownOptions({
-        rolesList: Array.isArray(roles) ? roles : [],
-        managersList: Array.isArray(managers) ? managers : [],
-        teamsList: Array.isArray(teams) ? teams : [],
+        rolesList: rolesArr,
+        managersList: managersArr,
+        teamsList: teamsArr,
       });
     } catch (err) {
       console.error("Error loading user dropdowns from API:", err);
+      dropdownsFetchedRef.current = false;
     }
   }, []);
 
@@ -76,8 +84,6 @@ export default function Settings() {
     try {
       setLoading(true);
       const response = await fetchUsersAdmin({ search: searchTerm, sort: sortOption });
-      console.log("[Settings] fetchUsersAdmin response:", response);
-      console.log("[Settings] Users Array:", response?.data?.data?.users);
       const rawData = response?.data;
       const apiData =
         rawData?.data?.users ||
@@ -113,6 +119,10 @@ export default function Settings() {
               (typeof item.manager_name === "string" ? item.manager_name : null) ||
               (typeof item.manager === "string" ? item.manager : null) ||
               "-",
+            reporting_to_id: item.reporting_to_id || item.reportingToId || item.reporting_manager_id || item.manager_id || null,
+            joined_date: item.joined_date || item.joinedDate || "",
+            team: item.team || item.team_name || "",
+            team_id: item.team_id || null,
             status: item.status || (item.is_active ? "Active" : "Deactive"),
             is_lead_enabled:
               item.is_lead_enabled !== undefined
@@ -144,9 +154,14 @@ export default function Settings() {
   useEffect(() => {
     if (activeTab === "users") {
       loadUsers();
+    }
+  }, [activeTab, loadUsers]);
+
+  useEffect(() => {
+    if (isAddUserOpen || isEditUserOpen) {
       loadDropdowns();
     }
-  }, [activeTab, loadUsers, loadDropdowns]);
+  }, [isAddUserOpen, isEditUserOpen, loadDropdowns]);
 
   const handleAddUser = async (newUserData) => {
     try {
@@ -181,6 +196,15 @@ export default function Settings() {
   const handleOpenTransferLeads = (user) => {
     setTransferUser(user);
     setIsTransferLeadsOpen(true);
+  };
+
+  const handleTransferComplete = async (updatedUserSummary) => {
+    setIsTransferLeadsOpen(false);
+    await loadUsers();
+    if (!updatedUserSummary || updatedUserSummary.total_leads === 0 || updatedUserSummary.total_leads === undefined) {
+      setUserToDelete(transferUser);
+      setIsDeleteUserOpen(true);
+    }
   };
 
   const handleOpenDeleteUser = (user) => {
@@ -310,6 +334,7 @@ export default function Settings() {
           <TransferLeadsView
             user={transferUser}
             onBack={() => setIsTransferLeadsOpen(false)}
+            onTransferComplete={handleTransferComplete}
           />
         ) : (
           <>
@@ -379,6 +404,9 @@ export default function Settings() {
 
       {/* Render Organization View when activeTab === "organization" */}
       {activeTab === "organization" && <OrganizationView />}
+
+      {/* Render Pipeline View when activeTab === "pipeline" */}
+      {activeTab === "pipeline" && <PipelineView />}
 
       {/* Render Teams View when activeTab === "teams" */}
       {activeTab === "teams" && <TeamsView />}

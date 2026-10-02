@@ -30,11 +30,7 @@ function AssignTelecallerModal({
     onClose?.();
   };
 
-  const defaultTelecallers = ["telecaller", "poomani", "Bharath", "Prakash"];
-  const activeTelecallers =
-    telecallerOptions && telecallerOptions.length > 0
-      ? telecallerOptions
-      : defaultTelecallers;
+  const activeTelecallers = telecallerOptions || [];
 
   return (
     <Dialog

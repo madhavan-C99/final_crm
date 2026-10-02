@@ -57,9 +57,15 @@ export default function DeleteUserModal({
         });
 
         console.log("[DeleteUserModal] Summary API Response:", response);
-        const data = response?.data?.data || response?.data || {};
+        const rawRes = response?.data;
+        const level1 = rawRes?.data?.data || rawRes?.data || rawRes || {};
+        const finalSummary =
+          level1?.has_assigned_leads !== undefined || level1?.user_id !== undefined || level1?.total_assigned_leads !== undefined
+            ? level1
+            : level1?.data || level1;
+
         if (isMounted) {
-          setSummaryData(data);
+          setSummaryData(finalSummary);
         }
       } catch (err) {
         console.error("[DeleteUserModal] Failed to fetch summary:", err);
@@ -83,50 +89,29 @@ export default function DeleteUserModal({
   if (!open) return null;
 
   // Extract lead stats from summary API or user object fallback
-  const activeLeadsCount =
-    summaryData?.active_leads ??
-    user?.active_leads ??
-    user?.activeLeads ??
-    user?.active_leads_count ??
-    0;
+  const activeLeadsCount = summaryData !== null
+    ? Number(summaryData?.active_leads ?? 0)
+    : Number(user?.active_leads ?? user?.activeLeads ?? user?.active_leads_count ?? 0);
 
-  const newLeadsCount =
-    summaryData?.new_leads ??
-    user?.new_leads ??
-    user?.newLeads ??
-    user?.new_leads_count ??
-    0;
+  const newLeadsCount = summaryData !== null
+    ? Number(summaryData?.new_leads ?? 0)
+    : Number(user?.new_leads ?? user?.newLeads ?? user?.new_leads_count ?? 0);
 
-  const followUpsCount =
-    summaryData?.follow_ups ??
-    user?.follow_ups ??
-    user?.followUps ??
-    user?.follow_ups_count ??
-    0;
+  const followUpsCount = summaryData !== null
+    ? Number(summaryData?.follow_ups ?? 0)
+    : Number(user?.follow_ups ?? user?.followUps ?? user?.follow_ups_count ?? 0);
 
-  const campaignsCount =
-    summaryData?.campaigns_count ??
-    user?.campaigns_count ??
-    user?.campaigns ??
-    0;
+  const campaignsCount = summaryData !== null
+    ? Number(summaryData?.campaigns_count ?? summaryData?.total_campaigns ?? (Array.isArray(summaryData?.campaigns) ? summaryData.campaigns.length : 0))
+    : Number(user?.campaigns_count ?? user?.campaigns ?? 0);
 
-  const totalAssignedLeads =
-    summaryData?.total_assigned_leads !== undefined
-      ? Number(summaryData.total_assigned_leads)
-      : user?.assigned_leads_count !== undefined
-      ? Number(user.assigned_leads_count)
-      : user?.leads_count !== undefined
-      ? Number(user.leads_count)
-      : activeLeadsCount + newLeadsCount + followUpsCount + campaignsCount;
+  const totalAssignedLeads = summaryData !== null
+    ? Number(summaryData?.total_assigned_leads ?? summaryData?.total_leads ?? (activeLeadsCount + newLeadsCount + followUpsCount + campaignsCount))
+    : Number(user?.assigned_leads_count ?? user?.leads_count ?? (activeLeadsCount + newLeadsCount + followUpsCount + campaignsCount));
 
-  const hasAssignedLeads =
-    summaryData?.has_assigned_leads !== undefined
-      ? Boolean(summaryData.has_assigned_leads)
-      : user?.has_assigned_leads !== undefined
-      ? Boolean(user.has_assigned_leads)
-      : user?.hasAssignedLeads !== undefined
-      ? Boolean(user.hasAssignedLeads)
-      : totalAssignedLeads > 0;
+  const hasAssignedLeads = summaryData !== null
+    ? Boolean(summaryData?.has_assigned_leads ?? (totalAssignedLeads > 0))
+    : Boolean(user?.has_assigned_leads ?? (totalAssignedLeads > 0));
 
   const userName =
     summaryData?.user_name || user?.name || user?.full_name || "User";

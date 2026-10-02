@@ -39,7 +39,7 @@ function EnquirySheet() {
 
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("Enquiry Sheet");
-  const [stats, setStats] = useState(defaultStats);
+  const [stats, setStats] = useState([]);
   const [rows, setRows] = useState([]);
   const [rawCampaignName, setRawCampaignName] = useState("");
   const [resolvedCampaignId, setResolvedCampaignId] = useState(campaignId || null);
@@ -71,7 +71,7 @@ function EnquirySheet() {
           }));
           setStats(updatedStats);
         } else {
-          setStats(defaultStats);
+          setStats([]);
         }
 
         setRows(d.telecallers || d.distribution_rows || []);
@@ -122,10 +122,10 @@ function EnquirySheet() {
     } else if (label === "Pause Campaign" || label === "Resume Campaign") {
       setPauseCampaignOpen(true);
     } else if (label === "Campaign Setting") {
-      const activeCampName = rawCampaignName || campaignNameParam || "Samosa_mokka Lead";
+      const activeCampName = rawCampaignName || campaignNameParam || "";
       navigate(`/admin/edit-campaign?campaign_name=${encodeURIComponent(activeCampName)}`);
     } else if (label === "Edit Enquiry Form") {
-      const activeCampName = rawCampaignName || campaignNameParam || "500 Enquiry Shet";
+      const activeCampName = rawCampaignName || campaignNameParam || "";
       navigate(`/admin/edit-enquiry-form?campaign_name=${encodeURIComponent(activeCampName)}`);
     }
   };
@@ -188,8 +188,8 @@ function EnquirySheet() {
       <UploadExcelModal
         open={uploadExcelOpen}
         onClose={() => setUploadExcelOpen(false)}
-        onUploadSuccess={(file) => {
-          console.log("Excel uploaded on EnquirySheet:", file);
+        onUploadSuccess={() => {
+          loadEnquiryData();
         }}
       />
 
@@ -200,8 +200,7 @@ function EnquirySheet() {
         initialCampaignName={rawCampaignName || campaignNameParam}
         lockCampaign={true}
         onClose={() => setAddLeadOpen(false)}
-        onSaveSuccess={(data) => {
-          console.log("New Lead Added on EnquirySheet:", data);
+        onSaveSuccess={() => {
           loadEnquiryData();
         }}
       />
@@ -212,8 +211,7 @@ function EnquirySheet() {
         campaignId={resolvedCampaignId || (campaignId ? Number(campaignId) : null)}
         isCurrentlyActive={isCampaignActive}
         onClose={() => setPauseCampaignOpen(false)}
-        onConfirmPause={(newStatus) => {
-          console.log("Campaign Paused/Resumed from EnquirySheet, newStatus:", newStatus);
+        onConfirmPause={() => {
           loadEnquiryData();
         }}
       />

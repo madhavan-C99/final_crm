@@ -14,6 +14,8 @@ import CustomDateRangePicker from "@/shared/components/table/CustomDateDialog";
 
 import { useAuth } from "@/shared/context/AuthContext";
 
+import { fetchPerformanceFilterDropdowns } from "@/apps/admin/services/performanceAdminService";
+
 const PerformanceFilter = ({
   fromDate,
   setFromDate,
@@ -34,7 +36,27 @@ const PerformanceFilter = ({
   const [teamsAnchorEl, setTeamsAnchorEl] = useState(null);
   const isTeamsOpen = Boolean(teamsAnchorEl);
 
-  const teamList = Array.isArray(teams) ? teams : [];
+  const [internalTeams, setInternalTeams] = useState(null);
+  const fetchedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (isTeamsOpen && !fetchedRef.current) {
+      fetchedRef.current = true;
+      fetchPerformanceFilterDropdowns()
+        .then((res) => {
+          const data = res?.data?.data || res?.data;
+          if (data && Array.isArray(data.teams)) {
+            setInternalTeams(data.teams);
+          }
+        })
+        .catch((err) => {
+          console.error("Error loading performance filter dropdowns:", err);
+          fetchedRef.current = false;
+        });
+    }
+  }, [isTeamsOpen]);
+
+  const teamList = internalTeams !== null ? internalTeams : (Array.isArray(teams) ? teams : []);
 
   const handleTeamsClick = (event) => {
     setTeamsAnchorEl(event.currentTarget);
@@ -51,11 +73,9 @@ const PerformanceFilter = ({
 
   const getTeamLabel = () => {
     const found = teamList.find(
-      (t) => Number(t.id) === Number(selectedTeam) || t.code === selectedTeam
+      (t) => Number(t.id ?? t.value) === Number(selectedTeam) || (t.name || t.label || t.code) === selectedTeam
     );
-    if (found) return found.name;
-    if (selectedTeam === "all" || selectedTeam === 0 || selectedTeam === "0")
-      return "All Teams";
+    if (found) return found.name || found.label;
     return "All Teams";
   };
 
@@ -103,8 +123,10 @@ const PerformanceFilter = ({
               setOpenCalendar(true);
             }
           }}
-          SelectProps={{
-            IconComponent: KeyboardArrowDownOutlinedIcon,
+          slotProps={{
+            select: {
+              IconComponent: KeyboardArrowDownOutlinedIcon,
+            },
           }}
           sx={{
             minWidth: "140px",
@@ -175,27 +197,28 @@ const PerformanceFilter = ({
             },
           }}
         >
-          {teamList.length > 0 ? (
-            teamList.map((team) => (
+          <MenuItem
+            onClick={() => handleTeamSelect(0)}
+            selected={Number(selectedTeam) === 0 || selectedTeam === "all"}
+          >
+            All Teams
+          </MenuItem>
+          {teamList.map((team, idx) => {
+            const teamId = team.id ?? team.value ?? idx + 1;
+            const teamName = team.name ?? team.label ?? String(teamId);
+            return (
               <MenuItem
-                key={team.id}
-                onClick={() => handleTeamSelect(team.id)}
+                key={teamId}
+                onClick={() => handleTeamSelect(teamId)}
                 selected={
-                  Number(selectedTeam) === Number(team.id) ||
-                  (selectedTeam === "all" && Number(team.id) === 0)
+                  Number(selectedTeam) === Number(teamId) ||
+                  (String(selectedTeam).toLowerCase() === String(teamName).toLowerCase())
                 }
               >
-                {team.name}
+                {teamName}
               </MenuItem>
-            ))
-          ) : (
-            <MenuItem
-              onClick={() => handleTeamSelect(0)}
-              selected={Number(selectedTeam) === 0 || selectedTeam === "all"}
-            >
-              All Teams
-            </MenuItem>
-          )}
+            );
+          })}
         </Menu>
 
         {/* 3. Export Button */}
