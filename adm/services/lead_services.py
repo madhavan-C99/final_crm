@@ -65,17 +65,22 @@ def fetch_all_leads_admin(user=None, **data):
                 Q(email__icontains=search)
             )
 
-        # 2. Specific Telecaller Filter
-        if data.get("tele_id"):
-            base_qs = base_qs.filter(assigned_to_id=data.get("tele_id"))
+        # 2. Specific Telecaller / Assigned To Filter
+        tele_id = data.get("assigned_to") or data.get("tele_id")
+        if tele_id:
+            if str(tele_id).isdigit():
+                base_qs = base_qs.filter(assigned_to_id=int(tele_id))
+            else:
+                base_qs = base_qs.filter(
+                    Q(assigned_to__username__iexact=str(tele_id)) |
+                    Q(assigned_to__first_name__icontains=str(tele_id))
+                )
 
         # 3. Dropdown & Pipeline Filters
         pipeline_id = data.get("pipeline_id")
         pipeline_name = data.get("pipeline_name")
         if pipeline_id:
-            base_qs = base_qs.filter(
-                Q(campaign__pipeline_category_id=pipeline_id) | Q(campaign_id=pipeline_id)
-            ).distinct()
+            base_qs = base_qs.filter(campaign__pipeline_category_id=pipeline_id)
         elif pipeline_name and str(pipeline_name).strip():
             p_name = str(pipeline_name).strip()
             if p_name.lower() not in ["all", "all leads", "none", "null"]:
@@ -86,10 +91,15 @@ def fetch_all_leads_admin(user=None, **data):
 
         if data.get("pipeline_stage_id"):
             base_qs = base_qs.filter(pipeline_stage_id=data.get("pipeline_stage_id"))
-        if data.get("lead_source_id"):
-            base_qs = base_qs.filter(lead_source_id=data.get("lead_source_id"))
-        if data.get("campaign_name_id"):
-            base_qs = base_qs.filter(campaign_id=data.get("campaign_name_id"))
+
+        source_id = data.get("source_id") or data.get("lead_source_id")
+        if source_id:
+            base_qs = base_qs.filter(lead_source_id=source_id)
+
+        campaign_id = data.get("campaign_id") or data.get("campaign_name_id")
+        if campaign_id:
+            base_qs = base_qs.filter(campaign_id=campaign_id)
+
         if data.get("course_plan_id"):
             base_qs = base_qs.filter(course_plan_id=data.get("course_plan_id"))
         if data.get("course_name_id"):
@@ -98,7 +108,7 @@ def fetch_all_leads_admin(user=None, **data):
             base_qs = base_qs.filter(priority_id=data.get("priority_id"))
 
         # 4. Date Filter
-        date_filter_type = data.get("date_filter_type") or "all"
+        date_filter_type = str(data.get("date_filter_type") or "all").lower().strip()
         from_date = data.get("from_date")
         to_date = data.get("to_date")
         today = now.date()
@@ -109,16 +119,16 @@ def fetch_all_leads_admin(user=None, **data):
             from_date = to_date = today - timedelta(days=1)
         elif date_filter_type == "weekly":
             from_date, to_date = today - timedelta(days=7), today
-        elif date_filter_type == "monthly":
+        elif date_filter_type in ["monthly", "this_month", "this month"]:
             from_date, to_date = today.replace(day=1), today
 
         if from_date and to_date:
             base_qs = base_qs.filter(enquiry_date__date__range=[from_date, to_date])
 
         # 5. Exclude ONLY UNAPPROVED loss leads (waiting in Loss Approval queue) from main leads list
-        # Approved loss leads (in AdminApprovedLossLead) remain in main leads list under 'lost' tab!
         approved_loss_lead_ids = AdminApprovedLossLead.objects.values_list("lead_id", flat=True)
         unapproved_loss_ids = Lead.objects.filter(
+            Q(pipeline_stage__stage_type="closed_lost") | Q(pipeline_stage__stage_type="terminal_closed") |
             Q(pipeline_stage_id=5) | Q(pipeline_stage__name__icontains="loss") | Q(pipeline_stage__name__icontains="lost")
         ).exclude(
             id__in=approved_loss_lead_ids
@@ -126,10 +136,25 @@ def fetch_all_leads_admin(user=None, **data):
 
         base_qs = base_qs.exclude(id__in=unapproved_loss_ids)
 
-        new_lead_qs = base_qs.filter(Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")).distinct()
-        follow_up_qs = base_qs.filter(Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")).distinct()
-        won_qs = base_qs.filter(Q(pipeline_stage_id=4) | Q(pipeline_stage__name__icontains="won")).distinct()
-        lost_qs = base_qs.filter(id__in=approved_loss_lead_ids).distinct()
+        new_lead_qs = base_qs.filter(
+            Q(pipeline_stage__stage_type="open", pipeline_stage__order_no=1) |
+            Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")
+        ).distinct()
+
+        follow_up_qs = base_qs.filter(
+            Q(pipeline_stage__stage_type="open", pipeline_stage__order_no__gt=1) |
+            Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")
+        ).distinct()
+
+        won_qs = base_qs.filter(
+            Q(pipeline_stage__stage_type="closed_won") | Q(pipeline_stage__stage_type="terminal_joined") |
+            Q(pipeline_stage_id=4) | Q(pipeline_stage__name__icontains="won")
+        ).distinct()
+
+        lost_qs = base_qs.filter(
+            Q(pipeline_stage__stage_type="closed_lost") | Q(pipeline_stage__stage_type="terminal_closed") |
+            Q(id__in=approved_loss_lead_ids)
+        ).distinct()
 
         # Missed / Pending followups: unattended past followups
         missed_follow_up_qs = base_qs.filter(
@@ -148,35 +173,76 @@ def fetch_all_leads_admin(user=None, **data):
             "loss": lost_qs,
         }
 
-        # Stats Counts matching UI Screen 100%:
+        canonical_tabs = {
+            "all": tabs["all"],
+            "new_lead": tabs["new_lead"],
+            "follow_up": tabs["follow_up"],
+            "missed_follow_up": tabs["missed_follow_up"],
+            "won": tabs["won"],
+            "lost": tabs["lost"],
+        }
+        canonical_counts = {key: qs.count() for key, qs in canonical_tabs.items()}
+        tab_count_keys = {
+            "all": "all",
+            "new_lead": "new_lead",
+            "new": "new_lead",
+            "follow_up": "follow_up",
+            "missed_follow_up": "missed_follow_up",
+            "pending_follow_up": "missed_follow_up",
+            "won": "won",
+            "lost": "lost",
+            "loss": "lost",
+        }
+        tab_counts = {
+            key: canonical_counts[count_key]
+            for key, count_key in tab_count_keys.items()
+        }
         stats = {
-            "total_count": tabs["all"].count(),
-            "new_count": tabs["new_lead"].count(),           # ➔ 33
-            "follow_up_count": tabs["follow_up"].count(),     # ➔ 19
-            "pending_follow_up_count": tabs["missed_follow_up"].count(), # ➔ 0
-            "won_count": tabs["won"].count(),               # ➔ 17
-            "loss_count": tabs["lost"].count(),             # ➔ 6
+            "total_count": canonical_counts["all"],
+            "new_count": canonical_counts["new_lead"],
+            "followup_count": canonical_counts["follow_up"],
+            "follow_up_count": canonical_counts["follow_up"],
+            "missed_count": canonical_counts["missed_follow_up"],
+            "pending_follow_up_count": canonical_counts["missed_follow_up"],
+            "won_count": canonical_counts["won"],
+            "lost_count": canonical_counts["lost"],
+            "loss_count": canonical_counts["lost"],
         }
 
-        tab_counts = {key: qs.count() for key, qs in tabs.items()}
+        # Populate dynamic ${stage_id}_count keys for frontend LeadStats stage badges
+        stage_counts_qs = base_qs.values('pipeline_stage_id').annotate(cnt=Count('id'))
+        for sc in stage_counts_qs:
+            stg_id = sc['pipeline_stage_id']
+            if stg_id:
+                stats[f"{stg_id}_count"] = sc['cnt']
 
-        # 6. Selected Tab & Pagination
-        lead_filter_type = data.get("lead_filter_type") or "all"
-        selected_qs = tabs.get(lead_filter_type, tabs["all"]).order_by(data.get("sort_by") or "-created_at")
+        # 6. Sorting & Pagination
+        sort_order = str(data.get("sort_order") or "").lower().strip()
+        sort_by = data.get("sort_by") or "-created_at"
+        if sort_order == "newest":
+            sort_by = "-created_at"
+        elif sort_order == "oldest":
+            sort_by = "created_at"
 
-        total = selected_qs.count()
-        page_size_input = data.get("page_size")
-        # page_size = 0, "all", அல்லது 1000 என அனுப்பினால் அத்தனை 63+ லீட்களையும் ஒரே பக்கத்தில் தரும்
+        lead_filter_type = str(data.get("lead_filter_type") or "all").lower().strip()
+        selected_qs = tabs.get(lead_filter_type, tabs["all"]).order_by(sort_by)
+
+        total = tab_counts.get(lead_filter_type, tab_counts["all"])
+        page_size_input = data.get("rows_per_page") or data.get("page_size")
         
+        raw_page = data.get("page")
+        if raw_page is None:
+            page = 0
+        else:
+            page = int(raw_page)
+
         if str(page_size_input).lower() in ["0", "all", "none"] or page_size_input == 0:
-            page = 1
-            page_size = total
+            page_size = total if total > 0 else 1000
             start = 0 
             rows = selected_qs
         else:
-            page = int(data.get("page") or 1)
-            page_size = int(page_size_input or 1000)  # 👈 Default limit set to 1000
-            start = (page - 1) * page_size
+            page_size = int(page_size_input or 1000)
+            start = page * page_size
             end = start + page_size
             rows = selected_qs[start:end]
 
@@ -235,6 +301,7 @@ def fetch_all_leads_admin(user=None, **data):
                 "assigned_to_id": lead.assigned_to_id,
                 "assigned_to": get_user_display_name(lead.assigned_to),
                 "stage_id": lead.pipeline_stage_id,
+                "pipeline_stage_id": lead.pipeline_stage_id,
                 "stage": lead.pipeline_stage.name if lead.pipeline_stage else "New",
                 "tag": tag_name,
                 "tag_id": tag_id_val,
@@ -252,13 +319,23 @@ def fetch_all_leads_admin(user=None, **data):
                 "enquiry_date": lead.enquiry_date,
             })
 
+        import math
+        total_pages = math.ceil(total / page_size) if (page_size and page_size > 0 and total > 0) else 1
+
         return {
+            "status": True,
+            "message": "Leads fetched successfully",
+            "total_count": total,
+            "total_records": total,
+            "total": total,
             "leads": leads,
             "stats": stats,   
             "tab_counts": tab_counts,
             "page": page,
+            "current_page": page,
             "page_size": page_size,
-            "total": total
+            "rows_per_page": page_size,
+            "total_pages": total_pages
         }
 
     except Exception as e:

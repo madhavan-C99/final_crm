@@ -6,7 +6,7 @@ class PipelineStageTranferedData(models.Model):
     pipeline_id = models.IntegerField(null=True, blank=True)
     pipeline_name = models.CharField(max_length=150, null=True, blank=True)
     stage_name = models.CharField(max_length=150)
-    stage_type = models.CharField(max_length=50, default="standard")
+    stage_type = models.CharField(max_length=50, default="open")
     order_no = models.IntegerField(default=1)
 
     # Organization context

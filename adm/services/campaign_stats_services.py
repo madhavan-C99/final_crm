@@ -140,7 +140,7 @@ def fetch_filter_options(user, **data):
         stage_tags_map = {}
         try:
             ps1 = list(PipelineStage.objects.values_list('name', flat=True))
-            ps2 = list(Lead.objects.values_list('pipeline_stage__name', flat=True))
+            ps2 = list(Lead.objects.exclude(pipeline_stage__name__isnull=True).values_list('pipeline_stage__name', flat=True).distinct())
             stages = sorted(list(set([st for st in (ps1 + ps2) if st and str(st).strip()])))
 
             for ps in PipelineStage.objects.all():

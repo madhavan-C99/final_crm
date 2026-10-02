@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from django.conf import settings
 from rest_framework.exceptions import APIException
+from utils.constants import UITheme
 
 
 def generate_excel_file(file_path, export_cols, raw_rows):
@@ -74,7 +75,7 @@ def generate_pdf_file(file_path, entity, export_cols, raw_rows):
         doc = SimpleDocTemplate(file_path, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
         styles = getSampleStyleSheet()
         
-        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor('#1E3A8A'))
+        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=14, leading=18, textColor=colors.HexColor(UITheme.PDF_HEADER_TITLE))
         th_style = ParagraphStyle('TH', parent=styles['Normal'], fontSize=7.5, leading=9.5, fontName='Helvetica-Bold', textColor=colors.white)
         td_style = ParagraphStyle('TD', parent=styles['Normal'], fontSize=7, leading=9)
 
@@ -92,10 +93,10 @@ def generate_pdf_file(file_path, entity, export_cols, raw_rows):
 
         t = Table(table_data)
         t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#84C225')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(UITheme.PDF_TABLE_HEADER_BG)),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor(UITheme.PDF_TABLE_GRID)),
             ('TOPPADDING', (0, 0), (-1, -1), 5),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ]))

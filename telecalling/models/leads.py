@@ -158,7 +158,7 @@ class PipelineStage(SafeDeleteModel):
     name = models.CharField(max_length=100)
     display_value = models.CharField(max_length=100, null=True, blank=True)
     order_no = models.IntegerField(default=0)
-    stage_type = models.CharField(max_length=50, default='standard')
+    stage_type = models.CharField(max_length=50, default='open')  # ('open', 'closed_won', 'closed_lost')
     is_active = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True,null=True)
     created_by = models.CharField(max_length=50,null=True)

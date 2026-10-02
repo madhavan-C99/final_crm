@@ -1,7 +1,7 @@
 from django.urls import path
 from .views.team_views import (
     FetchAllTeamsAdminApi, CreateTeamAdminApi, EditTeamAdminApi, DeleteTeamAdminApi,
-    FetchTeamDropdownsAdminApi,
+    # FetchTeamDropdownsAdminApi,
 )
 from .views.organization_views import (
     CreateOrganizationProfileAdminApi, GetOrganizationProfileAdminApi, EditOrganizationProfileAdminApi,
@@ -15,17 +15,16 @@ from .views.lead_views import (
 )
 from .views.payment_views import (
     FetchAllPendingPaymentsAdmin, ExportPendingPaymentsAdmin,
-    GetPendingPaymentFilterDropdownsAdmin,
+    # GetPendingPaymentFilterDropdownsAdmin,
 )
 from .views.loss_lead_approval_views import (
     FetchLossLeadApprovalRequestsAdmin, ActionLossLeadApprovalAdmin,
-    ExportLossLeadApprovalRequestsAdmin, GetLossLeadApprovalFilterDropdownsAdmin,
+    ExportLossLeadApprovalRequestsAdmin,
 )
 from .views.performance_views import (
     FetchPerformanceOverviewAdmin, AssignUsersToTeamAdmin,
     UpdateTelecallerTargetAdmin, FetchMonthlyTargetAdmin, SetMonthlyTargetAdmin,
-    ExportPerformanceOverviewAdmin, FetchTargetDropdownsAdmin,
-    GetPerformanceFilterDropdownsAdmin,
+    ExportPerformanceOverviewAdmin,
 )
 from .views.permission_views import (
     GetRolesAndPermissionsApi, UpdateRolePermissionApi,
@@ -53,7 +52,7 @@ from .views.user_views import (
     TransferSingleCampaignLeadsAdminApi,
     TransferAllCampaignsLeadsAdminApi,
     FetchUserDeleteSummaryAdminApi,
-    FetchUserDropdownsAdminApi,
+    # FetchUserDropdownsAdminApi,
 )
 from .views.loss_reason_views import (
     FetchLossReasonsAdminApi,
@@ -72,7 +71,7 @@ from .views.settings_pipeline_views import (
 )
 
 # Poomani
-from .views.campaign_stats_views import EducationPipelineStats, CampaignCardsList, FilterOptionsView
+from .views.campaign_stats_views import EducationPipelineStats, CampaignCardsList
 from .views.enquiry_sheet_views import (
     CampaignEnquirySheetView,
     LeadSummaryReportView,
@@ -90,12 +89,12 @@ from .views.campaign_management_views import (
     ToggleCampaignStatusView,
     FetchCampaignDetailView,
     UpdateCampaignDetailView,
-    PipelineCategoriesView,
-    CampaignManagersView,
-    CampaignAgentsView,
+    # PipelineCategoriesView,
+    # CampaignManagersView,
+    # CampaignAgentsView,
 )
 
-from .views.add_new_lead_views import AddNewLeadView, AddLeadDropdownsView
+from .views.add_new_lead_views import AddNewLeadView
 from .views.generic_engine_views import FetchLeadsApi, ExportDataApi, ActionLeadManagementApi, CreateLeadApi
 
 urlpatterns = [
@@ -203,7 +202,7 @@ urlpatterns = [
     path('create_team_admin', CreateTeamAdminApi.as_view()),
     path('edit_team_admin', EditTeamAdminApi.as_view()),
     path('delete_team_admin', DeleteTeamAdminApi.as_view()),
-    path('fetch_team_dropdowns_admin', FetchTeamDropdownsAdminApi.as_view()),
+    # path('fetch_team_dropdowns_admin', FetchTeamDropdownsAdminApi.as_view()), # 🔄 Replaced by get_select_options
 
     # 📌 Organization APIs
     path('create_organization_profile_admin', CreateOrganizationProfileAdminApi.as_view()),

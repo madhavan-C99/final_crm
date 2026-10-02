@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from rest_framework.views import APIView
 from rest_framework import serializers, status
 from rest_framework.response import Response
@@ -34,14 +36,38 @@ class FetchAllPendingPaymentsAdmin(APIView):
         from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         sort_by = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        sort_type = serializers.ChoiceField(
+            choices=("newest", "oldest"), required=False, default="newest"
+        )
         pipeline_id = serializers.IntegerField(required=False, allow_null=True)
+        course_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        course_plan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        course_time = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        payment_stage = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        pending_amount = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         course_name_id = serializers.IntegerField(required=False, allow_null=True)
         course_plan_id = serializers.IntegerField(required=False, allow_null=True)
         course_timing_id = serializers.IntegerField(required=False, allow_null=True)
         payment_stage_id = serializers.IntegerField(required=False, allow_null=True)
         pending_amount_range = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        page = serializers.IntegerField(required=False, default=1)
-        limit = serializers.IntegerField(required=False, default=1000)
+        page = serializers.IntegerField(required=False, min_value=1, default=1)
+        page_size = serializers.IntegerField(required=False, min_value=1)
+        limit = serializers.IntegerField(required=False, min_value=1)
+
+        def validate_from_date(self, value):
+            return self._validate_date(value)
+
+        def validate_to_date(self, value):
+            return self._validate_date(value)
+
+        @staticmethod
+        def _validate_date(value):
+            if value in (None, ""):
+                return None
+            try:
+                return datetime.strptime(value, "%Y-%m-%d").date()
+            except ValueError as exc:
+                raise serializers.ValidationError("Use the YYYY-MM-DD date format.") from exc
 
     def post(self, request):
         authorize_request('api_fetch_all_pending_payments_admin', request.user)
@@ -55,7 +81,7 @@ class FetchAllPendingPaymentsAdmin(APIView):
             'api_name': request.path,
             'method': request.method,
             'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status"), "total_count": result.get("total_count") if isinstance(result, dict) else 0},
+            'response_payload': {"status": result.get("status"), "total_records": result.get("total_records", 0)},
             'status_code': 200
         }
         api_history_log(log_data)
@@ -75,7 +101,15 @@ class ExportPendingPaymentsAdmin(APIView):
         from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         sort_by = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        sort_type = serializers.ChoiceField(
+            choices=("newest", "oldest"), required=False, default="newest"
+        )
         pipeline_id = serializers.IntegerField(required=False, allow_null=True)
+        course_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        course_plan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        course_time = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        payment_stage = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        pending_amount = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         course_name_id = serializers.IntegerField(required=False, allow_null=True)
         course_plan_id = serializers.IntegerField(required=False, allow_null=True)
         course_timing_id = serializers.IntegerField(required=False, allow_null=True)

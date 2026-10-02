@@ -16,20 +16,28 @@ class FetchAllLeadsAdmin(APIView):
         lead_filter_type = serializers.CharField(required=False, default="all")
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         tele_id = serializers.IntegerField(required=False, allow_null=True)
-        from_date = serializers.DateField(required=False)
-        to_date = serializers.DateField(required=False)
+        telecaller_id = serializers.IntegerField(required=False, allow_null=True)
+        assigned_to = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        from_date = serializers.DateField(required=False, allow_null=True)
+        to_date = serializers.DateField(required=False, allow_null=True)
+        created_date_from = serializers.DateField(required=False, allow_null=True)
+        created_date_to = serializers.DateField(required=False, allow_null=True)
         date_filter_type = serializers.CharField(required=False, default="all")
         pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True, default=0)
         lead_source_id = serializers.IntegerField(required=False, allow_null=True, default=0)
+        source_id = serializers.IntegerField(required=False, allow_null=True, default=0)
         course_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
         priority_id = serializers.IntegerField(required=False, allow_null=True, default=0)
         course_plan_id = serializers.IntegerField(required=False, allow_null=True, default=0)
         campaign_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
+        campaign_id = serializers.IntegerField(required=False, allow_null=True, default=0)
         pipeline_id = serializers.IntegerField(required=False, allow_null=True, default=0)
         pipeline_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         sort_by = serializers.CharField(required=False, default="-created_at")
-        page = serializers.IntegerField(required=False, default=1)
+        sort_order = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        page = serializers.IntegerField(required=False, min_value=0, default=0)
         page_size = serializers.IntegerField(required=False, allow_null=True, default=1000)
+        rows_per_page = serializers.IntegerField(required=False, allow_null=True)
         
     def post(self, request):
         authorize_request('api_fetch_all_leads_admin', request.user)
@@ -48,7 +56,7 @@ class FetchAllLeadsAdmin(APIView):
         # }
         # api_history_log(log_data)
 
-        return Response({"data": result}, status=status.HTTP_200_OK)
+        return Response({"status": True, **result}, status=status.HTTP_200_OK)
 
 
 
@@ -238,6 +246,8 @@ class FetchPipelineLeadsAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
+
+
 # --------------------------------------fetch_lead_details_admin----------------------------------
 
 # @authentication_classes([])
@@ -267,6 +277,7 @@ class FetchLeadDetailsAdmin(APIView):
         # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
+
     
     
     
@@ -511,4 +522,3 @@ class ReassignLeadAdmin(APIView):
         # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
-

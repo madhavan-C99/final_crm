@@ -102,18 +102,56 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
                 Q(enquiry_date__date__lte=filter_to)
             ).distinct()
 
-        # 4. Additional DB-Driven Dropdown Filters
-        loss_reason_val = data.get("loss_reason_id") or data.get("reason_id")
-        if loss_reason_val and str(loss_reason_val).isdigit():
-            base_qs = base_qs.filter(loss_detail__loss_reason_id=int(loss_reason_val))
+        # 4. Additional DB-Driven Dropdown & Popup Filters
+        pipeline_id_val = data.get("pipeline_id")
+        if pipeline_id_val and str(pipeline_id_val).isdigit() and int(pipeline_id_val) > 0:
+            base_qs = base_qs.filter(
+                Q(campaign__pipeline_category_id=int(pipeline_id_val)) |
+                Q(campaign_id=int(pipeline_id_val))
+            )
 
-        telecaller_val = data.get("assigned_to_id") or data.get("telecaller_id")
-        if telecaller_val and str(telecaller_val).isdigit():
-            base_qs = base_qs.filter(assigned_to_id=int(telecaller_val))
+        loss_reason_val = data.get("loss_reason") or data.get("loss_reason_id") or data.get("reason_id")
+        if loss_reason_val and str(loss_reason_val).strip() and str(loss_reason_val).lower() not in ["all", "none"]:
+            loss_reason_str = str(loss_reason_val).strip()
+            if loss_reason_str.isdigit():
+                base_qs = base_qs.filter(loss_detail__loss_reason_id=int(loss_reason_str))
+            else:
+                base_qs = base_qs.filter(
+                    Q(loss_detail__loss_reason__name__icontains=loss_reason_str) |
+                    Q(loss_detail__main_reason__icontains=loss_reason_str) |
+                    Q(loss_detail__detailed_reason__icontains=loss_reason_str)
+                )
 
-        course_val = data.get("course_id") or data.get("course_name_id")
-        if course_val and str(course_val).isdigit():
-            base_qs = base_qs.filter(course_name_id=int(course_val))
+        telecaller_val = data.get("telecaller") or data.get("assigned_to_id") or data.get("telecaller_id") or data.get("tele_id")
+        if telecaller_val and str(telecaller_val).strip() and str(telecaller_val).lower() not in ["all", "none"]:
+            telecaller_str = str(telecaller_val).strip()
+            if telecaller_str.isdigit():
+                base_qs = base_qs.filter(assigned_to_id=int(telecaller_str))
+            else:
+                base_qs = base_qs.filter(
+                    Q(assigned_to__username__iexact=telecaller_str) |
+                    Q(assigned_to__first_name__icontains=telecaller_str) |
+                    Q(assigned_to__last_name__icontains=telecaller_str)
+                )
+
+        course_val = data.get("course") or data.get("course_id") or data.get("course_name_id")
+        if course_val and str(course_val).strip() and str(course_val).lower() not in ["all", "none"]:
+            course_str = str(course_val).strip()
+            if course_str.isdigit():
+                base_qs = base_qs.filter(course_name_id=int(course_str))
+            else:
+                base_qs = base_qs.filter(
+                    Q(course_name__coursename__icontains=course_str) |
+                    Q(course_name__name__icontains=course_str)
+                )
+
+        lead_source_val = data.get("lead_source") or data.get("lead_source_id") or data.get("source_id")
+        if lead_source_val and str(lead_source_val).strip() and str(lead_source_val).lower() not in ["all", "none"]:
+            source_str = str(lead_source_val).strip()
+            if source_str.isdigit():
+                base_qs = base_qs.filter(lead_source_id=int(source_str))
+            else:
+                base_qs = base_qs.filter(lead_source__name__icontains=source_str)
 
         course_plan_val = data.get("course_plan_id")
         if course_plan_val and str(course_plan_val).isdigit():
@@ -133,6 +171,13 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
         else:
             base_qs = base_qs.exclude(id__in=approved_lead_ids)
 
+        # Sorting (sort_type: newest / oldest)
+        sort_type = str(data.get("sort_type") or data.get("sort_by") or "newest").lower().strip()
+        if sort_type in ["oldest", "asc", "created_at"]:
+            base_qs = base_qs.order_by("updated_at", "created_at")
+        else:
+            base_qs = base_qs.order_by("-updated_at", "-created_at")
+
         total_count = base_qs.count()
 
         # 5. Pagination
@@ -144,7 +189,9 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
             rows = base_qs
         else:
             page = int(data.get("page") or 1)
-            page_size = int(page_size_input or 250)
+            if page < 1:
+                page = 1
+            page_size = int(page_size_input or 50)
             start = (page - 1) * page_size
             end = start + page_size
             rows = base_qs[start:end]
@@ -226,13 +273,27 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
                 "approval_status": "pending_approval"
             })
 
+        import math
+        total_pages = math.ceil(total_count / page_size) if (page_size and page_size > 0 and total_count > 0) else 1
+
         return {
-            "status": "success",
+            "status": True,
             "message": "Loss lead approval requests fetched successfully!",
+            "total_records": total_count,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "page": page,
+            "page_size": page_size,
+            "showing_count": len(leads_list),
+            "requests": leads_list,
+            "leads": leads_list,
             "data": {
+                "requests": leads_list,
                 "leads": leads_list,
                 "showing_count": len(leads_list),
+                "total_records": total_count,
                 "total_count": total_count,
+                "total_pages": total_pages,
                 "page": page,
                 "page_size": page_size
             }
@@ -340,7 +401,7 @@ def export_loss_lead_approval_requests_admin(**data):
         # Fetch matching leads
         data["page_size"] = "all"
         res = fetch_loss_lead_approval_requests_admin(**data)
-        leads = res.get("data", {}).get("leads", [])
+        leads = res.get("requests") or res.get("leads") or res.get("data", {}).get("leads", [])
 
         wb = openpyxl.Workbook()
         ws = wb.active

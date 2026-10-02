@@ -158,124 +158,26 @@ def fetch_lead_summary_report(user, campaign_id=None, campaign_name=None, search
         }
 
         rows = exec_raw_sql("D_FETCH_LEAD_SUMMARY_REPORT", qry_vars) or []
+        total_records = len(rows)
 
-        for idx, r in enumerate(rows, start=1):
+        page = int(kwargs.get("page") or 1)
+        page_size = int(kwargs.get("page_size") or 50)
+        start = (page - 1) * page_size
+        paged_rows = rows[start:start + page_size]
+
+        for idx, r in enumerate(paged_rows, start=start + 1):
             r['no'] = idx
 
         return {
             "campaign_name": c_name or "All Leads",
-            "total_count": len(rows),
-            "rows": rows
+            "total_records": total_records,
+            "total_count": total_records,
+            "page": page,
+            "page_size": page_size,
+            "rows": paged_rows
         }
     except Exception as e:
         raise APIException(e)
-
-
-"""
-# 🌟 ORM QUERY BACKUP (COMMENTED OUT FOR FUTURE USE AS REQUESTED):
-def fetch_lead_summary_report_orm_backup(user, campaign_id=None, campaign_name=None, search=None, **kwargs):
-    try:
-        campaign_name_str = "All Leads"
-
-        q_camp = Q()
-        if campaign_id and str(campaign_id).strip() not in ["null", "None", ""]:
-            q_camp |= Q(campaign_id=campaign_id)
-        if campaign_name and str(campaign_name).strip() not in ["null", "None", ""]:
-            q_camp |= Q(campaign__name__iexact=campaign_name)
-
-        if q_camp:
-            leads_qs = Lead.objects.filter(q_camp)
-            first_l = leads_qs.first()
-            campaign_name_str = first_l.campaign.name if (first_l and first_l.campaign) else (campaign_name or "Campaign")
-        else:
-            campaign_name_str = "All Leads"
-            leads_qs = Lead.objects.all()
-
-        # Date Filter
-        date_filter = kwargs.get('date_range')
-        if date_filter and str(date_filter).strip():
-            today = timezone.now().date()
-            d_str = str(date_filter).strip().lower()
-            if "today" in d_str:
-                leads_qs = leads_qs.filter(created_at__date=today)
-            elif "yesterday" in d_str:
-                leads_qs = leads_qs.filter(created_at__date=today - timedelta(days=1))
-            elif "7" in d_str:
-                leads_qs = leads_qs.filter(created_at__date__gte=today - timedelta(days=7))
-            elif "30" in d_str:
-                leads_qs = leads_qs.filter(created_at__date__gte=today - timedelta(days=30))
-            elif "month" in d_str:
-                leads_qs = leads_qs.filter(created_at__month=today.month, created_at__year=today.year)
-
-        assigned_users = kwargs.get('assigned_to')
-        if assigned_users:
-            if isinstance(assigned_users, str):
-                assigned_users = [u.strip() for u in assigned_users.split(',') if u.strip()]
-            elif not isinstance(assigned_users, (list, tuple)):
-                assigned_users = [assigned_users]
-
-            id_list = [int(u) for u in assigned_users if str(u).strip().isdigit()]
-            name_list = [str(u).strip() for u in assigned_users if not str(u).strip().isdigit()]
-
-            q_assigned = Q()
-            if id_list:
-                q_assigned |= Q(assigned_to_id__in=id_list)
-            if name_list:
-                q_assigned |= (
-                    Q(assigned_to__first_name__in=name_list) |
-                    Q(assigned_to__username__in=name_list)
-                )
-            if id_list or name_list:
-                leads_qs = leads_qs.filter(q_assigned)
-
-        if search:
-            leads_qs = leads_qs.filter(
-                Q(full_name__icontains=search) |
-                Q(mobile_no__icontains=search) |
-                Q(email__icontains=search)
-            )
-
-        leads = list(leads_qs)
-        rows = []
-        for idx, l in enumerate(leads, start=1):
-            calls = CallDetails.objects.filter(lead=l)
-            call_count = calls.count()
-            last_call = calls.order_by('-called_at').first()
-            last_contacted = last_call.called_at.strftime("%Y-%m-%d %H:%M") if last_call and last_call.called_at else "-"
-            tag_name = last_call.select_tag.name if (last_call and last_call.select_tag) else "-"
-            followup = FollowUp.objects.filter(lead=l, is_attended=False).order_by('scheduled_at').first()
-            followup_time = followup.scheduled_at.strftime("%Y-%m-%d %H:%M") if followup and followup.scheduled_at else "-"
-            deal_amount = l.course.course_fees if (l.course and l.course.course_fees) else 0
-            assigned = (f"{l.assigned_to.first_name or ''} {l.assigned_to.last_name or ''}".strip() or l.assigned_to.username or "Unknown") if l.assigned_to else "-"
-
-            rows.append({
-                "id": l.id,
-                "no": idx,
-                "lead_name": l.full_name or "-",
-                "lead_number": l.mobile_no or "-",
-                "email": l.email or "-",
-                "campaign_name": l.campaign.name if l.campaign else (campaign_name_str if campaign_name_str != "All Leads" else "-"),
-                "lead_source": l.lead_source.name if l.lead_source else "-",
-                "creation_date": l.created_at.strftime("%Y-%m-%d") if l.created_at else "-",
-                "updated_at": l.updated_at.strftime("%Y-%m-%d %H:%M") if l.updated_at else "-",
-                "lead_stage": l.pipeline_stage.name if l.pipeline_stage else "-",
-                "tag": tag_name,
-                "assigned_to": assigned,
-                "followup_time": followup_time,
-                "lead_status": l.current_status or "-",
-                "deal_amount": f"₹{deal_amount}",
-                "last_contacted": last_contacted,
-                "call_attempt_count": call_count,
-            })
-
-        return {
-            "campaign_name": campaign_name_str,
-            "total_count": len(rows),
-            "rows": rows
-        }
-    except Exception as e:
-        raise APIException(e)
-"""
 
 
 # 3. UPDATE LEAD SUMMARY SERVICE (POST METHOD)
@@ -669,18 +571,26 @@ def fetch_call_log_report(user, **data):
             'search': data.get('search', '') or '',
         }
 
-        raw_rows = exec_raw_sql("D_FETCH_CALL_LOG_REPORT", qry_vars)
+        raw_rows = exec_raw_sql("D_FETCH_CALL_LOG_REPORT", qry_vars) or []
+        total_records = len(raw_rows) if isinstance(raw_rows, list) else 0
+
+        page = int(data.get('page') or 1)
+        page_size = int(data.get('page_size') or 50)
+        start = (page - 1) * page_size
+        paged_raw_rows = raw_rows[start:start + page_size] if isinstance(raw_rows, list) else []
 
         formatted_rows = []
-        if raw_rows and isinstance(raw_rows, list):
-            for idx, r in enumerate(raw_rows, 1):
-                r['no'] = idx
-                formatted_rows.append(r)
+        for idx, r in enumerate(paged_raw_rows, start=start + 1):
+            r['no'] = idx
+            formatted_rows.append(r)
 
         return {
             "campaign_id": c_id,
             "campaign_name": c_name or "All Call Logs",
-            "total_count": len(formatted_rows),
+            "total_records": total_records,
+            "total_count": total_records,
+            "page": page,
+            "page_size": page_size,
             "rows": formatted_rows
         }
     except Exception as e:
@@ -714,13 +624,23 @@ def fetch_disposition_log(user, campaign_id=None, campaign_name=None, search=Non
         }
 
         rows = exec_raw_sql("D_FETCH_DISPOSITION_LOG", qry_vars) or []
-        for idx, r in enumerate(rows, start=1):
+        total_records = len(rows)
+
+        page = int(kwargs.get('page') or 1)
+        page_size = int(kwargs.get('page_size') or 50)
+        start = (page - 1) * page_size
+        paged_rows = rows[start:start + page_size]
+
+        for idx, r in enumerate(paged_rows, start=start + 1):
             r['no'] = idx
 
         return {
             "campaign_name": c_name or "Education",
-            "total_count": len(rows),
-            "rows": rows
+            "total_records": total_records,
+            "total_count": total_records,
+            "page": page,
+            "page_size": page_size,
+            "rows": paged_rows
         }
     except Exception as e:
         raise APIException(e)

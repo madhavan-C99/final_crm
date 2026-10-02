@@ -10,21 +10,30 @@ from ..services.loss_lead_approval_services import *
 class FetchLossLeadApprovalRequestsAdmin(APIView):
     
     class InputSerializer(serializers.Serializer):
+        pipeline_id = serializers.IntegerField(required=False, allow_null=True)
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        sort_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        sort_by = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        loss_reason = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         loss_reason_id = serializers.IntegerField(required=False, allow_null=True)
+        telecaller = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        telecaller_id = serializers.IntegerField(required=False, allow_null=True)
         assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
+        course = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         course_id = serializers.IntegerField(required=False, allow_null=True)
+        course_name_id = serializers.IntegerField(required=False, allow_null=True)
+        lead_source = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        lead_source_id = serializers.IntegerField(required=False, allow_null=True)
         course_plan_id = serializers.IntegerField(required=False, allow_null=True)
         campaign_id = serializers.IntegerField(required=False, allow_null=True)
         approval_status = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         status = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        sort_by = serializers.CharField(required=False, default="-updated_at")
-        page = serializers.IntegerField(required=False, default=1)
-        page_size = serializers.IntegerField(required=False, allow_null=True, default=250)
+        page = serializers.IntegerField(required=False, min_value=1, default=1)
+        page_size = serializers.IntegerField(required=False, allow_null=True, default=50)
 
     def post(self, request):
         authorize_request('api_fetch_loss_lead_approval_requests_admin', request.user)
@@ -38,7 +47,7 @@ class FetchLossLeadApprovalRequestsAdmin(APIView):
             'api_name': request.path,
             'method': request.method,
             'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status"), "total_count": result.get("data", {}).get("total_count") if isinstance(result.get("data"), dict) else 0},
+            'response_payload': {"status": result.get("status"), "total_records": result.get("total_records", 0)},
             'status_code': 200
         }
         api_history_log(log_data)
@@ -94,12 +103,24 @@ class GetLossLeadApprovalFilterDropdownsAdmin(APIView):
 class ExportLossLeadApprovalRequestsAdmin(APIView):
  
     class InputSerializer(serializers.Serializer):
+        pipeline_id = serializers.IntegerField(required=False, allow_null=True)
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        date_filter_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        sort_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        sort_by = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        loss_reason = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         loss_reason_id = serializers.IntegerField(required=False, allow_null=True)
+        telecaller = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        telecaller_id = serializers.IntegerField(required=False, allow_null=True)
         assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
+        course = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        course_id = serializers.IntegerField(required=False, allow_null=True)
+        course_name_id = serializers.IntegerField(required=False, allow_null=True)
+        lead_source = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        lead_source_id = serializers.IntegerField(required=False, allow_null=True)
 
     def post(self, request):
         authorize_request('api_export_loss_lead_approval_requests_admin', request.user)

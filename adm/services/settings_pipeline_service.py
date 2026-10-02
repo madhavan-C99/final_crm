@@ -1,6 +1,7 @@
 from rest_framework.exceptions import APIException
 from django.db.models import Q, Prefetch
 from django.db import transaction
+from utils.constants import UITheme
 
 from adm.models import (
     PipelineCategory, Organization, PipelineStageTranferedData, PipelineStageDeletedLog
@@ -20,9 +21,11 @@ DEFAULT_STAGES_BLUEPRINT = [
 
 
 def _get_org(user):
+    if not user:
+        return Organization.objects.first()
     org = getattr(user, 'organization', None)
-    if not org:
-        org = Organization.objects.filter(organization_name__icontains="Code 99").first()
+    if not org and hasattr(user, 'organization_id') and user.organization_id:
+        org = Organization.objects.filter(id=user.organization_id).first()
     if not org:
         org = Organization.objects.first()
     return org
@@ -35,7 +38,7 @@ def _format_stage(stage):
             continue
         tag_name = prio.display_value or prio.name
 
-        hex_c = (prio.color or "#3B82F6").strip()
+        hex_c = (prio.color or UITheme.DEFAULT_PIPELINE_TAG_COLOR).strip()
         bg_c = f"{hex_c}1F" if (hex_c.startswith("#") and len(hex_c) == 7) else "rgba(59, 130, 246, 0.12)"
         color_props = {
             "borderColor": hex_c,
@@ -100,9 +103,9 @@ def fetch_pipeline_categories(user, **data):
 
             for stage in stages_qs:
                 formatted = _format_stage(stage)
-                if stage.stage_type == "terminal_joined":
+                if stage.stage_type in ["closed_won", "terminal_joined"]:
                     terminals_dict["joined"] = formatted
-                elif stage.stage_type == "terminal_closed":
+                elif stage.stage_type in ["closed_lost", "terminal_closed"]:
                     terminals_dict["closed"] = formatted
                 else:
                     stages_list.append(formatted)
@@ -169,7 +172,7 @@ def create_pipeline_category(user, **data):
                 name=s_name,
                 display_value=s_name,
                 order_no=idx + 1,
-                stage_type="standard",
+                stage_type="open",
                 is_active=True,
                 created_by=user.username if user else "admin"
             )
@@ -185,7 +188,7 @@ def create_pipeline_category(user, **data):
             name=joined_name,
             display_value=joined_name,
             order_no=98,
-            stage_type="terminal_joined",
+            stage_type="closed_won",
             is_active=True,
             created_by=user.username if user else "admin"
         )
@@ -200,7 +203,7 @@ def create_pipeline_category(user, **data):
             name=closed_name,
             display_value=closed_name,
             order_no=99,
-            stage_type="terminal_closed",
+            stage_type="closed_lost",
             is_active=True,
             created_by=user.username if user else "admin"
         )
@@ -278,7 +281,7 @@ def update_pipeline_stages(user, **data):
                         name=stage_name,
                         display_value=stage_name,
                         order_no=order_no,
-                        stage_type="standard",
+                        stage_type="open",
                         is_active=True,
                         created_by=user.username if user else "admin",
                     )
@@ -286,7 +289,7 @@ def update_pipeline_stages(user, **data):
                     stage_obj.name = stage_name
                     stage_obj.display_value = stage_name
                     stage_obj.order_no = order_no
-                    stage_obj.stage_type = "standard"
+                    stage_obj.stage_type = "open"
                     stage_obj.is_active = True
                     stage_obj.save()
 
@@ -295,7 +298,7 @@ def update_pipeline_stages(user, **data):
 
             PipelineStage.objects.filter(
                 pipeline_category=cat,
-                stage_type="standard"
+                stage_type__in=["open", "standard"]
             ).exclude(id__in=active_stage_ids).update(is_active=False)
 
         if has_terminals:
@@ -310,7 +313,7 @@ def update_pipeline_stages(user, **data):
                     stage_obj = PipelineStage.objects.filter(id=raw_id, pipeline_category=cat).first()
                 if not stage_obj:
                     stage_obj = PipelineStage.objects.filter(
-                        pipeline_category=cat, stage_type="terminal_joined"
+                        pipeline_category=cat, stage_type__in=["closed_won", "terminal_joined"]
                     ).first()
 
                 if not stage_obj:
@@ -320,14 +323,14 @@ def update_pipeline_stages(user, **data):
                         name=t_name,
                         display_value=t_name,
                         order_no=98,
-                        stage_type="terminal_joined",
+                        stage_type="closed_won",
                         is_active=True,
                         created_by=user.username if user else "admin",
                     )
                 else:
                     stage_obj.name = t_name
                     stage_obj.display_value = t_name
-                    stage_obj.stage_type = "terminal_joined"
+                    stage_obj.stage_type = "closed_won"
                     stage_obj.is_active = True
                     stage_obj.save()
 
@@ -342,7 +345,7 @@ def update_pipeline_stages(user, **data):
                     stage_obj = PipelineStage.objects.filter(id=raw_id, pipeline_category=cat).first()
                 if not stage_obj:
                     stage_obj = PipelineStage.objects.filter(
-                        pipeline_category=cat, stage_type="terminal_closed"
+                        pipeline_category=cat, stage_type__in=["closed_lost", "terminal_closed"]
                     ).first()
 
                 if not stage_obj:
@@ -352,14 +355,14 @@ def update_pipeline_stages(user, **data):
                         name=t_name,
                         display_value=t_name,
                         order_no=99,
-                        stage_type="terminal_closed",
+                        stage_type="closed_lost",
                         is_active=True,
                         created_by=user.username if user else "admin",
                     )
                 else:
                     stage_obj.name = t_name
                     stage_obj.display_value = t_name
-                    stage_obj.stage_type = "terminal_closed"
+                    stage_obj.stage_type = "closed_lost"
                     stage_obj.is_active = True
                     stage_obj.save()
 

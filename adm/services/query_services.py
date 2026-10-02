@@ -1,6 +1,7 @@
 from django.db import connection
 from adm.models import CollectionQuery
 from rest_framework.exceptions import APIException
+from utils.constants import UITheme
 from datetime import date, datetime
 import re
 
@@ -32,6 +33,18 @@ ALIAS_MAP = {
     'unassigned_telecallers': 'L_UNASSIGNED_TELECALLERS',
     'unassigned_users': 'L_UNASSIGNED_TELECALLERS',
     'unassigned_members': 'L_UNASSIGNED_TELECALLERS',
+}
+
+TENANT_SCOPED_TABLES = {
+    'adm_user',
+    'telecalling_lead',
+    'adm_team',
+    'adm_pipeline_category',
+    'telecalling_lead_source',
+    'telecalling_campaign_name',
+    'telecalling_pipeline_stage',
+    'telecalling_call_details',
+    'telecalling_user_settings',
 }
 
 
@@ -110,22 +123,14 @@ def replace_query(qry, qry_vars):
     if org_id is not None and str(org_id) != "":
         # Skip injecting duplicate organization predicate if already present in the SQL query
         if 'organization_id' not in qry.lower():
-            org_tables = [
-                'adm_user', 'telecalling_lead', 'adm_team', 'adm_pipeline_category',
-                'telecalling_lead_source', 'telecalling_campaign_name',
-                'telecalling_pipeline_stage', 'telecalling_call_details',
-                'telecalling_user_settings'
-            ]
-            query_lower = qry.lower()
-            matched_table = next((tbl for tbl in org_tables if tbl in query_lower), None)
-
-            if matched_table:
-                alias = _get_table_alias_or_name(qry, matched_table)
-                filter_clause = f"{alias}.organization_id = @_organization_id"
+            main_table_match = re.search(r'\bFROM\s+([a-zA-Z0-9_]+)', qry, re.IGNORECASE)
+            main_table = main_table_match.group(1).lower() if main_table_match else None
+            if main_table in TENANT_SCOPED_TABLES:
+                target_alias = _get_table_alias_or_name(qry, main_table)
+                filter_clause = f"{target_alias}.organization_id = @_organization_id"
                 replquery = _add_tenant_predicate(qry, filter_clause)
 
-    for key in qry_vars:
-        raw_val = qry_vars[key]
+    for key, raw_val in qry_vars.items():
         if raw_val is None:
             val = ""
         elif isinstance(raw_val, (int, float)):
@@ -250,7 +255,6 @@ def make_serializable(obj):
 # --------------------------- No Generic needed for fetching --------------------------------
 
 def exec_paginated_raw_sql(qry_key, qry_vars=dict(), page=1, page_size=50):
-   
     try:
         page = max(1, int(page or 1))
         page_size = max(1, int(page_size or 50))
@@ -260,9 +264,16 @@ def exec_paginated_raw_sql(qry_key, qry_vars=dict(), page=1, page_size=50):
         qry_vars['offset'] = offset
         qry_vars['limit'] = page_size
 
-        all_rows = exec_raw_sql(qry_key, qry_vars) or []
-        total_count = len(all_rows)
-        sliced_rows = all_rows[offset:offset + page_size] if len(all_rows) > page_size else all_rows
+        coll_qry = CollectionQuery.objects.filter(key=qry_key).first()
+        raw_sql = coll_qry.query if coll_qry else ""
+
+        if "limit" in raw_sql.lower():
+            sliced_rows = exec_raw_sql(qry_key, qry_vars) or []
+            total_count = len(sliced_rows) + offset
+        else:
+            all_rows = exec_raw_sql(qry_key, qry_vars) or []
+            total_count = len(all_rows)
+            sliced_rows = all_rows[offset:offset + page_size] if len(all_rows) > page_size else all_rows
 
         return {
             "total": total_count,
@@ -310,7 +321,7 @@ def enrich_telecallers_data(res_vals):
                 uid = r['value']
                 st = stats.get(uid, {'total': 0, 'new': 0, 'followup': 0, 'won': 0, 'lost': 0})
                 u_obj = users_map.get(uid)
-                t_color = u_obj.team.badge_color if (u_obj and u_obj.team and u_obj.team.badge_color) else "#505AF2"
+                t_color = u_obj.team.badge_color if (u_obj and u_obj.team and u_obj.team.badge_color) else UITheme.DEFAULT_PRIMARY_COLOR
 
                 r['total_leads'] = st['total']
                 r['current_leads'] = st['total']

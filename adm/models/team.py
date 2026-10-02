@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from telecalling.models.delete_base_model import SafeDeleteModel
+from utils.constants import UITheme
 
 class Team(SafeDeleteModel):
     name = models.CharField(max_length=100)
@@ -12,7 +13,7 @@ class Team(SafeDeleteModel):
         blank=True, 
         related_name='led_teams'
     )
-    badge_color = models.CharField(max_length=20, default="#E3F2FD")
+    badge_color = models.CharField(max_length=20, default=UITheme.DEFAULT_BADGE_COLOR)
     organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='teams')
     is_active = models.BooleanField(default=True)
     

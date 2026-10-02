@@ -45,6 +45,7 @@ class FetchAllUsersAdminApi(APIView):
         page = serializers.IntegerField(required=False, default=1)
         page_size = serializers.CharField(required=False, default="50")
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
+        sort = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
         sort_by = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
 
     def post(self, request):
@@ -55,7 +56,7 @@ class FetchAllUsersAdminApi(APIView):
             user=request.user,
             **serializer.validated_data
         )
-        return Response({"data": res}, status=status.HTTP_200_OK)
+        return Response({"data": res, **res}, status=status.HTTP_200_OK)
 
 
 class CreateUserAdminApi(APIView):

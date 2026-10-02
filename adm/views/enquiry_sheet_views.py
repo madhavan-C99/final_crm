@@ -12,6 +12,7 @@ from ..services.enquiry_sheet_services import (
     assign_lead_telecaller,
     change_lead_status,
     fetch_call_log_report,
+    fetch_disposition_log,
 )
 
 
@@ -198,12 +199,41 @@ class CallLogReportView(APIView):
         assigned_to = serializers.CharField(required=False, allow_null=True, allow_blank=True)
         call_status = serializers.CharField(required=False, allow_null=True, allow_blank=True)
         call_direction = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+        page = serializers.IntegerField(required=False, default=1)
+        page_size = serializers.IntegerField(required=False, default=50)
 
     def post(self, request):
         authorize_request('api_call_log_report_admin', request.user)
         serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         data = fetch_call_log_report(
+            request.user,
+            **serializer.validated_data
+        )
+        return Response({"data": data}, status=status.HTTP_200_OK)
+
+
+class DispositionLogView(APIView):
+    """
+    POST /adm/disposition_log_report
+    Fetch disposition log report details.
+    """
+    class InputSerializer(serializers.Serializer):
+        campaign_id = serializers.IntegerField(required=False, allow_null=True)
+        campaign_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+        filter_campaign = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+        search = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+        date_range = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+        assigned_to = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+        stages = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+        page = serializers.IntegerField(required=False, default=1)
+        page_size = serializers.IntegerField(required=False, default=50)
+
+    def post(self, request):
+        authorize_request('api_disposition_log_report_admin', request.user)
+        serializer = self.InputSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        data = fetch_disposition_log(
             request.user,
             **serializer.validated_data
         )

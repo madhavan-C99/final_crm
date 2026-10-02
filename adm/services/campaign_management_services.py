@@ -46,9 +46,12 @@ def create_campaign(user, **data):
             organization=getattr(user, 'organization', None)
         )
 
-        for agent_id in data.get("agent_ids", []):
-            if agent_id:
-                CampaignAssignedAgent.objects.create(campaign=campaign, agent_user_id=agent_id)
+        agent_objs = [
+            CampaignAssignedAgent(campaign=campaign, agent_user_id=agent_id)
+            for agent_id in data.get("agent_ids", []) if agent_id
+        ]
+        if agent_objs:
+            CampaignAssignedAgent.objects.bulk_create(agent_objs)
 
         return {
             "status": True,

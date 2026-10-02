@@ -157,7 +157,7 @@ def fetch_user_permissions(user):
 
 # ----------------------------- fetch_all_users_admin -----------------------------
 
-def fetch_all_users_admin(user, page=1, page_size=50, search=None, sort_by=None):
+def fetch_all_users_admin(user, page=1, page_size=50, search=None, sort=None, sort_by=None):
     """
     Fetch all admin users using CollectionQuery 'D_FETCH_ALL_USERS_ADMIN' (0 Python Loops).
     """
@@ -170,6 +170,13 @@ def fetch_all_users_admin(user, page=1, page_size=50, search=None, sort_by=None)
             'organization_id': org_id,
             'search': search_str
         }) or []
+
+        # Sort users array based on frontend request ("newest" vs "oldest")
+        sort_val = str(sort or sort_by or "newest").lower().strip()
+        if sort_val in ["oldest", "asc"]:
+            raw_users.sort(key=lambda u: u.get("id", 0))
+        else:
+            raw_users.sort(key=lambda u: u.get("id", 0), reverse=True)
 
         total_records = len(raw_users)
         page = int(page or 1)
@@ -887,12 +894,12 @@ def fetch_user_dropdowns_admin(user=None):
     try:
         roles_qs = Role.objects.exclude(
             Q(name__iexact='developer') | Q(code__iexact='DEV')
-        ).order_by("id")
+        ).values("id", "name", "display_value", "code").order_by("id")
         roles = [
             {
-                "id": r.id,
-                "name": r.display_value or r.name,
-                "code": r.code
+                "id": r["id"],
+                "name": r["display_value"] or r["name"],
+                "code": r["code"]
             }
             for r in roles_qs
         ]
@@ -919,19 +926,12 @@ def fetch_user_dropdowns_admin(user=None):
             })
 
         # 3. Fetch Active Teams
-        teams_qs = Team.objects.filter(is_active=True).order_by("id")
+        teams_qs = Team.objects.filter(is_active=True)
         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
             teams_qs = teams_qs.filter(organization=user.organization)
         elif user and getattr(user, 'is_authenticated', False):
             teams_qs = teams_qs.none()
-        teams = [
-            {
-                "id": t.id,
-                "name": t.name,
-                "code": t.code
-            }
-            for t in teams_qs
-        ]
+        teams = list(teams_qs.values("id", "name", "code").order_by("id"))
 
         return {
             "status": True,
@@ -1172,7 +1172,6 @@ def transfer_single_campaign_leads_admin(admin_user, data):
                         lead.pipeline_stage = followup_stage
                     lead.current_status = "working"
 
-                lead.save()
                 AdminApprovedLossLead.objects.filter(lead=lead).delete()
 
                 history_rec = AdminLeadReassignHistory(
@@ -1186,6 +1185,9 @@ def transfer_single_campaign_leads_admin(admin_user, data):
                 )
                 history_records.append(history_rec)
                 total_transferred += 1
+
+            if batch_leads:
+                Lead.objects.bulk_update(batch_leads, ['assigned_to', 'pipeline_stage', 'current_status'])
 
             if history_records:
                 AdminLeadReassignHistory.objects.bulk_create(history_records)

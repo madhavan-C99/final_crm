@@ -10,6 +10,7 @@ from rest_framework.exceptions import APIException
 
 from telecalling.models import User, Lead, CallDetails, FollowUp, PaymentInfo
 from adm.models import Team, TeamTarget, IndividualTarget
+from utils.constants import UITheme
 
 def get_date_range(date_filter_type, from_date_str=None, to_date_str=None):
     
@@ -88,32 +89,73 @@ def fetch_performance_overview_admin(data, user=None, all_rows=False):
 
         now_dt = timezone.now()
 
-        for user in users_qs:
+        # Pre-aggregate data in bulk to eliminate N+1 query loops
+        users_list = list(users_qs.select_related('team'))
+        user_ids = [u.id for u in users_list]
+
+        leads_assigned_map = dict(
+            Lead.objects.filter(assigned_to_id__in=user_ids)
+            .values('assigned_to_id')
+            .annotate(cnt=Count('id'))
+            .values_list('assigned_to_id', 'cnt')
+        ) if user_ids else {}
+
+        calls_made_map = dict(
+            CallDetails.objects.filter(
+                telecaller_id__in=user_ids, 
+                created_at__date__range=[start_date, end_date]
+            )
+            .values('telecaller_id')
+            .annotate(cnt=Count('id'))
+            .values_list('telecaller_id', 'cnt')
+        ) if user_ids else {}
+
+        followups_done_map = dict(
+            FollowUp.objects.filter(
+                telecaller_id__in=user_ids, 
+                is_attended=True, 
+                updated_at__date__range=[start_date, end_date]
+            )
+            .values('telecaller_id')
+            .annotate(cnt=Count('id'))
+            .values_list('telecaller_id', 'cnt')
+        ) if user_ids else {}
+
+        pending_followups_map = dict(
+            FollowUp.objects.filter(
+                telecaller_id__in=user_ids, 
+                is_attended=False, 
+                scheduled_at__lt=now_dt
+            )
+            .values('telecaller_id')
+            .annotate(cnt=Count('id'))
+            .values_list('telecaller_id', 'cnt')
+        ) if user_ids else {}
+
+        targets_map = {
+            t.telecaller_id: t 
+            for t in IndividualTarget.objects.filter(telecaller_id__in=user_ids, target_month=target_month)
+        } if user_ids else {}
+
+        for user in users_list:
             # 1. Telecaller Display Name
             t_name = user.get_full_name() or user.username
             
             # 2. Team Info
             t_team = user.team
             team_name = t_team.name if t_team else "No Team"
-            team_badge_color = t_team.badge_color if t_team else "#E0E0E0"
+            team_badge_color = t_team.badge_color if t_team else UITheme.RATING_DEFAULT_BG
 
             # 3. Leads Assigned
-            leads_assigned = Lead.objects.filter(assigned_to=user).count()
+            leads_assigned = leads_assigned_map.get(user.id, 0)
             total_leads_assigned_sum += leads_assigned
 
             # 4. Calls Made in Date Range
-            calls_made = CallDetails.objects.filter(
-                telecaller=user, 
-                created_at__date__range=[start_date, end_date]
-            ).count()
+            calls_made = calls_made_map.get(user.id, 0)
             total_calls_made_sum += calls_made
 
             # 5. Follow-Ups Done in Date Range
-            followups_done = FollowUp.objects.filter(
-                telecaller=user, 
-                is_attended=True, 
-                updated_at__date__range=[start_date, end_date]
-            ).count()
+            followups_done = followups_done_map.get(user.id, 0)
             total_followups_done_sum += followups_done
 
             # 6. Admissions (Won Stage) & Weighted Payment Credit in Date Range
@@ -146,15 +188,11 @@ def fetch_performance_overview_admin(data, user=None, all_rows=False):
                     effective_admissions_credit += 0.5
 
             # 7. Pending Follow-Ups (Unattended past follow-ups)
-            pending_followups = FollowUp.objects.filter(
-                telecaller=user, 
-                is_attended=False, 
-                scheduled_at__lt=now_dt
-            ).count()
+            pending_followups = pending_followups_map.get(user.id, 0)
             total_pending_followups_sum += pending_followups
 
             # 8. Retrieve Target for Month (from adm_individual_target or default 0)
-            target_obj = IndividualTarget.objects.filter(telecaller=user, target_month=target_month).first()
+            target_obj = targets_map.get(user.id)
             target_admissions = target_obj.target_admissions if target_obj else 0
             target_calls = getattr(target_obj, 'target_calls', 0) if target_obj else 0
 
@@ -186,13 +224,13 @@ def fetch_performance_overview_admin(data, user=None, all_rows=False):
             # 10. Rating Badges & Special Overachiever Badges
             if performance_score >= 70:
                 rating_label = "Good"
-                rating_badge_color = "#E8F5E9" # Green
+                rating_badge_color = UITheme.RATING_GOOD_BG # Green
             elif performance_score >= 45:
                 rating_label = "Average"
-                rating_badge_color = "#FFFDE7" # Yellow
+                rating_badge_color = UITheme.RATING_AVERAGE_BG # Yellow
             else:
                 rating_label = "Needs Improvement"
-                rating_badge_color = "#FFEBEE" # Red
+                rating_badge_color = UITheme.RATING_NEEDS_IMP_BG # Red
 
             special_badge = None
             if full_payments_count > 0 and admissions > 0 and full_payments_count >= round(admissions * 0.75):
@@ -661,6 +699,8 @@ def fetch_monthly_target_admin_service(data, user=None):
                 u_name = f"{fname} {lname}".strip() or u.username
 
                 members_list.append({
+                    "id": u.id,
+                    "user_id": u.id,
                     "name": u_name,
                     "team": t.name,
                     "target": u_target,
@@ -717,6 +757,7 @@ def fetch_monthly_target_admin_service(data, user=None):
 
             individual_targets.append({
                 "id": u.id,
+                "user_id": u.id,
                 "employee": u_name,
                 "target": u_target,
                 "achieved": u_achieved,
