@@ -248,10 +248,7 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
 
 
 def get_loss_lead_approval_filter_dropdowns_admin(user=None):
-    """
-    Loss Lead Approval Page -> Filter Modal Dropdowns API.
-    Returns Pipeline Stages, Loss Reasons, Telecallers, Course Plans, Campaigns.
-    """
+  
     try:
         pipeline_stages_qs = PipelineStage.objects.all().order_by("id")
         pipeline_stages = [{"id": p.id, "name": getattr(p, 'display_value', None) or p.name} for p in pipeline_stages_qs]
@@ -273,35 +270,34 @@ def get_loss_lead_approval_filter_dropdowns_admin(user=None):
             users_qs = users_qs.filter(organization=user.organization)
         elif user and getattr(user, 'is_authenticated', False):
             users_qs = users_qs.none()
+        closed_stage_filter = Q(pipeline_stage__name__icontains="won") | Q(pipeline_stage__name__icontains="loss") | Q(pipeline_stage__name__icontains="lost") | Q(pipeline_stage__name__icontains="closed")
+        followup_stage_filter = Q(pipeline_stage__name__icontains="follow")
+        new_stage_filter = Q(pipeline_stage__name__icontains="new")
+        unreachable_stage_filter = Q(pipeline_stage__name__icontains="unreach") | Q(pipeline_stage__name__icontains="contact")
+
+        telecaller_lead_stats = Lead.objects.filter(assigned_to__in=users_qs).values('assigned_to').annotate(
+            active_count=Count('id', filter=~closed_stage_filter),
+            followup_count=Count('id', filter=~closed_stage_filter & followup_stage_filter),
+            new_count=Count('id', filter=~closed_stage_filter & new_stage_filter),
+            unreachable_count=Count('id', filter=~closed_stage_filter & unreachable_stage_filter),
+        )
+
+        stats_map = {item['assigned_to']: item for item in telecaller_lead_stats}
+
         telecallers = []
         for u in users_qs:
-            user_leads = Lead.objects.filter(assigned_to=u)
-            # Exclude Won (Stage 3) and Lost (Stage 4) from total_assigned_leads
-            active_user_leads = user_leads.exclude(
-                Q(pipeline_stage_id__in=[3, 4]) | 
-                Q(pipeline_stage__name__icontains="won") | 
-                Q(pipeline_stage__name__icontains="loss")
-            )
-            
-            total_assigned = active_user_leads.count()
-            followup_count = active_user_leads.filter(Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")).count()
-            new_count = active_user_leads.filter(Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")).count()
-            unreachable_count = active_user_leads.filter(
-                Q(pipeline_stage_id__in=[5, 7]) | 
-                Q(pipeline_stage__name__icontains="unreach") | 
-                Q(pipeline_stage__name__icontains="contact")
-            ).count()
-            
+            u_stat = stats_map.get(u.id, {})
+            total_assigned = u_stat.get('active_count', 0)
             role_str = "Admin" if (getattr(u, 'is_superuser', False) or str(getattr(u, 'user_type', '')).lower() == 'admin') else "Telecaller"
-            
+
             telecallers.append({
                 "id": u.id,
                 "name": get_user_display_name(u),
                 "role": role_str,
                 "total_assigned_leads": total_assigned,
-                "followup_leads_count": followup_count,
-                "new_leads_count": new_count,
-                "unreachable_leads_count": unreachable_count,
+                "followup_leads_count": u_stat.get('followup_count', 0),
+                "new_leads_count": u_stat.get('new_count', 0),
+                "unreachable_leads_count": u_stat.get('unreachable_count', 0),
                 "assigned_leads_count": total_assigned
             })
 
@@ -339,10 +335,7 @@ def get_loss_lead_approval_filter_dropdowns_admin(user=None):
 
 
 def export_loss_lead_approval_requests_admin(**data):
-    """
-    Loss Lead Approval Request Page -> Export to Excel (.xlsx) API.
-    Lime Green Header Styling (#84C225) matching reference image across all 11 columns.
-    """
+    
     try:
         # Fetch matching leads
         data["page_size"] = "all"
@@ -443,13 +436,7 @@ def export_loss_lead_approval_requests_admin(**data):
 
 
 def action_loss_lead_approval_admin(user=None, **data):
-    """
-    Loss Lead Approval Page -> Action Buttons API (Approve, Reject, Reassign).
-    Handles 3 Figma Actions:
-    1. 'approve' (Green Tick): Confirms Loss status permanently.
-    2. 'reject' (Red Cross): Rejects Loss request & restores lead to Follow Up stage.
-    3. 'reassign' (Blue Refresh): Reassigns lead to another Telecaller / resets for retry.
-    """
+   
     try:
         lead_id = data.get("lead_id") or data.get("id")
         if not lead_id:

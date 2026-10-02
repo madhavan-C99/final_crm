@@ -1,7 +1,6 @@
 from rest_framework.views import APIView
-from rest_framework import serializers
+from rest_framework import serializers, status
 from rest_framework.response import Response
-from rest_framework import status
 from adm.services.permission_services import (
     authorize_request,
     create_permission,
@@ -15,7 +14,10 @@ from adm.services.permission_services import (
 
 
 class AddPermAPIView(APIView):
-
+    """
+    POST /adm/perm_add
+    Register a new system permission code.
+    """
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(required=True)
         display_value = serializers.CharField(required=True)
@@ -38,7 +40,10 @@ class AddPermAPIView(APIView):
 
 
 class FetchPermsListAPIView(APIView):
-  
+    """
+    POST /adm/perm_list
+    Fetch all registered system permissions list.
+    """
     def post(self, request):
         authorize_request('api_fetch_perms_list', request.user)
         perms_list = fetch_perms_list()
@@ -49,7 +54,10 @@ class FetchPermsListAPIView(APIView):
 
 
 class FetchRolesListAPIView(APIView):
-  
+    """
+    POST /adm/role_list
+    Fetch all system roles list.
+    """
     def post(self, request):
         authorize_request('api_fetch_roles_list', request.user)
         roles_list = fetch_roles_list()
@@ -60,7 +68,10 @@ class FetchRolesListAPIView(APIView):
 
 
 class AssignRolePermAPIView(APIView):
-    
+    """
+    POST /adm/role_assign_perm
+    Assign a permission to a role.
+    """
     class InputSerializer(serializers.Serializer):
         role_id = serializers.IntegerField(required=True)
         perm_id = serializers.IntegerField(required=True)
@@ -80,7 +91,10 @@ class AssignRolePermAPIView(APIView):
 
 
 class GetRolesAndPermissionsApi(APIView):
-   
+    """
+    GET /adm/get_roles_and_permissions
+    Fetch Role & Permission Matrix for tenant.
+    """
     def get(self, request):
         authorize_request('api_get_roles_and_permissions', request.user)
         result = get_roles_and_permissions_service(user=request.user)
@@ -92,10 +106,13 @@ class GetRolesAndPermissionsApi(APIView):
 
 
 class CreateRoleApi(APIView):
-    
+    """
+    POST /adm/create_role
+    Create a new Role in matrix (optionally duplicate permissions from an existing role).
+    """
     class InputSerializer(serializers.Serializer):
         name = serializers.CharField(required=True)
-        duplicate_from = serializers.CharField(required=True)
+        duplicate_from = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
         authorize_request('api_create_role', request.user)
@@ -112,12 +129,17 @@ class CreateRoleApi(APIView):
 
 
 class UpdateRolePermissionApi(APIView):
-    
+    """
+    POST /adm/update_role_permission
+    Toggle individual permission access for a specific role in Matrix.
+    """
     class InputSerializer(serializers.Serializer):
-        role_id = serializers.CharField(required=True)
-        category_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
-        permission_id = serializers.CharField(required=True)
+        role_id = serializers.IntegerField(required=False, allow_null=True)
+        permission_id = serializers.IntegerField(required=False, allow_null=True)
         has_permission = serializers.BooleanField(required=True)
+        category_id = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="")
+        role_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        perm_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
         authorize_request('api_update_role_permission', request.user)
@@ -131,6 +153,3 @@ class UpdateRolePermissionApi(APIView):
 
         status_code = status.HTTP_200_OK if res.get('status') else status.HTTP_400_BAD_REQUEST
         return Response(res, status=status_code)
-
-
-

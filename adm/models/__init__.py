@@ -14,6 +14,8 @@ from .CampaignAssignedAgent import CampaignAssignedAgent
 from .organization import Organization
 from .payment_mode import PaymentMode
 
+from .pipeline_stage_tranfered_data import PipelineStageTranferedData, PipelineStageDeletedLog
+
 __all__ = [
     'AdminLossActionLog',
     'AdminApprovedLossLead',
@@ -31,4 +33,6 @@ __all__ = [
     'CampaignAssignedAgent',
     'Organization',
     'PaymentMode',
+    'PipelineStageTranferedData',
+    'PipelineStageDeletedLog',
 ]

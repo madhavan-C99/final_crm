@@ -1,14 +1,14 @@
 from rest_framework.views import APIView
 from rest_framework import serializers, status
 from rest_framework.response import Response
-from rest_framework.decorators import authentication_classes, permission_classes
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from adm.services.permission_services import authorize_request
 from adm.services.organization_services import (
     create_organization_profile_admin_service,
     get_organization_profile_admin_service,
     edit_organization_profile_admin_service
 )
-from adm.services.permission_services import authorize_request
+
 
 class HybridLogoField(serializers.Field):
     def to_internal_value(self, data):
@@ -18,7 +18,12 @@ class HybridLogoField(serializers.Field):
             return serializers.ImageField().to_internal_value(data)
         return data
 
+
 class CreateOrganizationProfileAdminApi(APIView):
+    """
+    POST /adm/create_organization_profile_admin
+    Create Organization Profile with Logo & Address.
+    """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     class InputSerializer(serializers.Serializer):
@@ -56,14 +61,22 @@ class CreateOrganizationProfileAdminApi(APIView):
 
 
 class GetOrganizationProfileAdminApi(APIView):
+    """
+    GET /adm/get_organization_profile_admin
+    Fetch Organization Profile details for logged in user's tenant.
+    """
     def get(self, request):
         if request.user and request.user.is_authenticated:
             authorize_request('api_get_organization_profile_admin', request.user)
-        res = get_organization_profile_admin_service(request=request)
+        res = get_organization_profile_admin_service(request=request, user=request.user)
         return Response(res, status=status.HTTP_200_OK)
 
 
 class EditOrganizationProfileAdminApi(APIView):
+    """
+    POST /adm/edit_organization_profile_admin
+    Update Organization Profile details for tenant.
+    """
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     class InputSerializer(serializers.Serializer):

@@ -14,6 +14,7 @@ class GetPendingPaymentFilterDropdownsAdmin(APIView):
     """
     GET /adm/get_pending_payment_filter_dropdowns_admin
     Pending Payments Page -> Filter Modal Dropdowns API.
+    Fast Dropdowns using Collection Queries (exec_raw_sql).
     """
     def get(self, request):
         authorize_request('api_get_pending_payment_filter_dropdowns_admin', request.user)
@@ -44,17 +45,17 @@ class FetchAllPendingPaymentsAdmin(APIView):
 
     def post(self, request):
         authorize_request('api_fetch_all_pending_payments_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
+        serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
 
         result = fetch_all_pending_payments_admin(user=request.user, **serializer.validated_data)
 
         log_data = {
-            'user_id': request.user.id if request.user.id else None,
+            'user_id': request.user.id if (request.user and hasattr(request.user, 'id')) else None,
             'api_name': request.path,
             'method': request.method,
             'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status"), "total_count": result.get("total_count")},
+            'response_payload': {"status": result.get("status"), "total_count": result.get("total_count") if isinstance(result, dict) else 0},
             'status_code': 200
         }
         api_history_log(log_data)
@@ -65,7 +66,7 @@ class FetchAllPendingPaymentsAdmin(APIView):
 class ExportPendingPaymentsAdmin(APIView):
     """
     POST /adm/export_pending_payments_admin
-    Export pending payments to Excel / CSV / PDF.
+    Export pending payments list.
     """
     class InputSerializer(serializers.Serializer):
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -83,7 +84,7 @@ class ExportPendingPaymentsAdmin(APIView):
 
     def post(self, request):
         authorize_request('api_export_pending_payments_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
+        serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
 
         return export_pending_payments_admin(user=request.user, **serializer.validated_data)

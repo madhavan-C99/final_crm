@@ -760,11 +760,10 @@ def fetch_user_delete_summary_admin(data, admin_user=None):
         has_assigned_leads = (total_assigned_leads > 0)
 
         new_leads_cnt = assigned_leads_qs.filter(
-            Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")
+            Q(pipeline_stage__name__icontains="new")
         ).count()
 
         closed_won_lost_filter = (
-            Q(pipeline_stage_id__in=[3, 4]) |
             Q(pipeline_stage__name__icontains="won") |
             Q(pipeline_stage__name__icontains="converted") |
             Q(pipeline_stage__name__icontains="closed") |
@@ -998,10 +997,10 @@ def fetch_user_campaigns_admin(data, admin_user=None):
 
             called_cnt = user_leads.filter(calls__isnull=False).distinct().count()
             rescheduled_cnt = user_leads.filter(
-                Q(followups__isnull=False) | Q(pipeline_stage_id__in=[2, 3]) | Q(pipeline_stage__name__icontains="follow")
+                Q(followups__isnull=False) | Q(pipeline_stage__name__icontains="follow")
             ).distinct().count()
             closed_cnt = user_leads.filter(
-                Q(pipeline_stage_id__in=[4, 5]) | Q(pipeline_stage__name__iregex=r'won|loss|lost|closed')
+                Q(pipeline_stage__name__iregex=r'won|loss|lost|closed')
             ).distinct().count()
 
             pipeline_name = camp.pipeline_category.display_name or camp.pipeline_category.category_name if (hasattr(camp, 'pipeline_category') and camp.pipeline_category) else "Education"

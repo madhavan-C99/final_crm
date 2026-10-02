@@ -12,9 +12,7 @@ from telecalling.models import User, Lead, CallDetails, FollowUp, PaymentInfo
 from adm.models import Team, TeamTarget, IndividualTarget
 
 def get_date_range(date_filter_type, from_date_str=None, to_date_str=None):
-    """
-    Returns start_date and end_date based on filter type.
-    """
+    
     today = timezone.now().date()
     
     if date_filter_type == 'today':
@@ -408,9 +406,7 @@ def update_telecaller_target_admin(data, admin_user=None):
 
 
 def get_performance_filter_dropdowns_admin(user=None):
-    """
-    Service to fetch teams dropdown & date range filter options for performance page.
-    """
+   
     try:
         teams_qs = Team.objects.select_related('leader').filter(is_active=True).order_by('id')
         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):

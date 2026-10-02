@@ -2,19 +2,11 @@ from adm.services.permission_services import authorize_request
 from rest_framework import serializers, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import authentication_classes, permission_classes
 from telecalling.views import api_history_log
 
-from ..services.loss_lead_approval_services import (
-    fetch_loss_lead_approval_requests_admin,
-    get_loss_lead_approval_filter_dropdowns_admin,
-    export_loss_lead_approval_requests_admin,
-    action_loss_lead_approval_admin
-)
+from ..services.loss_lead_approval_services import *
 
 
-# @authentication_classes([])
-# @permission_classes([])
 class FetchLossLeadApprovalRequestsAdmin(APIView):
     
     class InputSerializer(serializers.Serializer):
@@ -34,24 +26,19 @@ class FetchLossLeadApprovalRequestsAdmin(APIView):
         page = serializers.IntegerField(required=False, default=1)
         page_size = serializers.IntegerField(required=False, allow_null=True, default=250)
 
-    # def get(self, request):
-    #     authorize_request('api_fetch_loss_lead_approval_requests_admin', request.user)
-    #     result = fetch_loss_lead_approval_requests_admin(user=request.user, **request.query_params.dict())
-    #     return Response(result, status=status.HTTP_200_OK)
-
     def post(self, request):
         authorize_request('api_fetch_loss_lead_approval_requests_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
+        serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
 
         result = fetch_loss_lead_approval_requests_admin(user=request.user, **serializer.validated_data)
 
         log_data = {
-            'user_id': request.user.id if request.user and request.user.id else None,
+            'user_id': request.user.id if (request.user and hasattr(request.user, 'id')) else None,
             'api_name': request.path,
             'method': request.method,
             'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status"), "total_count": result.get("data", {}).get("total_count")},
+            'response_payload': {"status": result.get("status"), "total_count": result.get("data", {}).get("total_count") if isinstance(result.get("data"), dict) else 0},
             'status_code': 200
         }
         api_history_log(log_data)
@@ -59,50 +46,8 @@ class FetchLossLeadApprovalRequestsAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-# @authentication_classes([])
-# @permission_classes([])
-class GetLossLeadApprovalFilterDropdownsAdmin(APIView):
-    """
-    Filter Modal Dropdown Options API for Loss Lead Approval Page (No inputs required).
-    """
-    def get(self, request):
-        authorize_request('api_get_loss_lead_approval_filter_dropdowns_admin', request.user)
-        result = get_loss_lead_approval_filter_dropdowns_admin(user=request.user)
-        return Response(result, status=status.HTTP_200_OK)
-
-
-# @authentication_classes([])
-# @permission_classes([])
-class ExportLossLeadApprovalRequestsAdmin(APIView):
-    """
-    POST & GET -> Lime Green Excel Export API for Loss Lead Approval Requests Page.
-    """
-    class InputSerializer(serializers.Serializer):
-        search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        loss_reason_id = serializers.IntegerField(required=False, allow_null=True)
-        assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
-
-    # def get(self, request):
-    #     authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
-    #     result = export_loss_lead_approval_requests_admin(user=request.user, **request.query_params.dict())
-    #     return Response(result, status=status.HTTP_200_OK)
-
-    def post(self, request):
-        authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        result = export_loss_lead_approval_requests_admin(user=request.user, **serializer.validated_data)
-        return Response(result, status=status.HTTP_200_OK)
-
-
-# @authentication_classes([])
-# @permission_classes([])
 class ActionLossLeadApprovalAdmin(APIView):
-   
+    
     class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=False, allow_null=True)
         id = serializers.IntegerField(required=False, allow_null=True)
@@ -119,15 +64,14 @@ class ActionLossLeadApprovalAdmin(APIView):
 
     def post(self, request):
         authorize_request('api_action_loss_lead_approval_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
+        serializer = self.InputSerializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
 
-        payload = {**serializer.validated_data, **request.data}
-        payload.pop('user', None)
+        payload = {**serializer.validated_data}
         result = action_loss_lead_approval_admin(user=request.user, **payload)
 
         log_data = {
-            'user_id': request.user.id if request.user and request.user.id else None,
+            'user_id': request.user.id if (request.user and hasattr(request.user, 'id')) else None,
             'api_name': request.path,
             'method': request.method,
             'request_payload': serializer.validated_data,
@@ -136,4 +80,31 @@ class ActionLossLeadApprovalAdmin(APIView):
         }
         api_history_log(log_data)
 
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class GetLossLeadApprovalFilterDropdownsAdmin(APIView):
+    
+    def get(self, request):
+        authorize_request('api_get_loss_lead_approval_filter_dropdowns_admin', request.user)
+        result = get_loss_lead_approval_filter_dropdowns_admin(user=request.user)
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class ExportLossLeadApprovalRequestsAdmin(APIView):
+ 
+    class InputSerializer(serializers.Serializer):
+        search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        loss_reason_id = serializers.IntegerField(required=False, allow_null=True)
+        assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def post(self, request):
+        authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
+        serializer = self.InputSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+
+        result = export_loss_lead_approval_requests_admin(user=request.user, **serializer.validated_data)
         return Response(result, status=status.HTTP_200_OK)

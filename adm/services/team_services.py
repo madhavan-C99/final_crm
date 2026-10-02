@@ -21,9 +21,7 @@ def fetch_all_teams_admin(user=None):
 
 
 def create_team_admin(admin_user, data):
-    """
-    Create a new Team using Pure Django ORM.
-    """
+    
     try:
         name = str(data.get('name', '')).strip()
         if not name:
@@ -96,9 +94,7 @@ def create_team_admin(admin_user, data):
 
 
 def edit_team_admin(admin_user, data):
-    """
-    Edit an existing Team using Pure Django ORM.
-    """
+  
     try:
         t_id = data.get('id') or data.get('team_id') or data.get('teamId')
         if not t_id:
@@ -194,9 +190,7 @@ def delete_team_admin(admin_user, data):
 
 
 def fetch_team_dropdowns_admin(user=None, data=None):
-    """
-    Fetch dropdown options using CollectionQuery options.
-    """
+    
     try:
         data = data or {}
         org_id = getattr(user, 'organization_id', 0) if (user and hasattr(user, 'organization_id') and user.organization_id) else 0

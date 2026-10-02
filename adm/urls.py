@@ -60,6 +60,16 @@ from .views.loss_reason_views import (
     CreateLossReasonAdminApi,
     UpdateLossReasonAdminApi,
 )
+from .views.settings_pipeline_views import (
+    FetchPipelineCategoriesView,
+    CreatePipelineCategoryView,
+    UpdatePipelineStagesView,
+    CheckStageLeadsView,
+    TransferPipelineStageDataView,
+    CheckTagLeadsView,
+    TransferPipelineTagDataView,
+    FetchPipelineStageTranferedDataView,
+)
 
 # Poomani
 from .views.campaign_stats_views import EducationPipelineStats, CampaignCardsList, FilterOptionsView
@@ -207,4 +217,18 @@ urlpatterns = [
     path('fetch_loss_reasons_admin', FetchLossReasonsAdminApi.as_view()),
     path('create_loss_reason_admin', CreateLossReasonAdminApi.as_view()),
     path('update_loss_reason_admin', UpdateLossReasonAdminApi.as_view()),
+
+    # 📌 Dedicated Settings Pipeline APIs
+    path('settings_pipeline_categories', FetchPipelineCategoriesView.as_view()),
+    path('settings_create_pipeline_category', CreatePipelineCategoryView.as_view()),
+    path('settings_update_pipeline_stages', UpdatePipelineStagesView.as_view()),
+    path('settings_check_stage_leads', CheckStageLeadsView.as_view()),
+    path('settings_delete_pipeline_stage', TransferPipelineStageDataView.as_view()),
+    path('settings_transfer_pipeline_stage_data', TransferPipelineStageDataView.as_view()),
+    path('settings_check_tag_leads', CheckTagLeadsView.as_view()),
+    path('settings_delete_tag', TransferPipelineTagDataView.as_view()),
+    path('settings_transfer_pipeline_tag_data', TransferPipelineTagDataView.as_view()),
+    path('settings_pipeline_stage_tranfered_data', FetchPipelineStageTranferedDataView.as_view()),
+    path('get_pipeline_categories', FetchPipelineCategoriesView.as_view()),
+    path('create_pipeline_category', CreatePipelineCategoryView.as_view()),
 ]

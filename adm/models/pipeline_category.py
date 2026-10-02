@@ -6,6 +6,7 @@ class PipelineCategory(SafeDeleteModel):
     category_name = models.CharField(max_length=100)
     display_name = models.CharField(max_length=100, null=True, blank=True)
     organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='pipeline_categories')
+    is_default = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     created_by = models.CharField(max_length=50, null=True)
