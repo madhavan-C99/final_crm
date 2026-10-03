@@ -35,7 +35,6 @@ class CreateTeamAdminApi(APIView):
         )
         return Response({"data": res}, status=status.HTTP_201_CREATED)
 
-
 class EditTeamAdminApi(APIView):
     class InputSerializer(serializers.Serializer):
         id = serializers.IntegerField(required=False, allow_null=True)

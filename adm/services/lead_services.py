@@ -4,7 +4,7 @@ import openpyxl
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Q
+from django.db.models import Q, Count
 from rest_framework.exceptions import APIException
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -80,7 +80,10 @@ def fetch_all_leads_admin(user=None, **data):
         pipeline_id = data.get("pipeline_id")
         pipeline_name = data.get("pipeline_name")
         if pipeline_id:
-            base_qs = base_qs.filter(campaign__pipeline_category_id=pipeline_id)
+            base_qs = base_qs.filter(
+                Q(pipeline_stage__pipeline_category_id=pipeline_id) |
+                Q(campaign__pipeline_category_id=pipeline_id)
+            )
         elif pipeline_name and str(pipeline_name).strip():
             p_name = str(pipeline_name).strip()
             if p_name.lower() not in ["all", "all leads", "none", "null"]:
@@ -89,8 +92,10 @@ def fetch_all_leads_admin(user=None, **data):
                     Q(campaign__name__icontains=p_name)
                 ).distinct()
 
-        if data.get("pipeline_stage_id"):
-            base_qs = base_qs.filter(pipeline_stage_id=data.get("pipeline_stage_id"))
+        # Popup stage filter (from filter popup menu)
+        popup_stage_id = data.get("pipeline_stage_id")
+        if popup_stage_id and str(popup_stage_id).isdigit() and int(popup_stage_id) > 0:
+            base_qs = base_qs.filter(pipeline_stage_id=int(popup_stage_id))
 
         source_id = data.get("source_id") or data.get("lead_source_id")
         if source_id:
@@ -122,7 +127,7 @@ def fetch_all_leads_admin(user=None, **data):
         elif date_filter_type in ["monthly", "this_month", "this month"]:
             from_date, to_date = today.replace(day=1), today
 
-        if from_date and to_date:
+        if from_date and to_date and str(from_date).strip() != "" and str(to_date).strip() != "":
             base_qs = base_qs.filter(enquiry_date__date__range=[from_date, to_date])
 
         # 5. Exclude ONLY UNAPPROVED loss leads (waiting in Loss Approval queue) from main leads list
@@ -209,14 +214,15 @@ def fetch_all_leads_admin(user=None, **data):
             "loss_count": canonical_counts["lost"],
         }
 
-        # Populate dynamic ${stage_id}_count keys for frontend LeadStats stage badges
+        # Populate dynamic ${stage_id}_count and ${stage_id} keys for frontend LeadStats stage badges
         stage_counts_qs = base_qs.values('pipeline_stage_id').annotate(cnt=Count('id'))
         for sc in stage_counts_qs:
             stg_id = sc['pipeline_stage_id']
             if stg_id:
                 stats[f"{stg_id}_count"] = sc['cnt']
+                stats[str(stg_id)] = sc['cnt']
 
-        # 6. Sorting & Pagination
+        # 6. Sorting & Stage Tab Selection
         sort_order = str(data.get("sort_order") or "").lower().strip()
         sort_by = data.get("sort_by") or "-created_at"
         if sort_order == "newest":
@@ -224,15 +230,20 @@ def fetch_all_leads_admin(user=None, **data):
         elif sort_order == "oldest":
             sort_by = "created_at"
 
+        lead_stage_id = data.get("lead_stage_id")
         lead_filter_type = str(data.get("lead_filter_type") or "all").lower().strip()
-        selected_qs = tabs.get(lead_filter_type, tabs["all"]).order_by(sort_by)
 
-        total = tab_counts.get(lead_filter_type, tab_counts["all"])
+        if lead_stage_id and str(lead_stage_id).isdigit() and int(lead_stage_id) > 0:
+            selected_qs = base_qs.filter(pipeline_stage_id=int(lead_stage_id)).order_by(sort_by)
+        else:
+            selected_qs = tabs.get(lead_filter_type, tabs["all"]).order_by(sort_by)
+
+        total = selected_qs.count()
         page_size_input = data.get("rows_per_page") or data.get("page_size")
         
         raw_page = data.get("page")
-        if raw_page is None:
-            page = 0
+        if raw_page is None or str(raw_page).lower() in ["none", "", "0"] or int(raw_page or 1) <= 1:
+            page = 1
         else:
             page = int(raw_page)
 
@@ -241,8 +252,8 @@ def fetch_all_leads_admin(user=None, **data):
             start = 0 
             rows = selected_qs
         else:
-            page_size = int(page_size_input or 1000)
-            start = page * page_size
+            page_size = int(page_size_input or 50)
+            start = (page - 1) * page_size
             end = start + page_size
             rows = selected_qs[start:end]
 
@@ -410,8 +421,17 @@ def add_new_lead_admin(user, **data):
             ).select_related('assigned_to').first()
             
         if existing_lead:
-            assigned_name = get_user_display_name(existing_lead.assigned_to) or "another agent"
-            raise APIException(f"Mobile number '{mobile_no}' is already registered and assigned to {assigned_name}.")
+            return {
+                "status": "failed",
+                "message": "Lead with this mobile number already exists."
+            }
+        
+        email_val = (data.get("email") or "").strip()
+        if email_val and Lead.objects.filter(email__iexact=email_val).exists():
+            return {
+                "status": "failed",
+                "message": "Lead with this email address already exists."
+            }
         
         # 2. Mandatory Name Validation
         first_name = (data.get("first_name") or "").strip()
@@ -534,19 +554,55 @@ def upload_lead_excel_admin(file_obj, user=None):
             raise APIException("Unsupported file format! Please upload a .csv, .xls, or .xlsx file.")
         rows_data = []
 
-        # 3. Reading File Data (.csv vs .xlsx)
+        # 3. Reading File Data (.csv vs .xlsx vs .xls/text)
+        content_bytes = file_obj.read()
+        file_obj.seek(0)
+        
+        rows_data = []
+
         if filename.endswith('.csv'):
-            decoded_file = file_obj.read().decode('utf-8-sig').splitlines()
+            try:
+                decoded_file = content_bytes.decode('utf-8-sig').splitlines()
+            except Exception:
+                decoded_file = content_bytes.decode('latin-1').splitlines()
             reader = csv.reader(decoded_file)
             for row in reader:
                 if any(row):
                     rows_data.append(row)
         else:  # .xlsx or .xls
-            wb = openpyxl.load_workbook(file_obj, data_only=True)
-            sheet = wb.active
-            for row in sheet.iter_rows(values_only=True):
-                if row and any(row):
-                    rows_data.append([str(cell) if cell is not None else "" for cell in row])
+            is_parsed = False
+            # First, try openpyxl for true .xlsx OpenXML zip files
+            try:
+                import io
+                wb = openpyxl.load_workbook(io.BytesIO(content_bytes), data_only=True)
+                sheet = wb.active
+                for row in sheet.iter_rows(values_only=True):
+                    if row and any(row):
+                        rows_data.append([str(cell) if cell is not None else "" for cell in row])
+                is_parsed = True
+            except Exception:
+                # Fallback: Many .xls or exported files are actually plain text / CSV files in disguise!
+                try:
+                    try:
+                        text_lines = content_bytes.decode('utf-8-sig').splitlines()
+                    except Exception:
+                        text_lines = content_bytes.decode('latin-1').splitlines()
+                    reader = csv.reader(text_lines)
+                    temp_rows = []
+                    for row in reader:
+                        if any(row):
+                            temp_rows.append(row)
+                    if len(temp_rows) >= 2:
+                        rows_data = temp_rows
+                        is_parsed = True
+                except Exception:
+                    pass
+
+            if not is_parsed:
+                raise APIException(
+                    "Unable to read the file format. If you are uploading an older Excel (.xls) binary file, "
+                    "please save/convert it as Excel Workbook (.xlsx) or CSV (.csv) format and try again."
+                )
         if not rows_data or len(rows_data) < 2:
             raise APIException("The uploaded file is empty or missing data rows.")
         
@@ -639,6 +695,13 @@ def upload_lead_excel_admin(file_obj, user=None):
                 enquiry_date=timezone.now()
             )
             success_count += 1
+
+        if success_count == 0 and duplicate_count > 0:
+            return {
+                "status": "failed",
+                "message": "Lead with this mobile number already exists."
+            }
+
         return {
             "status": "success",
             "message": f"{success_count} leads uploaded successfully! {duplicate_count} duplicate mobile numbers skipped.",
@@ -655,133 +718,119 @@ def upload_lead_excel_admin(file_obj, user=None):
     
 # --------------------------------export leads to excel service------------------------------------------
 
-# def export_all_leads_admin(user=None, **data):
-#     """
-#     Admin Leads Page -> Export to Excel (.xlsx) Service.
-#     Lime Green Header Styling (#84C225) & Spacious Column Widths matching reference image.
-#     """
-#     try:
-#         # 1. Normalize filter type
-#         raw_filter = (
-#             data.get("lead_filter_type") or 
-#             data.get("filter_type") or 
-#             data.get("stage") or 
-#             data.get("tab") or 
-#             "all"
-#         )
-#         lead_filter_type = str(raw_filter).lower().strip()
+# --------------------------------export leads to excel service------------------------------------------
+
+def export_all_leads_admin(user=None, request_host=None, **data):
+    """
+    Admin Leads Page -> Export to Excel (.xlsx) Service.
+    Supports dynamic columns array, Lime Green Header Styling (#84C225), and download URL output.
+    """
+    try:
+        data['page_size'] = "all"
+        result = fetch_all_leads_admin(user=user, **data)
+        leads = result.get("leads", [])
+
+        import openpyxl
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Leads_Export"
+
+        requested_cols = data.get("columns") or []
         
-#         data["lead_filter_type"] = lead_filter_type
-#         data['page_size'] = "all"
+        column_map = {
+            "s_no": ("S.No", lambda idx, l: idx),
+            "id": ("Lead ID", lambda idx, l: l.get("id")),
+            "full_name": ("Full Name", lambda idx, l: l.get("full_name") or ""),
+            "name": ("Name", lambda idx, l: l.get("full_name") or ""),
+            "mobile_no": ("Mobile No", lambda idx, l: l.get("mobile_no") or ""),
+            "mobile": ("Mobile", lambda idx, l: l.get("mobile_no") or ""),
+            "email": ("Email", lambda idx, l: l.get("email") or ""),
+            "assigned_to": ("Assigned To", lambda idx, l: l.get("assigned_to") or "Unassigned"),
+            "stage": ("Stage", lambda idx, l: l.get("stage") or ""),
+            "tag": ("Priority Tag", lambda idx, l: l.get("tag") or ""),
+            "campaign": ("Campaign", lambda idx, l: l.get("campaign") or ""),
+            "source": ("Source", lambda idx, l: l.get("source") or ""),
+            "course_plan": ("Course Plan", lambda idx, l: l.get("course_plan") or ""),
+            "course": ("Course", lambda idx, l: l.get("course") or ""),
+            "pending_amount": ("Pending Amount", lambda idx, l: l.get("pending_amount") or 0),
+            "total_amount": ("Total Amount", lambda idx, l: l.get("amount") or 0),
+            "created_at": ("Created At", lambda idx, l: str(l.get("created")) if l.get("created") else "")
+        }
 
-#         # 2. Fetch matching leads from fetch_all_leads_admin
-#         result = fetch_all_leads_admin(user=user, **data)
-#         leads = result.get("leads", [])
+        if requested_cols:
+            active_col_keys = [c for c in requested_cols if c in column_map]
+            if not active_col_keys:
+                active_col_keys = ["s_no", "name", "mobile", "assigned_to", "stage", "campaign", "source"]
+        else:
+            active_col_keys = ["s_no", "name", "mobile", "assigned_to", "stage", "campaign", "source"]
 
-#         # 3. Create Excel Workbook
-#         wb = openpyxl.Workbook()
-#         ws = wb.active
-#         ws.title = f"Leads_{lead_filter_type}"
+        headers = [column_map[k][0] for k in active_col_keys]
+        ws.append(headers)
 
-#         # 🎨 4. Exact 14 Column Headers matching reference image
-#         headers = [
-#             "s_no", 
-#             "id", 
-#             "full_name", 
-#             "mobile_no", 
-#             "email", 
-#             "tag", 
-#             "stage", 
-#             "source", 
-#             "campaign_name", 
-#             "course_plan", 
-#             "course_name", 
-#             "pending_amount", 
-#             "total_amount", 
-#             "created_at"
-#         ]
-#         ws.append(headers)
+        for idx, lead in enumerate(leads, start=1):
+            row_vals = [column_map[k][1](idx, lead) for k in active_col_keys]
+            ws.append(row_vals)
 
-#         # 5. Populate Data Rows
-#         for idx, lead in enumerate(leads, start=1):
-#             ws.append([
-#                 idx,                                                                   # s_no
-#                 lead.get("id"),                                                        # id
-#                 lead.get("full_name") or "",                                           # full_name
-#                 lead.get("mobile_no") or "",                                           # mobile_no
-#                 lead.get("email") or "",                                              # email
-#                 lead.get("tag") or "new",                                              # tag
-#                 lead.get("stage") or "",                                               # stage
-#                 lead.get("source") or "",                                              # source
-#                 lead.get("campaign") or "",                                            # campaign_name
-#                 lead.get("course_plan") or "",                                         # course_plan
-#                 lead.get("course") or "",                                              # course_name
-#                 lead.get("pending_amount") or 0,                                       # pending_amount
-#                 lead.get("amount") or 0,                                               # total_amount
-#                 str(lead.get("created")) if lead.get("created") else ""                # created_at
-#             ])
+        header_fill = PatternFill(start_color="84C225", end_color="84C225", fill_type="solid")
+        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        data_font = Font(name="Calibri", size=10)
+        center_align = Alignment(horizontal="center", vertical="center")
 
-#         # 🎨 6. LIME GREEN HEADER STYLING (#84C225) & BORDERS
-#         header_fill = PatternFill(start_color="84C225", end_color="84C225", fill_type="solid")  # Bright Lime Green
-#         header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")                   # Bold White Text
-#         data_font = Font(name="Calibri", size=10)
-#         center_align = Alignment(horizontal="center", vertical="center")
-#         left_align = Alignment(horizontal="left", vertical="center")
-        
-#         thin_border = Border(
-#             left=Side(style='thin', color='D9D9D9'),
-#             right=Side(style='thin', color='D9D9D9'),
-#             top=Side(style='thin', color='D9D9D9'),
-#             bottom=Side(style='thin', color='D9D9D9')
-#         )
+        thin_border = Border(
+            left=Side(style='thin', color='D9D9D9'),
+            right=Side(style='thin', color='D9D9D9'),
+            top=Side(style='thin', color='D9D9D9'),
+            bottom=Side(style='thin', color='D9D9D9')
+        )
 
-#        # Apply Header Styling (Center Aligned)
-#         ws.row_dimensions[1].height = 26
-#         for col_num in range(1, len(headers) + 1):
-#             cell = ws.cell(row=1, column=col_num)
-#             cell.fill = header_fill
-#             cell.font = header_font
-#             cell.alignment = center_align
-#             cell.border = thin_border
-            
-#         # 🎯 Apply Data Rows Styling (Neat Center Alignment for ALL Cells)
-#         for row_num in range(2, ws.max_row + 1):
-#             ws.row_dimensions[row_num].height = 22
-#             for col_num in range(1, len(headers) + 1):
-#                 cell = ws.cell(row=row_num, column=col_num)
-#                 cell.font = data_font
-#                 cell.border = thin_border
-#                 cell.alignment = center_align
+        ws.row_dimensions[1].height = 26
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = center_align
+            cell.border = thin_border
 
-#         # 📐 7. AUTO COLUMN WIDTH (Spacious Display)
-#         for col in ws.columns:
-#             max_len = 0
-#             col_letter = get_column_letter(col[0].column)
-#             for cell in col:
-#                 val_str = str(cell.value or '')
-#                 if len(val_str) > max_len:
-#                     max_len = len(val_str)
-#             ws.column_dimensions[col_letter].width = max(max_len + 6, 16)
+        for row_num in range(2, ws.max_row + 1):
+            ws.row_dimensions[row_num].height = 22
+            for col_num in range(1, len(headers) + 1):
+                cell = ws.cell(row=row_num, column=col_num)
+                cell.font = data_font
+                cell.border = thin_border
+                cell.alignment = center_align
 
-#         # 8. Save & Return File Link
-#         file_name = f"Admin_Leads_{lead_filter_type}.xlsx"
-#         export_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
-#         os.makedirs(export_dir, exist_ok=True)
-#         file_path = os.path.join(export_dir, file_name)
+        for col in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                val_str = str(cell.value or '')
+                if len(val_str) > max_len:
+                    max_len = len(val_str)
+            ws.column_dimensions[col_letter].width = max(max_len + 6, 16)
 
-#         wb.save(file_path)
+        today_str = timezone.now().strftime("%Y%m%d")
+        file_name = f"Admin_Leads_{today_str}.xlsx"
+        export_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
+        os.makedirs(export_dir, exist_ok=True)
+        file_path = os.path.join(export_dir, file_name)
 
-#         return {
-#             "status": "success",
-#             "message": f"Successfully exported {len(leads)} leads for tab '{lead_filter_type}'!",
-#             "total_exported": len(leads),
-#             "lead_filter_type": lead_filter_type,
-#             "file_name": file_name,
-#             "download_url": f"/media/exports/{file_name}"
-#         }
+        wb.save(file_path)
 
-#     except Exception as e:
-#         raise APIException(str(e))
+        rel_url = f"/media/exports/{file_name}"
+        full_url = f"{request_host}{rel_url}" if request_host else rel_url
+
+        return {
+            "status": True,
+            "message": f"Successfully exported {len(leads)} leads!",
+            "total_exported": len(leads),
+            "file_name": file_name,
+            "download_url": full_url
+        }
+    except Exception as e:
+        raise APIException(str(e))
     
     
     
@@ -920,7 +969,13 @@ def fetch_pipeline_leads_admin(**data):
             "lead_source"
         )
 
-        # 1. Search Filter
+        pipeline_id = data.get("pipeline_id")
+        if pipeline_id:
+            base_qs = base_qs.filter(
+                Q(pipeline_stage__pipeline_category_id=pipeline_id) |
+                Q(campaign__pipeline_category_id=pipeline_id)
+            )
+
         search = data.get("search")
         if search:
             base_qs = base_qs.filter(
@@ -929,23 +984,32 @@ def fetch_pipeline_leads_admin(**data):
                 Q(email__icontains=search)
             )
 
-        # 2. Assigned Telecaller Filter
-        tele_id = data.get("assigned_to_id") or data.get("tele_id")
-        if tele_id and int(tele_id) > 0:
-            base_qs = base_qs.filter(assigned_to_id=tele_id)
+        tele_id = data.get("assigned_to") or data.get("assigned_to_id") or data.get("tele_id")
+        if tele_id:
+            if str(tele_id).isdigit():
+                base_qs = base_qs.filter(assigned_to_id=int(tele_id))
+            else:
+                base_qs = base_qs.filter(
+                    Q(assigned_to__username__iexact=str(tele_id)) |
+                    Q(assigned_to__first_name__icontains=str(tele_id))
+                )
 
-        # 3. Dropdown Filters
-        if data.get("pipeline_stage_id") and int(data.get("pipeline_stage_id")) > 0:
-            base_qs = base_qs.filter(pipeline_stage_id=data.get("pipeline_stage_id"))
-        if data.get("lead_source_id") and int(data.get("lead_source_id")) > 0:
-            base_qs = base_qs.filter(lead_source_id=data.get("lead_source_id"))
-        if data.get("campaign_name_id") and int(data.get("campaign_name_id")) > 0:
-            base_qs = base_qs.filter(campaign_id=data.get("campaign_name_id"))
-        if data.get("course_plan_id") and int(data.get("course_plan_id")) > 0:
+        stage_id_val = data.get("lead_stage_id") or data.get("pipeline_stage_id")
+        if stage_id_val and int(stage_id_val) > 0:
+            base_qs = base_qs.filter(pipeline_stage_id=int(stage_id_val))
+
+        source_id = data.get("source_id") or data.get("lead_source_id")
+        if source_id:
+            base_qs = base_qs.filter(lead_source_id=source_id)
+
+        campaign_id = data.get("campaign_id") or data.get("campaign_name_id")
+        if campaign_id:
+            base_qs = base_qs.filter(campaign_id=campaign_id)
+
+        if data.get("course_plan_id"):
             base_qs = base_qs.filter(course_plan_id=data.get("course_plan_id"))
 
-        # 4. Date Filter
-        date_filter_type = data.get("date_filter_type") or "all"
+        date_filter_type = str(data.get("date_filter_type") or "all").lower().strip()
         from_date = data.get("from_date")
         to_date = data.get("to_date")
 
@@ -955,86 +1019,79 @@ def fetch_pipeline_leads_admin(**data):
             from_date = to_date = today - timedelta(days=1)
         elif date_filter_type == "weekly":
             from_date, to_date = today - timedelta(days=7), today
-        elif date_filter_type == "monthly":
+        elif date_filter_type in ["monthly", "this_month", "this month"]:
             from_date, to_date = today.replace(day=1), today
 
         if from_date and to_date and str(from_date).strip() != "" and str(to_date).strip() != "":
             base_qs = base_qs.filter(enquiry_date__date__range=[from_date, to_date])
 
-        # Card Formatting Helper (Exact UI Match: e.g. "31 Jan, 10:55 AM")
         def format_card(lead):
             created_dt = lead.enquiry_date or lead.created_at
             formatted_date = created_dt.strftime("%d %b, %I:%M %p") if created_dt else ""
+            stg_id = lead.pipeline_stage_id or 1
             return {
                 "id": lead.id,
                 "full_name": lead.full_name or "",
+                "name": lead.full_name or "",
                 "mobile_no": lead.mobile_no or "",
+                "mobile": lead.mobile_no or "",
                 "assigned_to": get_user_display_name(lead.assigned_to) or "Unassigned",
+                "assigned_to_id": lead.assigned_to_id,
+                "stage_id": stg_id,
+                "pipeline_stage_id": stg_id,
+                "stage": lead.pipeline_stage.name if lead.pipeline_stage else "",
                 "source": lead.lead_source.name if lead.lead_source else "direct walk in",
+                "campaign": lead.campaign.name if lead.campaign else None,
                 "created_at": formatted_date
             }
 
-        # 1. New Lead Column (Stage ID 1)
-        new_lead_qs = base_qs.filter(Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")).order_by("-id")
-        new_lead_cards = [format_card(l) for l in new_lead_qs]
+        pipeline_id_val = data.get("pipeline_id")
+        pipeline_stages_qs = PipelineStage.objects.filter(is_active=True)
+        if pipeline_id_val and str(pipeline_id_val).isdigit() and int(pipeline_id_val) > 0:
+            pipeline_stages_qs = pipeline_stages_qs.filter(pipeline_category_id=int(pipeline_id_val))
+        else:
+            pipeline_stages_qs = pipeline_stages_qs.filter(pipeline_category_id=1)
 
-        # 2. Follow Up Column (Stage ID 2)
-        follow_up_qs = base_qs.filter(Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")).order_by("-id")
-        follow_up_cards = [format_card(l) for l in follow_up_qs]
+        pipeline_stages = list(pipeline_stages_qs.order_by("order_no", "id"))
 
-        follow_up_dict = {
-            "total_count": len(follow_up_cards),
-            "past": [],
-            "current": follow_up_cards,
-            "future": []
-        }
+        data_by_stage = {}
+        for stg in pipeline_stages:
+            stg_name = stg.display_value or stg.name
+            data_by_stage[stg_name] = []
 
-        # 3. Unreached Calls Column
-        unreached_dict = {
-            "total_count": 0,
-            "past": [],
-            "current": [],
-            "future": []
-        }
+        all_leads = list(base_qs.order_by("-id"))
+        for lead in all_leads:
+            card = format_card(lead)
+            stg_obj = lead.pipeline_stage
+            stg_name_key = (stg_obj.display_value or stg_obj.name) if stg_obj else "New Lead"
 
-        # 4. Pending Payment Column
-        # Database-ல் நிலுவைத் தொகை உள்ள லீட்களைப் (Pending Payment) படித்தல்:
-        pending_pay_lead_ids = PaymentInfo.objects.filter(pending_amount__gt=0).values_list("lead_id", flat=True)
-        pending_payment_qs = base_qs.filter(id__in=pending_pay_lead_ids).order_by("-id")
-        pending_payment_cards = [format_card(l) for l in pending_payment_qs]
-        pending_payment_dict = {
-            "total_count": len(pending_payment_cards),
-            "past": [],
-            "current": pending_payment_cards,
-            "future": []
-        }
+            if stg_name_key not in data_by_stage:
+                data_by_stage[stg_name_key] = []
+            data_by_stage[stg_name_key].append(card)
 
-        # 5. Closed Column (Won=Stage ID 3, Lost=Stage ID 4)
-        won_qs = base_qs.filter(Q(pipeline_stage_id=3) | Q(pipeline_stage__name__icontains="won")).order_by("-id")
-        lost_qs = base_qs.filter(Q(pipeline_stage_id=4) | Q(pipeline_stage__name__icontains="loss") | Q(pipeline_stage__name__icontains="lost")).order_by("-id")
-
-        won_cards = [format_card(l) for l in won_qs]
-        lost_cards = [format_card(l) for l in lost_qs]
-
-        closed_dict = {
-            "total_count": len(won_cards) + len(lost_cards),
-            "no_response": [],
-            "not_reachable": [],
-            "wrong_number": [],
-            "won": won_cards,
-            "lost": lost_cards
-        }
+        stage_list = []
+        for stg in pipeline_stages:
+            stg_name = stg.display_value or stg.name
+            cards_for_stg = data_by_stage.get(stg_name, [])
+            stage_list.append({
+                "id": stg.id,
+                "stage_id": stg.id,
+                "name": stg_name,
+                "stage_name": stg_name,
+                "title": stg_name,
+                "stage_type": stg.stage_type,
+                "order_no": stg.order_no,
+                "count": len(cards_for_stg),
+                "total_count": len(cards_for_stg),
+                "leads": cards_for_stg
+            })
 
         return {
             "status": True,
             "message": "Pipeline leads fetched successfully",
-            "data": {
-                "new_lead": new_lead_cards,
-                "follow_up": follow_up_dict,
-                "unreached_calls": unreached_dict,
-                "pending_payment": pending_payment_dict,
-                "closed": closed_dict
-            }
+            "data": data_by_stage,
+            "stage_list": stage_list,
+            "stages": stage_list
         }
 
     except Exception as e:
@@ -1569,11 +1626,27 @@ def edit_lead_admin(**data):
             if data.get("last_name"):
                 lead.last_name = data.get("last_name")
 
-        # 2. Basic Info Updates
+        # 2. Basic Info Updates & Duplicate Checks
         if data.get("mobile_no"):
-            lead.mobile_no = data.get("mobile_no")
+            mob = str(data.get("mobile_no")).strip()
+            clean_digits = "".join(filter(str.isdigit, mob))
+            last_10 = clean_digits[-10:] if len(clean_digits) >= 10 else clean_digits
+            if last_10 and Lead.objects.filter(Q(mobile_no=mob) | Q(mobile_no__endswith=last_10)).exclude(id=lead.id).exists():
+                return {
+                    "status": "failed",
+                    "message": "Lead with this mobile number already exists."
+                }
+            lead.mobile_no = mob
+
         if "email" in data and data.get("email") is not None:
-            lead.email = data.get("email")
+            em = str(data.get("email")).strip()
+            if em and Lead.objects.filter(email__iexact=em).exclude(id=lead.id).exists():
+                return {
+                    "status": "failed",
+                    "message": "Lead with this email address already exists."
+                }
+            lead.email = em
+
         if "alt_mobile" in data and data.get("alt_mobile") is not None:
             lead.alternative_mobile = data.get("alt_mobile")
         if data.get("enquiry_date"):

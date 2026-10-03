@@ -62,14 +62,14 @@ class FetchAllUsersAdminApi(APIView):
 class CreateUserAdminApi(APIView):
     class InputSerializer(serializers.Serializer):
         full_name = serializers.CharField(required=True)
-        contact_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        contact_no = serializers.CharField(required=True, allow_blank=False)
         email = serializers.EmailField(required=True)
+        emp_id = serializers.CharField(required=True, allow_blank=False)
         location = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         role = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         reporting_to = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         status = serializers.CharField(required=False, default="Active")
         joined_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        emp_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         team = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def post(self, request):
@@ -80,7 +80,9 @@ class CreateUserAdminApi(APIView):
             admin_user=request.user,
             data=serializer.validated_data
         )
-        return Response({"data": res}, status=status.HTTP_201_CREATED)
+        if isinstance(res, dict) and res.get("status") in [False, "failed"]:
+            return Response(res, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"status": True, "data": res, **(res if isinstance(res, dict) else {})}, status=status.HTTP_201_CREATED)
 
 
 class EditUserAdminApi(APIView):
@@ -105,7 +107,9 @@ class EditUserAdminApi(APIView):
             admin_user=request.user,
             data=serializer.validated_data
         )
-        return Response({"data": res}, status=status.HTTP_200_OK)
+        if isinstance(res, dict) and res.get("status") in [False, "failed"]:
+            return Response(res, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"status": True, "data": res, **(res if isinstance(res, dict) else {})}, status=status.HTTP_200_OK)
 
 
 class ToggleUserStatusAdminApi(APIView):

@@ -18,6 +18,11 @@ ALIAS_MAP = {
     'course_time_list': 'L_COURSE_TIMES',
     'course_timing_list': 'L_COURSE_TIMES',
     'telecaller_list': 'L_TELECALLERS',
+    'employee_list': 'L_TELECALLERS',
+    'employees': 'L_TELECALLERS',
+    'employee': 'L_TELECALLERS',
+    'employees_list': 'L_TELECALLERS',
+    'target_dropdowns': 'L_TELECALLERS',
     'campaign_manager_list': 'L_CAMPAIGN_MANAGERS',
     'lead_source_list': 'L_LEAD_SOURCES',
     'team_list': 'L_TEAMS',
@@ -27,11 +32,12 @@ ALIAS_MAP = {
     'unassigned_team_leads': 'L_UNASSIGNED_TEAM_LEADS',
     'unassigned_team_lead': 'L_UNASSIGNED_TEAM_LEADS',
     'unassigned_leads': 'L_UNASSIGNED_TEAM_LEADS',
+    'reporting_to': 'L_REPORTING_MANAGERS',
     'category_list': 'L_CATEGORIES',
     'unassigned_tl': 'L_UNASSIGNED_TEAM_LEADS',
     'unassigned_team_members': 'L_UNASSIGNED_TELECALLERS',
     'unassigned_telecallers': 'L_UNASSIGNED_TELECALLERS',
-    'unassigned_users': 'L_UNASSIGNED_TELECALLERS',
+    'unassigned_users': 'L_REPORTING_MANAGERS',
     'unassigned_members': 'L_UNASSIGNED_TELECALLERS',
 }
 
@@ -323,6 +329,12 @@ def enrich_telecallers_data(res_vals):
                 u_obj = users_map.get(uid)
                 t_color = u_obj.team.badge_color if (u_obj and u_obj.team and u_obj.team.badge_color) else UITheme.DEFAULT_PRIMARY_COLOR
 
+                full_name = r.get('label') or (u_obj.get_full_name() if u_obj else '') or (u_obj.username if u_obj else '')
+                emp_code = (u_obj.employee_id if u_obj else None) or f"EMP{uid:02d}"
+
+                r['id'] = uid
+                r['name'] = full_name
+                r['emp_id'] = emp_code
                 r['total_leads'] = st['total']
                 r['current_leads'] = st['total']
                 r['total_lead_count'] = st['total']

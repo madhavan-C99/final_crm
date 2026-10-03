@@ -190,20 +190,50 @@ def delete_team_admin(admin_user, data):
 
 
 def fetch_team_dropdowns_admin(user=None, data=None):
-    
+    """
+    Fetch dropdown options for Team Create & Edit modals (Leader & Members selection).
+    Returns ALL active users under 'users', 'telecallers', 'members', 'leaders'.
+    """
     try:
         data = data or {}
-        org_id = getattr(user, 'organization_id', 0) if (user and hasattr(user, 'organization_id') and user.organization_id) else 0
-        
-        telecallers = exec_raw_sql('L_TELECALLERS', {'organization_id': org_id}) or []
-        teams = exec_raw_sql('L_TEAMS', {'organization_id': org_id}) or []
+        users_qs = User.objects.filter(is_active=True).select_related('team').order_by("first_name", "username")
+
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization_id', None):
+            users_qs = users_qs.filter(organization_id=user.organization_id)
+
+        all_users = []
+        for u in users_qs:
+            fname = (u.first_name or "").strip()
+            lname = (u.last_name or "").strip()
+            display_name = f"{fname} {lname}".strip() if (fname or lname) else u.username
+
+            all_users.append({
+                "id": u.id,
+                "value": u.id,
+                "name": display_name,
+                "label": display_name,
+                "username": u.username,
+                "email": u.email or "",
+                "role": getattr(getattr(u, 'role', None), 'name', None) or getattr(u, 'user_type', None) or "User",
+                "team_id": u.team_id,
+                "team_name": u.team.name if u.team else None
+            })
+
+        teams_qs = Team.objects.filter(is_active=True).order_by("name")
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization_id', None):
+            teams_qs = teams_qs.filter(organization_id=user.organization_id)
+
+        all_teams = [{"id": t.id, "value": t.id, "name": t.name, "label": t.name} for t in teams_qs]
 
         return {
             "status": True,
             "message": "Team dropdowns fetched successfully",
             "data": {
-                "telecallers": telecallers,
-                "teams": teams
+                "users": all_users,
+                "telecallers": all_users,
+                "members": all_users,
+                "leaders": all_users,
+                "teams": all_teams
             }
         }
     except Exception as e:

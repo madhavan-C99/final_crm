@@ -58,6 +58,9 @@ def fetch_campaign_cards(user, **data):
         payload = {**data, "organization_id": org_id}
         raw_cards = exec_raw_sql("D_FETCH_CAMPAIGN_CARDS", payload)
         if raw_cards and isinstance(raw_cards, list):
+            search_text = str(data.get("search") or "").strip().lower()
+            if search_text:
+                raw_cards = [c for c in raw_cards if search_text in str(c.get("name", "")).lower()]
             return raw_cards
         return []
     except Exception as e:

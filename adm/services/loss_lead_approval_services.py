@@ -30,7 +30,7 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
             Q(current_status__iexact="lost")
         ).select_related(
             "assigned_to", "pipeline_stage", "campaign", "lead_source", "course_plan", "course_name"
-        ).order_by("-updated_at", "-created_at")
+        ).distinct().order_by("-updated_at", "-created_at")
 
         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
             base_qs = base_qs.filter(organization=user.organization)
@@ -106,6 +106,7 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
         pipeline_id_val = data.get("pipeline_id")
         if pipeline_id_val and str(pipeline_id_val).isdigit() and int(pipeline_id_val) > 0:
             base_qs = base_qs.filter(
+                Q(pipeline_stage__pipeline_category_id=int(pipeline_id_val)) |
                 Q(campaign__pipeline_category_id=int(pipeline_id_val)) |
                 Q(campaign_id=int(pipeline_id_val))
             )
@@ -114,11 +115,16 @@ def fetch_loss_lead_approval_requests_admin(user=None, **data):
         if loss_reason_val and str(loss_reason_val).strip() and str(loss_reason_val).lower() not in ["all", "none"]:
             loss_reason_str = str(loss_reason_val).strip()
             if loss_reason_str.isdigit():
-                base_qs = base_qs.filter(loss_detail__loss_reason_id=int(loss_reason_str))
+                r_id = int(loss_reason_str)
+                base_qs = base_qs.filter(
+                    Q(loss_reason_id=r_id) |
+                    Q(loss_detail__loss_reason_id=r_id) |
+                    Q(loss_detail__main_reason_id=r_id)
+                )
             else:
                 base_qs = base_qs.filter(
+                    Q(loss_reason__name__icontains=loss_reason_str) |
                     Q(loss_detail__loss_reason__name__icontains=loss_reason_str) |
-                    Q(loss_detail__main_reason__icontains=loss_reason_str) |
                     Q(loss_detail__detailed_reason__icontains=loss_reason_str)
                 )
 

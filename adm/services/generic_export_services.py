@@ -165,10 +165,13 @@ def _fetch_export_rows(entity, user, filters):
         from .loss_lead_approval_services import fetch_loss_lead_approval_requests_admin
 
         filters["page_size"] = "all"
-        return fetch_loss_lead_approval_requests_admin(
+        res = fetch_loss_lead_approval_requests_admin(
             user=user,
             **filters,
-        ).get("data", {}).get("leads", [])
+        )
+        if isinstance(res, dict):
+            return res.get("requests") or res.get("leads") or res.get("data", {}).get("leads", []) or res.get("data", {}).get("requests", [])
+        return []
 
     if entity == "performance":
         from .performance_services import fetch_performance_overview_admin
@@ -182,6 +185,33 @@ def _fetch_export_rows(entity, user, filters):
         ).get("data", {}).get("performance_list", [])
 
     raise APIException(f"Unsupported export entity: {entity}")
+
+
+COLUMN_ALIASES = {
+    "loss_approvals": {
+        "full_name": "name",
+        "mobile_no": "contact",
+        "mobile": "contact",
+        "phone": "contact",
+        "enquiry_date": "inquiry_date",
+        "created_at": "inquiry_date",
+        "created": "inquiry_date",
+        "status": "approval_status",
+    },
+    "pending_payments": {
+        "full_name": "name",
+        "mobile_no": "contact",
+        "mobile": "contact",
+        "phone": "contact",
+        "created_at": "joining_date",
+    },
+    "leads": {
+        "name": "full_name",
+        "contact": "mobile_no",
+        "mobile": "mobile_no",
+        "phone": "mobile_no",
+    }
+}
 
 
 def export_data_service(user, entity='leads', export_format='excel', selected_ids=None, columns=None, filters=None):
@@ -209,11 +239,19 @@ def export_data_service(user, entity='leads', export_format='excel', selected_id
             return {"status": "success", "message": "No records found to export", "total": 0, "download_url": ""}
 
         available_columns = list(EXPORT_COLUMNS[entity])
+        aliases = COLUMN_ALIASES.get(entity, {})
+
         if columns:
-            invalid_columns = [column for column in columns if column not in available_columns]
-            if invalid_columns:
-                raise APIException(f"Unknown export columns: {', '.join(invalid_columns)}")
-            export_cols = list(dict.fromkeys(columns))
+            normalized_cols = []
+            for col in columns:
+                c_str = str(col).strip().lower().replace(" ", "_")
+                mapped_col = aliases.get(c_str, c_str)
+                if mapped_col in available_columns:
+                    normalized_cols.append(mapped_col)
+                elif c_str in available_columns:
+                    normalized_cols.append(c_str)
+
+            export_cols = list(dict.fromkeys(normalized_cols)) if normalized_cols else available_columns
         else:
             export_cols = available_columns
 

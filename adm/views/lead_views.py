@@ -14,29 +14,30 @@ class FetchAllLeadsAdmin(APIView):
    
     class InputSerializer(serializers.Serializer):
         lead_filter_type = serializers.CharField(required=False, default="all")
+        lead_stage_id = serializers.IntegerField(required=False, allow_null=True)
+        pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True)
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         tele_id = serializers.IntegerField(required=False, allow_null=True)
         telecaller_id = serializers.IntegerField(required=False, allow_null=True)
         assigned_to = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        from_date = serializers.DateField(required=False, allow_null=True)
-        to_date = serializers.DateField(required=False, allow_null=True)
-        created_date_from = serializers.DateField(required=False, allow_null=True)
-        created_date_to = serializers.DateField(required=False, allow_null=True)
+        from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        created_date_from = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        created_date_to = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         date_filter_type = serializers.CharField(required=False, default="all")
-        pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        lead_source_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        source_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        course_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        priority_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        course_plan_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        campaign_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        campaign_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        pipeline_id = serializers.IntegerField(required=False, allow_null=True, default=0)
+        lead_source_id = serializers.IntegerField(required=False, allow_null=True)
+        source_id = serializers.IntegerField(required=False, allow_null=True)
+        course_name_id = serializers.IntegerField(required=False, allow_null=True)
+        priority_id = serializers.IntegerField(required=False, allow_null=True)
+        course_plan_id = serializers.IntegerField(required=False, allow_null=True)
+        campaign_name_id = serializers.IntegerField(required=False, allow_null=True)
+        campaign_id = serializers.IntegerField(required=False, allow_null=True)
+        pipeline_id = serializers.IntegerField(required=False, allow_null=True)
         pipeline_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         sort_by = serializers.CharField(required=False, default="-created_at")
         sort_order = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        page = serializers.IntegerField(required=False, min_value=0, default=0)
-        page_size = serializers.IntegerField(required=False, allow_null=True, default=1000)
+        page = serializers.IntegerField(required=False, default=1)
+        page_size = serializers.IntegerField(required=False, allow_null=True, default=50)
         rows_per_page = serializers.IntegerField(required=False, allow_null=True)
         
     def post(self, request):
@@ -46,17 +47,23 @@ class FetchAllLeadsAdmin(APIView):
 
         result = fetch_all_leads_admin(user=request.user, **serializer.validated_data)
 
-        # log_data = {
-        #     'user_id': request.user.id if request.user.id else None,
-        #     'api_name': request.path,
-        #     'method': request.method,
-        #     'request_payload': serializer.validated_data,
-        #     'response_payload': {"stats": result.get("stats"), "total": result.get("total")},
-        #     'status_code': 200
-        # }
-        # api_history_log(log_data)
+        payload = {
+            "total_records": result.get("total_records", 0),
+            "total_count": result.get("total_count", 0),
+            "stats": result.get("stats", {}),
+            "leads": result.get("leads", []),
+            "tab_counts": result.get("tab_counts", {}),
+            "page": result.get("page", 1),
+            "page_size": result.get("page_size", 50),
+            "total_pages": result.get("total_pages", 1)
+        }
 
-        return Response({"status": True, **result}, status=status.HTTP_200_OK)
+        return Response({
+            "status": True,
+            "message": result.get("message", "Leads fetched successfully"),
+            "data": payload,
+            **payload
+        }, status=status.HTTP_200_OK)
 
 
 
@@ -100,18 +107,14 @@ class AddNewLeadAdmin(APIView):
         """Form Submit panni puthu lead-ah save panna"""
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        result = add_new_lead_admin(user=request.user, **serializer.validated_data)
-        # log_data = {
-        #     'user_id': request.user.id if request.user.id else None,
-        #     'api_name': request.path,
-        #     'method': request.method,
-        #     'request_payload': serializer.validated_data,
-        #     'response_payload': result,
-        #     'status_code': 201
-        # }
-        # api_history_log(log_data)
-        
-        return Response({"data": result}, status=status.HTTP_201_CREATED)
+        try:
+            result = add_new_lead_admin(user=request.user, **serializer.validated_data)
+            if isinstance(result, dict) and result.get("status") in ["failed", False]:
+                return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": True, "data": result, **(result if isinstance(result, dict) else {})}, status=status.HTTP_201_CREATED)
+        except APIException as e:
+            msg = str(e.detail if hasattr(e, 'detail') else e)
+            return Response({"status": "failed", "message": msg}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -130,18 +133,14 @@ class UploadLeadExcelAdmin(APIView):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         uploaded_file = serializer.validated_data['file']
-        result = upload_lead_excel_admin(file_obj=uploaded_file, user=request.user)
-        # log_data = {
-        #     'user_id': request.user.id if request.user.id else None,
-        #     'api_name': request.path,
-        #     'method': request.method,
-        #     'request_payload': {'file_name': uploaded_file.name, 'file_size': uploaded_file.size},
-        #     'response_payload': result,
-        #     'status_code': 201
-        # }
-        # api_history_log(log_data)
-        
-        return Response({"data": result}, status=status.HTTP_201_CREATED)
+        try:
+            result = upload_lead_excel_admin(file_obj=uploaded_file, user=request.user)
+            if isinstance(result, dict) and result.get("status") in ["failed", False]:
+                return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": True, "data": result, **(result if isinstance(result, dict) else {})}, status=status.HTTP_200_OK)
+        except APIException as e:
+            msg = str(e.detail if hasattr(e, 'detail') else e)
+            return Response({"status": "failed", "message": msg}, status=status.HTTP_400_BAD_REQUEST)
     
     
     
@@ -150,63 +149,46 @@ class UploadLeadExcelAdmin(APIView):
 
 # @authentication_classes([])
 # @permission_classes([])
-# class ExportAllLeadsAdmin(APIView):
-#     """
-#     Admin Leads Page -> Export Button API.
-#     """
-#     class InputSerializer(serializers.Serializer):
-#         lead_filter_type = serializers.CharField(required=False, default="all")
-#         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-#         tele_id = serializers.IntegerField(required=False, allow_null=True)
-#         from_date = serializers.DateField(required=False)
-#         to_date = serializers.DateField(required=False)
-#         date_filter_type = serializers.CharField(required=False, default="all")
-#         pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-#         lead_source_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-#         course_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-#         priority_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-#         course_plan_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-#         campaign_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-#         sort_by = serializers.CharField(required=False, default="-created_at")
+class ExportAllLeadsAdmin(APIView):
+    """
+    Admin Leads Page -> Export Button API.
+    """
+    class InputSerializer(serializers.Serializer):
+        pipeline_id = serializers.IntegerField(required=False, allow_null=True)
+        lead_stage_id = serializers.IntegerField(required=False, allow_null=True)
+        pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True)
+        source_id = serializers.IntegerField(required=False, allow_null=True)
+        lead_source_id = serializers.IntegerField(required=False, allow_null=True)
+        campaign_id = serializers.IntegerField(required=False, allow_null=True)
+        campaign_name_id = serializers.IntegerField(required=False, allow_null=True)
+        course_plan_id = serializers.IntegerField(required=False, allow_null=True)
+        assigned_to = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        date_filter_type = serializers.CharField(required=False, default="all")
+        from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        sort_order = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        page_size = serializers.CharField(required=False, default="all")
+        columns = serializers.ListField(child=serializers.CharField(), required=False, default=list)
 
-#     def post(self, request):
-#         authorize_request('api_export_all_leads_admin', request.user)
-#         serializer = self.InputSerializer(data=request.data)
-#         serializer.is_valid(raise_exception=True)
+    def post(self, request):
+        authorize_request('api_export_all_leads_admin', request.user)
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-#         result = export_all_leads_admin(user=request.user, **serializer.validated_data)
+        req_host = request.build_absolute_uri('/')[:-1]
+        result = export_all_leads_admin(user=request.user, request_host=req_host, **serializer.validated_data)
 
-#                     # log_data = {
-#                     #     'user_id': request.user.id if request.user.id else None,
-#                     #     'api_name': request.path,
-#                     #     'method': request.method,
-#                     #     'request_payload': serializer.validated_data,
-#                     #     'response_payload': {"status": result.get("status"), "total_exported": result.get("total_exported")},
-#                     #     'status_code': 200
-#                     # }
-#                     # api_history_log(log_data)
-
-#         return Response({"data": result}, status=status.HTTP_200_OK)
+        payload = {
+            "download_url": result.get("download_url"),
+            "file_name": result.get("file_name"),
+            "total_exported": result.get("total_exported", 0)
+        }
+        return Response({"status": True, "data": payload, **payload}, status=status.HTTP_200_OK)
     
     
     
 
-# -------------------------------get_filter_dropdowns_admin-----------------------
-
-# @authentication_classes([])
-# @permission_classes([])
-
- # 🔄 Replaced by get_select_options
-# class GetFilterDropdownsAdmin(APIView):
-
-#     def get(self, request):
-#         authorize_request('api_get_filter_dropdowns_admin', request.user)
-#         result = get_filter_dropdowns_admin(user=request.user)
-#         return Response({"data": result}, status=status.HTTP_200_OK)
-    
-    
-    
-    
 # --------------------------------------fetch_pipeline_leads_admin----------------------------------
 
 # @authentication_classes([])
@@ -216,12 +198,17 @@ class FetchPipelineLeadsAdmin(APIView):
     Admin Pipeline View (Kanban Cards API).
     """
     class InputSerializer(serializers.Serializer):
-        pipeline_id = serializers.IntegerField(required=False, default=1)
+        pipeline_id = serializers.IntegerField(required=False, allow_null=True, default=1)
+        lead_stage_id = serializers.IntegerField(required=False, allow_null=True)
+        pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True)
+        assigned_to = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+        assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
+        source_id = serializers.IntegerField(required=False, allow_null=True)
+        lead_source_id = serializers.IntegerField(required=False, allow_null=True)
+        campaign_id = serializers.IntegerField(required=False, allow_null=True)
+        campaign_name_id = serializers.IntegerField(required=False, allow_null=True)
+        course_plan_id = serializers.IntegerField(required=False, allow_null=True)
         search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        lead_source_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        campaign_name_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        course_plan_id = serializers.IntegerField(required=False, allow_null=True, default=0)
-        assigned_to_id = serializers.IntegerField(required=False, allow_null=True, default=0)
         date_filter_type = serializers.CharField(required=False, default="all")
         from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
         to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -232,16 +219,6 @@ class FetchPipelineLeadsAdmin(APIView):
         serializer.is_valid(raise_exception=True)
 
         result = fetch_pipeline_leads_admin(**serializer.validated_data)
-
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status"), "message": result.get("message")},
-            'status_code': 200
-        }
-        api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
 
@@ -463,20 +440,14 @@ class EditLeadAdmin(APIView):
         authorize_request('api_edit_lead_admin', request.user)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        result = edit_lead_admin(**serializer.validated_data)
-
-        # log_data = {
-        #     'user_id': request.user.id if request.user.id else None,
-        #     'api_name': request.path,
-        #     'method': request.method,
-        #     'request_payload': serializer.validated_data,
-        #        'response_payload': result,
-        #     'status_code': 200
-        # }
-        # api_history_log(log_data)
-
-        return Response(result, status=status.HTTP_200_OK)
+        try:
+            result = edit_lead_admin(**serializer.validated_data)
+            if isinstance(result, dict) and result.get("status") in ["failed", False]:
+                return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status": True, "data": result, **(result if isinstance(result, dict) else {})}, status=status.HTTP_200_OK)
+        except APIException as e:
+            msg = str(e.detail if hasattr(e, 'detail') else e)
+            return Response({"status": "failed", "message": msg}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # @authentication_classes([])

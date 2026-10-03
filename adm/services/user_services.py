@@ -214,26 +214,49 @@ def create_user_admin(admin_user, data):
     try:
         email = str(data.get('email') or '').strip().lower()
         emp_id = str(data.get('emp_id') or '').strip()
-        contact_no = str(data.get('contact_no') or '').strip()
+        contact_no = str(data.get('contact_no') or data.get('mobile') or '').strip()
         full_name = str(data.get('full_name') or '').strip()
 
-        # Check unique constraints for email and emp_id
+        # 1. Compulsory Employee ID Validation
+        if not emp_id:
+            return {
+                "status": False,
+                "message": "Employee ID is a compulsory field."
+            }
+
+        if User.objects.filter(employee_id__iexact=emp_id).exists():
+            return {
+                "status": False,
+                "message": f"User with Employee ID '{emp_id}' already exists."
+            }
+
+        # 2. Compulsory Mobile Number & Smart 10-Digit Validation
+        if not contact_no:
+            return {
+                "status": False,
+                "message": "Mobile number is a compulsory field."
+            }
+
+        clean_digits = "".join(filter(str.isdigit, contact_no))
+        last_10 = clean_digits[-10:] if len(clean_digits) >= 10 else clean_digits
+
+        if len(last_10) < 10:
+            return {
+                "status": False,
+                "message": "Please enter a valid 10-digit mobile number."
+            }
+
+        if User.objects.filter(Q(mobile=contact_no) | Q(mobile__endswith=last_10)).exists():
+            return {
+                "status": False,
+                "message": f"User with mobile number '{contact_no}' already exists."
+            }
+
+        # 3. Compulsory Email Unique Validation
         if email and User.objects.filter(email=email).exists():
             return {
                 "status": False,
-                "message": "User with this Employee ID or Email already exists",
-                "errors": {
-                    "email": "Email already exists"
-                }
-            }
-
-        if emp_id and User.objects.filter(employee_id=emp_id).exists():
-            return {
-                "status": False,
-                "message": "User with this Employee ID or Email already exists",
-                "errors": {
-                    "emp_id": "Employee ID already exists"
-                }
+                "message": f"User with email '{email}' already exists."
             }
 
         # Handle name splitting
@@ -241,11 +264,8 @@ def create_user_admin(admin_user, data):
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else ""
 
-        # Auto-generate username from email if not provided
-        username = email.split('@')[0] if email else f"user_{get_random_string(6)}"
-        if User.objects.filter(username=username).exists():
-            from django.utils.crypto import get_random_string
-            username = f"{username}_{get_random_string(4)}"
+        # Username is set directly to the email input
+        username = email
 
         # Default password for admin created user if not passed
         raw_password = data.get('password') or "Password@123"
@@ -255,7 +275,7 @@ def create_user_admin(admin_user, data):
         user.last_name = last_name
         user.mobile = contact_no
         user.address = data.get('location')
-        user.employee_id = emp_id if emp_id else f"EMP-{user.id:04d}"
+        user.employee_id = emp_id
 
         status_val = str(data.get('status') or 'Active').lower()
         user.is_active = (status_val in ['active', 'true', '1'])
@@ -395,18 +415,55 @@ def edit_user_admin(admin_user, data):
             user.first_name = name_parts[0]
             user.last_name = name_parts[1] if len(name_parts) > 1 else ""
 
-        # Handle Email & Mobile
-        if 'email' in data:
-            user.email = str(data['email']).strip().lower()
-        if 'contact_no' in data:
-            user.mobile = str(data['contact_no']).strip()
-        elif 'mobile' in data:
-            user.mobile = str(data['mobile']).strip()
+        # Handle Employee ID update & validation
+        if 'emp_id' in data:
+            emp_val = str(data.get('emp_id') or '').strip()
+            if not emp_val:
+                return {
+                    "status": False,
+                    "message": "Employee ID is a compulsory field."
+                }
+            if User.objects.filter(employee_id__iexact=emp_val).exclude(id=user.id).exists():
+                return {
+                    "status": False,
+                    "message": f"User with Employee ID '{emp_val}' already exists."
+                }
+            user.employee_id = emp_val
+
+        # Handle Email & Mobile validation
+        if 'email' in data and data.get('email'):
+            em_val = str(data['email']).strip().lower()
+            if User.objects.filter(email=em_val).exclude(id=user.id).exists():
+                return {
+                    "status": False,
+                    "message": f"User with email '{em_val}' already exists."
+                }
+            user.email = em_val
+            user.username = em_val
+
+        if 'contact_no' in data or 'mobile' in data:
+            mob_val = str(data.get('contact_no') or data.get('mobile') or '').strip()
+            if not mob_val:
+                return {
+                    "status": False,
+                    "message": "Mobile number is a compulsory field."
+                }
+            clean_digits = "".join(filter(str.isdigit, mob_val))
+            last_10 = clean_digits[-10:] if len(clean_digits) >= 10 else clean_digits
+            if len(last_10) < 10:
+                return {
+                    "status": False,
+                    "message": "Please enter a valid 10-digit mobile number."
+                }
+            if User.objects.filter(Q(mobile=mob_val) | Q(mobile__endswith=last_10)).exclude(id=user.id).exists():
+                return {
+                    "status": False,
+                    "message": f"User with mobile number '{mob_val}' already exists."
+                }
+            user.mobile = mob_val
 
         if 'location' in data:
             user.address = data['location']
-        if 'emp_id' in data and data['emp_id']:
-            user.employee_id = data['emp_id']
 
         if 'status' in data:
             status_val = str(data['status']).lower()

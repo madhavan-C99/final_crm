@@ -29,6 +29,7 @@ class CampaignCardsList(APIView):
     class InputSerializer(serializers.Serializer):
         campaign_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
         campaign_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+        search = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     def post(self, request):
         authorize_request('api_campaign_cards_list_admin', request.user)

@@ -158,7 +158,8 @@ def fetch_all_pending_payments_admin(
 
         if pipeline_id:
             payments_qs = payments_qs.filter(
-                lead__campaign__pipeline_category_id=pipeline_id
+                Q(lead__pipeline_stage__pipeline_category_id=pipeline_id)
+                | Q(lead__campaign__pipeline_category_id=pipeline_id)
             )
 
         if course_name:

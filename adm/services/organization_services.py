@@ -100,6 +100,20 @@ def get_organization_profile_admin_service(request=None, user=None):
                 "data": None
             }
 
+        valid_date_formats = ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY"]
+        raw_date_format = org.date_format or "DD/MM/YYYY"
+        if raw_date_format not in valid_date_formats:
+            raw_date_format = "DD/MM/YYYY"
+
+        valid_time_formats = ["12hrs", "24hrs", "12hrs (AM/PM)"]
+        raw_time_format = org.time_format or "12hrs"
+        if raw_time_format not in valid_time_formats:
+            raw_time_format = "12hrs"
+
+        company_pan_val = org.company_pan or ""
+        if company_pan_val in ["Tamilnadu", "Tamil Nadu", "India"]:
+            company_pan_val = ""
+
         data = {
             "id": org.id,
             "logo_url": get_logo_url(org, request=request),
@@ -117,9 +131,9 @@ def get_organization_profile_admin_service(request=None, user=None):
             "official_email": org.official_email or "",
             "official_contact": org.official_contact or "",
             "gst_in": org.gstin or "",
-            "company_pan": org.company_pan or "",
-            "date_format": org.date_format or "DD/MM/YYYY",
-            "time_format": org.time_format or "12hrs"
+            "company_pan": company_pan_val,
+            "date_format": raw_date_format,
+            "time_format": raw_time_format
         }
 
         return {
@@ -177,11 +191,18 @@ def edit_organization_profile_admin_service(data, admin_user=None, org_id=None, 
         if 'gst_in' in data:
             org.gstin = data.get('gst_in') or ""
         if 'company_pan' in data:
-            org.company_pan = data.get('company_pan') or ""
+            pan_val = data.get('company_pan') or ""
+            if pan_val not in ["Tamilnadu", "Tamil Nadu"]:
+                org.company_pan = pan_val
         if 'date_format' in data:
-            org.date_format = data.get('date_format') or "DD/MM/YYYY"
+            d_fmt = data.get('date_format') or "DD/MM/YYYY"
+            valid_date_formats = ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY"]
+            if d_fmt not in valid_date_formats:
+                d_fmt = "DD/MM/YYYY"
+            org.date_format = d_fmt
         if 'time_format' in data:
-            org.time_format = data.get('time_format') or "12hrs"
+            t_fmt = data.get('time_format') or "12hrs"
+            org.time_format = t_fmt
 
         if data.get('logo'):
             org.logo = data.get('logo')

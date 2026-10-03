@@ -826,7 +826,7 @@ def fetch_target_dropdowns_admin_service(user=None):
                 Q(user_roles__role__name__icontains='telecaller')
             ).distinct()
 
-        teams_data = [{"id": t.id, "name": t.name} for t in teams_qs]
+        teams_data = [{"id": t.id, "value": t.id, "name": t.name, "label": t.name} for t in teams_qs]
 
         employees_data = []
         for u in users_qs:
@@ -836,7 +836,11 @@ def fetch_target_dropdowns_admin_service(user=None):
             emp_id = u.employee_id or f"EMP{u.id:02d}"
             employees_data.append({
                 "id": u.id,
+                "value": u.id,
                 "name": full_name,
+                "label": full_name,
+                "employee": full_name,
+                "employee_name": full_name,
                 "emp_id": emp_id
             })
 
