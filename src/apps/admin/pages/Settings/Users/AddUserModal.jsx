@@ -140,16 +140,17 @@ export default function AddUserModal({
 
   useEffect(() => {
     if (open) {
-      setForm({
-        ...EMPTY_FORM,
-        joinedDate: new Date().toISOString().split("T")[0],
-      });
+      setForm(EMPTY_FORM);
       setErrors({});
     }
   }, [open]);
 
   const handleChange = (field) => (event) => {
-    setForm((prev) => ({ ...prev, [field]: event.target.value }));
+    let value = event.target.value;
+    if (field === "contactNo") {
+      value = value.replace(/[^0-9+\s]/g, "").slice(0, 16);
+    }
+    setForm((prev) => ({ ...prev, [field]: value }));
     // clear this field's error as soon as the user edits it
     setErrors((prev) => ({ ...prev, [field]: "" }));
   };
@@ -160,6 +161,16 @@ export default function AddUserModal({
     Object.entries(REQUIRED_FIELDS).forEach(([key, label]) => {
       if (isEmpty(form[key])) newErrors[key] = `${label} is required`;
     });
+
+    if (!newErrors.contactNo) {
+      let rawDigits = String(form.contactNo).replace(/\D/g, "");
+      if (rawDigits.startsWith("91") && rawDigits.length > 10) {
+        rawDigits = rawDigits.slice(2);
+      }
+      if (rawDigits.length !== 10) {
+        newErrors.contactNo = "Enter a valid 10-digit mobile number";
+      }
+    }
 
     if (!newErrors.email && !/^\S+@\S+\.\S+$/.test(String(form.email).trim())) {
       newErrors.email = "Enter a valid email";
@@ -258,6 +269,7 @@ export default function AddUserModal({
                 placeholder="Enter Contact No"
                 value={form.contactNo}
                 onChange={handleChange("contactNo")}
+                inputProps={{ maxLength: 16 }}
                 sx={fieldStyles}
                 error={Boolean(errors.contactNo)}
                 helperText={errors.contactNo}

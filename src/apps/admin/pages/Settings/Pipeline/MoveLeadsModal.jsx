@@ -39,7 +39,7 @@ export default function MoveLeadsModal({
   useEffect(() => {
     if (open && eligibleStages.length > 0) {
       const defaultTarget = eligibleStages[0];
-      setTargetStageId(defaultTarget.id);
+      setTargetStageId(defaultTarget?.id || "");
       setTargetTagId("");
       setDeletionReason("");
     }

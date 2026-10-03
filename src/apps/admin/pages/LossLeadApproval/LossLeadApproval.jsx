@@ -243,11 +243,11 @@ export default function LossLeadApproval() {
     { id: "lead_age", label: "Lead Age" },
   ];
 
-  const handleExport = async () => {
+  const handleExport = async (selectedKeys) => {
     try {
       const dates = getComputedDates(filterType, fromDate, toDate);
-      const res = await exportLossLeadApprovalRequests({
-        pipeline_id: Number(selectedPipeline || 1),
+      const payload = {
+        pipeline_id: selectedPipeline ? Number(selectedPipeline) : undefined,
         date_filter_type: filterType,
         from_date: dates.from || "",
         to_date: dates.to || "",
@@ -260,7 +260,14 @@ export default function LossLeadApproval() {
         course: selectedFilters.course !== "All" ? selectedFilters.course : "",
         lead_source: selectedFilters.lead_source !== "All" ? selectedFilters.lead_source : "",
         page_size: "all",
-      });
+      };
+
+      if (selectedKeys && Array.isArray(selectedKeys) && selectedKeys.length > 0) {
+        payload.columns = selectedKeys;
+        payload.selected_columns = selectedKeys;
+      }
+
+      const res = await exportLossLeadApprovalRequests(payload);
       const data = res?.data || {};
       if (data?.download_url) {
         const baseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");

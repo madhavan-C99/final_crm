@@ -681,18 +681,13 @@ export default function OrganizationProfileForm({ onNext, onCancel }) {
               </Box>
               <Box sx={{ flex: 1 }}>
                 <FieldLabel required>Company Pan Card</FieldLabel>
-                <Select
+                <TextField
                   fullWidth
                   value={companyPan}
                   onChange={(e) => setCompanyPan(e.target.value)}
-                  IconComponent={KeyboardArrowDownIcon}
-                  sx={selectFieldStyles}
-                >
-                  <MenuItem value="Tamilnadu">Tamilnadu</MenuItem>
-                  <MenuItem value="Karnataka">Karnataka</MenuItem>
-                  <MenuItem value="Kerala">Kerala</MenuItem>
-                  <MenuItem value="Maharashtra">Maharashtra</MenuItem>
-                </Select>
+                  placeholder="e.g. ABCDE1234F"
+                  sx={fieldStyles}
+                />
               </Box>
             </Box>
 
@@ -714,13 +709,16 @@ export default function OrganizationProfileForm({ onNext, onCancel }) {
               </Box>
               <Box sx={{ flex: 1 }}>
                 <FieldLabel required>Time Format</FieldLabel>
-                <TextField
+                <Select
                   fullWidth
                   value={timeFormat}
                   onChange={(e) => setTimeFormat(e.target.value)}
-                  placeholder="24hrs"
-                  sx={fieldStyles}
-                />
+                  IconComponent={KeyboardArrowDownIcon}
+                  sx={selectFieldStyles}
+                >
+                  <MenuItem value="12hrs">12hrs</MenuItem>
+                  <MenuItem value="24hrs">24hrs</MenuItem>
+                </Select>
               </Box>
             </Box>
           </Stack>

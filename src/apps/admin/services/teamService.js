@@ -10,19 +10,23 @@ export const fetchAllTeamsAdmin = async () => {
   return await api.get("/adm/fetch_all_teams_admin");
 };
 
+const toNullableNumber = (val) =>
+  val !== null && val !== undefined && val !== "" && !isNaN(Number(val)) ? Number(val) : null;
+
 /**
  * Create a new team
  * Backend Service: create_team_admin
  * Endpoint: POST /adm/create_team_admin
  */
 export const createTeamAdmin = async (payload) => {
+  const rawLeadId = payload.lead_id ?? payload.leadId;
+  const rawMembers = payload.member_ids ?? payload.memberIds;
+
   const data = {
     name: payload.name || payload.teamName || "",
     color: payload.color || payload.teamColor || "#6366F1",
-    lead_id: payload.lead_id || payload.leadId ? Number(payload.lead_id || payload.leadId) : null,
-    member_ids: Array.isArray(payload.member_ids || payload.memberIds)
-      ? (payload.member_ids || payload.memberIds).map(Number)
-      : [],
+    lead_id: toNullableNumber(rawLeadId),
+    member_ids: Array.isArray(rawMembers) ? rawMembers.map(Number).filter((n) => !isNaN(n)) : [],
   };
   const res = await api.post("/adm/create_team_admin", data);
   invalidateSelectOptions("L_TEAMS");
@@ -38,15 +42,18 @@ export const createTeamAdmin = async (payload) => {
  * Endpoint: POST /adm/edit_team_admin
  */
 export const editTeamAdmin = async (payload) => {
+  const rawId = payload.id ?? payload.team_id;
+  const rawLeadId = payload.lead_id ?? payload.leadId;
+  const rawMembers = payload.member_ids ?? payload.memberIds;
+  const teamIdNum = toNullableNumber(rawId);
+
   const data = {
-    id: Number(payload.id || payload.team_id),
-    team_id: Number(payload.id || payload.team_id),
+    id: teamIdNum,
+    team_id: teamIdNum,
     name: payload.name || payload.teamName || "",
     color: payload.color || payload.teamColor || undefined,
-    lead_id: payload.lead_id || payload.leadId ? Number(payload.lead_id || payload.leadId) : null,
-    member_ids: Array.isArray(payload.member_ids || payload.memberIds)
-      ? (payload.member_ids || payload.memberIds).map(Number)
-      : [],
+    lead_id: toNullableNumber(rawLeadId),
+    member_ids: Array.isArray(rawMembers) ? rawMembers.map(Number).filter((n) => !isNaN(n)) : [],
   };
   const res = await api.post("/adm/edit_team_admin", data);
   invalidateSelectOptions("L_TEAMS");
@@ -62,9 +69,10 @@ export const editTeamAdmin = async (payload) => {
  * Endpoint: POST /adm/delete_team_admin
  */
 export const deleteTeamAdmin = async (payload) => {
+  const teamIdNum = toNullableNumber(payload.id ?? payload.team_id);
   const data = {
-    id: Number(payload.id || payload.team_id),
-    team_id: Number(payload.id || payload.team_id),
+    id: teamIdNum,
+    team_id: teamIdNum,
   };
   const res = await api.post("/adm/delete_team_admin", data);
   invalidateSelectOptions("L_TEAMS");

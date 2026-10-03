@@ -214,7 +214,7 @@ const LossLeadApprovalFilter = ({
 
           <TextField
             fullWidth
-            placeholder="Search by name, phone......"
+            placeholder="Search by name or phone"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             size="small"

@@ -36,7 +36,7 @@ const ApproveLossRequestModal = ({
   const lossReason = lead.loss_reason || lead.main_reason || lead.reason || "-";
   const lastConversation = lead.last_conversation_outcome || lead.last_conversation || lead.outcome || "-";
   const lastContacted = lead.last_contacted || lead.last_call_date || "-";
-  const leadAge = lead.lead_age || lead.age || "Recent";
+  const leadAge = lead.lead_age || lead.age || "-";
 
   const handleSubmit = async () => {
     setErrorMsg("");

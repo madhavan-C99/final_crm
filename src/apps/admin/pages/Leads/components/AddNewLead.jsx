@@ -15,18 +15,39 @@ import {
   InputAdornment,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import { createLead, getLeadSelectOptions } from "../../../services/leadService";
+import {
+  createLead,
+  getLeadSelectOptions,
+} from "../../../services/leadService";
 
-const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedPipeline = null }) => {
+const AddNewLeadModal = ({
+  open,
+  onClose,
+  onSave,
+  editLeadData = null,
+  selectedPipeline = null,
+}) => {
   const isEdit = Boolean(editLeadData);
+
+  const todayString = () => new Date().toISOString().split("T")[0];
 
   const getInitialState = () => {
     if (editLeadData) {
-      const nameParts = (editLeadData.full_name || editLeadData.name || "").split(" ");
-      let initialMobile = (editLeadData.mobile_no || editLeadData.phone_no || editLeadData.phone || "").replace(/\D/g, "");
+      const nameParts = (
+        editLeadData.full_name ||
+        editLeadData.name ||
+        ""
+      ).split(" ");
+      let initialMobile = (
+        editLeadData.mobile_no ||
+        editLeadData.phone_no ||
+        editLeadData.phone ||
+        ""
+      ).replace(/\D/g, "");
       if (initialMobile.startsWith("91") && initialMobile.length > 10) {
         initialMobile = initialMobile.slice(2);
       }
+      const rawDate = editLeadData.inquiry_date || editLeadData.created_at;
       return {
         firstName: editLeadData.first_name || nameParts[0] || "",
         lastName: editLeadData.last_name || nameParts.slice(1).join(" ") || "",
@@ -34,11 +55,19 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
         emailId: editLeadData.email || editLeadData.email_id || "",
         pipeline: editLeadData.pipeline || "",
         campaign: editLeadData.campaign_id || editLeadData.campaign || "",
-        sourceType: editLeadData.lead_source_id || editLeadData.source_id || editLeadData.source || "",
-        user: editLeadData.assigned_to_id || editLeadData.user_id || editLeadData.assigned_to || "",
-        inquiryDate: editLeadData.inquiry_date || editLeadData.created_at
-          ? new Date(editLeadData.inquiry_date || editLeadData.created_at).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0],
+        sourceType:
+          editLeadData.lead_source_id ||
+          editLeadData.source_id ||
+          editLeadData.source ||
+          "",
+        user:
+          editLeadData.assigned_to_id ||
+          editLeadData.user_id ||
+          editLeadData.assigned_to ||
+          "",
+        inquiryDate: rawDate
+          ? new Date(rawDate).toISOString().split("T")[0]
+          : todayString(),
       };
     }
     return {
@@ -50,13 +79,14 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
       campaign: "",
       sourceType: "",
       user: "",
-      inquiryDate: new Date().toISOString().split("T")[0],
+      inquiryDate: todayString(),
     };
   };
 
   const [formData, setFormData] = useState(getInitialState());
   const [errors, setErrors] = useState({});
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState(""); // API errors
+  const [validationWarning, setValidationWarning] = useState(""); // missing-field warning
 
   const [options, setOptions] = useState({
     pipelines: [],
@@ -73,8 +103,10 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
       setFormData(getInitialState());
       setErrors({});
       setErrorMessage("");
+      setValidationWarning("");
       fetchOptions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editLeadData]);
 
   const capitalize = (str) => {
@@ -94,19 +126,31 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
       let apiTelecallers = [];
       let apiPipelines = [];
 
-      // 1. Query dropdown options API directly from Backend
+      // Query dropdown options API directly from Backend
       try {
-        const optFilter = selectedPipeline ? { pipeline_id: selectedPipeline, category_id: selectedPipeline } : null;
+        const optFilter = selectedPipeline
+          ? { pipeline_id: selectedPipeline, category_id: selectedPipeline }
+          : null;
         const response = await getLeadSelectOptions(optFilter);
-        const raw = response?.data?.data || response?.data?.result || response?.data;
+        const raw =
+          response?.data?.data || response?.data?.result || response?.data;
 
         if (raw && typeof raw === "object") {
           const rawStages = raw.stages;
           if (Array.isArray(rawStages) && rawStages.length > 0) {
             apiPipelines = rawStages.map((item) =>
               typeof item === "object"
-                ? { id: item.id ?? item.value ?? item.stage_id, name: capitalize(item.name || item.label || item.stage_name || item.title || String(item.value ?? "")) }
-                : { id: item, name: capitalize(String(item)) }
+                ? {
+                    id: item.id ?? item.value ?? item.stage_id,
+                    name: capitalize(
+                      item.name ||
+                        item.label ||
+                        item.stage_name ||
+                        item.title ||
+                        String(item.value ?? ""),
+                    ),
+                  }
+                : { id: item, name: capitalize(String(item)) },
             );
           }
 
@@ -114,8 +158,16 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
           if (Array.isArray(rawCampaigns) && rawCampaigns.length > 0) {
             apiCampaigns = rawCampaigns.map((item) =>
               typeof item === "object"
-                ? { id: item.id ?? item.value ?? item.campaign_id, name: capitalize(item.name || item.label || item.campaign_name || String(item.value ?? "")) }
-                : { id: item, name: capitalize(String(item)) }
+                ? {
+                    id: item.id ?? item.value ?? item.campaign_id,
+                    name: capitalize(
+                      item.name ||
+                        item.label ||
+                        item.campaign_name ||
+                        String(item.value ?? ""),
+                    ),
+                  }
+                : { id: item, name: capitalize(String(item)) },
             );
           }
 
@@ -123,8 +175,16 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
           if (Array.isArray(rawSources) && rawSources.length > 0) {
             apiSources = rawSources.map((item) =>
               typeof item === "object"
-                ? { id: item.id ?? item.value ?? item.source_id, name: capitalize(item.name || item.label || item.source_name || String(item.value ?? "")) }
-                : { id: item, name: capitalize(String(item)) }
+                ? {
+                    id: item.id ?? item.value ?? item.source_id,
+                    name: capitalize(
+                      item.name ||
+                        item.label ||
+                        item.source_name ||
+                        String(item.value ?? ""),
+                    ),
+                  }
+                : { id: item, name: capitalize(String(item)) },
             );
           }
 
@@ -132,8 +192,17 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
           if (Array.isArray(rawTelecallers) && rawTelecallers.length > 0) {
             apiTelecallers = rawTelecallers.map((item) =>
               typeof item === "object"
-                ? { id: item.id ?? item.value ?? item.user_id, name: capitalize(item.name || item.label || item.user_name || item.telecaller || String(item.value ?? "")) }
-                : { id: item, name: capitalize(String(item)) }
+                ? {
+                    id: item.id ?? item.value ?? item.user_id,
+                    name: capitalize(
+                      item.name ||
+                        item.label ||
+                        item.user_name ||
+                        item.telecaller ||
+                        String(item.value ?? ""),
+                    ),
+                  }
+                : { id: item, name: capitalize(String(item)) },
             );
           }
         }
@@ -148,15 +217,8 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
         users: apiTelecallers,
       });
 
-      if (!isEdit) {
-        setFormData((prev) => ({
-          ...prev,
-          pipeline: prev.pipeline || apiPipelines[0]?.id || apiPipelines[0]?.value || "",
-          campaign: prev.campaign || apiCampaigns[0]?.id || apiCampaigns[0]?.value || "",
-          sourceType: prev.sourceType || apiSources[0]?.id || apiSources[0]?.value || "",
-          user: prev.user || apiTelecallers[0]?.id || apiTelecallers[0]?.value || "",
-        }));
-      }
+      // NOTE: Dropdowns are intentionally NOT auto-filled with the first option,
+      // so the user must select them (otherwise "required" validation never triggers).
     } catch (error) {
       console.error("fetchOptions error:", error);
     } finally {
@@ -169,12 +231,9 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
     if (name === "mobileNo") {
       const numericOnly = value.replace(/\D/g, "").slice(0, 10);
       setFormData((prev) => ({ ...prev, [name]: numericOnly }));
-      if (errors[name]) {
-        setErrors((prev) => ({ ...prev, [name]: "" }));
-      }
-      return;
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
-    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -182,37 +241,59 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.firstName || !formData.firstName.trim()) {
+
+    if (!formData.firstName?.trim())
       newErrors.firstName = "First name is required";
-    }
+    if (!formData.lastName?.trim())
+      newErrors.lastName = "Last name is required";
+
     const cleanMobile = (formData.mobileNo || "").replace(/\D/g, "");
     if (!cleanMobile) {
       newErrors.mobileNo = "Mobile number is required";
     } else if (cleanMobile.length !== 10) {
       newErrors.mobileNo = "Please enter a valid 10-digit mobile number";
     }
-    if (!formData.pipeline) {
+
+    if (!formData.emailId?.trim()) {
+      newErrors.emailId = "Email ID is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.emailId.trim())) {
+      newErrors.emailId = "Please enter a valid email address";
+    }
+
+    if (!formData.pipeline)
       newErrors.pipeline = "Pipeline selection is required";
-    }
-    if (!formData.campaign) {
+    if (!formData.campaign)
       newErrors.campaign = "Campaign selection is required";
-    }
+    if (!formData.sourceType) newErrors.sourceType = "Source type is required";
+    if (!formData.user) newErrors.user = "User selection is required";
+    if (!formData.inquiryDate)
+      newErrors.inquiryDate = "Inquiry date is required";
+
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    const hasErrors = Object.keys(newErrors).length > 0;
+    setValidationWarning(
+      hasErrors
+        ? "Please fill in all the required fields before submitting."
+        : "",
+    );
+    return !hasErrors;
   };
 
   const handleSubmit = async () => {
+    setErrorMessage("");
     if (!validate()) return;
 
     try {
       setSubmitting(true);
-      setErrorMessage("");
 
       const cleanMobile = (formData.mobileNo || "").replace(/\D/g, "");
       const formattedMobile = cleanMobile ? `+91 ${cleanMobile}` : "";
 
       const payload = {
-        ...(isEdit && editLeadData ? { lead_id: editLeadData.id || editLeadData.lead_id } : {}),
+        ...(isEdit && editLeadData
+          ? { lead_id: editLeadData.id || editLeadData.lead_id }
+          : {}),
         first_name: formData.firstName,
         last_name: formData.lastName,
         mobile_no: formattedMobile,
@@ -226,9 +307,7 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
           : new Date().toISOString(),
       };
 
-      const response = isEdit
-        ? { data: payload }
-        : await createLead(payload);
+      const response = isEdit ? { data: payload } : await createLead(payload);
 
       console.log(isEdit ? "Lead updated:" : "Lead created:", response?.data);
 
@@ -241,7 +320,7 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
       setErrorMessage(
         error?.response?.data?.message ||
           error?.response?.data?.data?.message ||
-          "Failed to save lead. Please try again."
+          "Failed to save lead. Please try again.",
       );
     } finally {
       setSubmitting(false);
@@ -258,6 +337,8 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
     },
     input: { padding: "10px 14px", fontSize: "14px" },
     "& .MuiSelect-select": { padding: "10px 14px", fontSize: "14px" },
+    // keep helper text visible and outside the grey box
+    "& .MuiFormHelperText-root": { marginLeft: 0, backgroundColor: "#FFF" },
   };
 
   const labelStyle = {
@@ -310,6 +391,12 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
       <DialogContent
         sx={{ display: "flex", flexDirection: "column", gap: 1.5, py: 1 }}
       >
+        {validationWarning && (
+          <Alert severity="warning" onClose={() => setValidationWarning("")}>
+            {validationWarning}
+          </Alert>
+        )}
+
         {errorMessage && (
           <Alert severity="error" onClose={() => setErrorMessage("")}>
             {errorMessage}
@@ -339,13 +426,15 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
 
             {/* Last Name */}
             <Box>
-              <Typography sx={labelStyle}>Last Name</Typography>
+              <Typography sx={labelStyle}>Last Name*</Typography>
               <TextField
                 fullWidth
                 name="lastName"
                 placeholder="Enter Last Name"
                 value={formData.lastName}
                 onChange={handleChange}
+                error={Boolean(errors.lastName)}
+                helperText={errors.lastName}
                 sx={customInputStyle}
               />
             </Box>
@@ -370,7 +459,13 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
                   input: {
                     startAdornment: (
                       <InputAdornment position="start" sx={{ mr: 0.5 }}>
-                        <Typography sx={{ fontSize: "14px", fontWeight: 700, color: "#374151" }}>
+                        <Typography
+                          sx={{
+                            fontSize: "14px",
+                            fontWeight: 700,
+                            color: "#374151",
+                          }}
+                        >
                           +91
                         </Typography>
                       </InputAdornment>
@@ -383,13 +478,15 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
 
             {/* Email ID */}
             <Box>
-              <Typography sx={labelStyle}>Email ID</Typography>
+              <Typography sx={labelStyle}>Email ID*</Typography>
               <TextField
                 fullWidth
                 name="emailId"
                 placeholder="Enter Email ID"
                 value={formData.emailId}
                 onChange={handleChange}
+                error={Boolean(errors.emailId)}
+                helperText={errors.emailId}
                 sx={customInputStyle}
               />
             </Box>
@@ -438,13 +535,15 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
 
             {/* Source Type Dropdown */}
             <Box>
-              <Typography sx={labelStyle}>Source Type</Typography>
+              <Typography sx={labelStyle}>Source Type*</Typography>
               <TextField
                 select
                 fullWidth
                 name="sourceType"
                 value={formData.sourceType}
                 onChange={handleChange}
+                error={Boolean(errors.sourceType)}
+                helperText={errors.sourceType}
                 sx={customInputStyle}
               >
                 {options.sources.map((item) => (
@@ -457,13 +556,15 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
 
             {/* Telecallers / User Dropdown */}
             <Box>
-              <Typography sx={labelStyle}>User</Typography>
+              <Typography sx={labelStyle}>User*</Typography>
               <TextField
                 select
                 fullWidth
                 name="user"
                 value={formData.user}
                 onChange={handleChange}
+                error={Boolean(errors.user)}
+                helperText={errors.user}
                 sx={customInputStyle}
               >
                 {options.users.map((item) => (
@@ -476,13 +577,15 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
 
             {/* Inquiry Date */}
             <Box>
-              <Typography sx={labelStyle}>Inquiry Date</Typography>
+              <Typography sx={labelStyle}>Inquiry Date*</Typography>
               <TextField
                 fullWidth
                 type="date"
                 name="inquiryDate"
                 value={formData.inquiryDate}
                 onChange={handleChange}
+                error={Boolean(errors.inquiryDate)}
+                helperText={errors.inquiryDate}
                 sx={customInputStyle}
               />
             </Box>
@@ -525,7 +628,11 @@ const AddNewLeadModal = ({ open, onClose, onSave, editLeadData = null, selectedP
             "&:hover": { backgroundColor: "#65A30D" },
           }}
         >
-          {submitting ? <CircularProgress size={20} sx={{ color: "#FFF" }} /> : "Save"}
+          {submitting ? (
+            <CircularProgress size={20} sx={{ color: "#FFF" }} />
+          ) : (
+            "Save"
+          )}
         </Button>
       </DialogActions>
     </Dialog>

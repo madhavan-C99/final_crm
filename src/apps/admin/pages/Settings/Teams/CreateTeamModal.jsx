@@ -84,8 +84,9 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
   const [teamColor, setTeamColor] = useState("#6366F1");
   const [leadId, setLeadId] = useState("");
   const [memberIds, setMemberIds] = useState([]);
+  const [errors, setErrors] = useState({ name: "", color: "", lead: "", members: "" });
 
-  const leadsOptions = leadsList.length > 0 ? leadsList : usersList;
+  const leadsOptions = Array.isArray(leadsList) ? leadsList : [];
 
   useEffect(() => {
     if (open) {
@@ -93,21 +94,31 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
       setTeamColor("#6366F1");
       setLeadId("");
       setMemberIds([]);
+      setErrors({ name: "", color: "", lead: "", members: "" });
     }
   }, [open]);
 
   if (!open) return null;
 
   const handleCreate = () => {
-    if (!teamName.trim()) {
-      toast.error("Please enter Team Name");
+    const newErrors = {
+      name: !teamName.trim() ? "Team Name is required" : "",
+      color: !teamColor ? "Please select Team Color" : "",
+      lead: !leadId ? "Please select Team Lead" : "",
+      members: !memberIds || memberIds.length === 0 ? "Please select at least one member" : "",
+    };
+
+    if (newErrors.name || newErrors.color || newErrors.lead || newErrors.members) {
+      setErrors(newErrors);
+      toast.error("Please fill all mandatory fields");
       return;
     }
+
     if (onSave) {
       onSave({
-        name: teamName,
+        name: teamName.trim(),
         color: teamColor || "#6366F1",
-        lead_id: leadId ? Number(leadId) : null,
+        lead_id: Number(leadId),
         member_ids: memberIds.map(Number),
       });
     }
@@ -166,24 +177,43 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
       >
         {/* Team Name */}
         <Box>
-          <Typography sx={labelStyles}>Team Name</Typography>
+          <Typography sx={labelStyles}>
+            Team Name <span style={{ color: "#EF4444" }}>*</span>
+          </Typography>
           <TextField
             fullWidth
             placeholder="Enter Name"
             value={teamName}
-            onChange={(e) => setTeamName(e.target.value)}
-            sx={fieldStyles}
+            onChange={(e) => {
+              setTeamName(e.target.value);
+              if (errors.name) setErrors((prev) => ({ ...prev, name: "" }));
+            }}
+            error={Boolean(errors.name)}
+            helperText={errors.name}
+            sx={{
+              ...fieldStyles,
+              ...(errors.name
+                ? {
+                    "& .MuiOutlinedInput-root fieldset": { borderColor: "#EF4444 !important" },
+                  }
+                : {}),
+            }}
           />
         </Box>
 
         {/* Team Color & Team Lead Row */}
         <Box sx={{ display: "flex", gap: 2.5, width: "100%" }}>
           <Box sx={{ flex: 1 }}>
-            <Typography sx={labelStyles}>Team Color</Typography>
+            <Typography sx={labelStyles}>
+              Team Color <span style={{ color: "#EF4444" }}>*</span>
+            </Typography>
             <Select
               fullWidth
               value={teamColor}
-              onChange={(e) => setTeamColor(e.target.value)}
+              onChange={(e) => {
+                setTeamColor(e.target.value);
+                if (errors.color) setErrors((prev) => ({ ...prev, color: "" }));
+              }}
               IconComponent={KeyboardArrowDownIcon}
               renderValue={(selected) => {
                 const found = COLOR_OPTIONS.find(
@@ -204,7 +234,10 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
                   </Box>
                 );
               }}
-              sx={selectFieldStyles}
+              sx={{
+                ...selectFieldStyles,
+                ...(errors.color ? { border: "1px solid #EF4444" } : {}),
+              }}
             >
               {COLOR_OPTIONS.map((c) => (
                 <MenuItem key={c.value} value={c.value}>
@@ -223,15 +256,25 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
                 </MenuItem>
               ))}
             </Select>
+            {errors.color && (
+              <Typography sx={{ color: "#EF4444", fontSize: "11.5px", mt: 0.5, fontFamily: "Inter, sans-serif" }}>
+                {errors.color}
+              </Typography>
+            )}
           </Box>
 
           <Box sx={{ flex: 1 }}>
-            <Typography sx={labelStyles}>Team Lead</Typography>
+            <Typography sx={labelStyles}>
+              Team Lead <span style={{ color: "#EF4444" }}>*</span>
+            </Typography>
             <Select
               fullWidth
               displayEmpty
               value={leadId}
-              onChange={(e) => setLeadId(e.target.value)}
+              onChange={(e) => {
+                setLeadId(e.target.value);
+                if (errors.lead) setErrors((prev) => ({ ...prev, lead: "" }));
+              }}
               IconComponent={KeyboardArrowDownIcon}
               renderValue={(selected) => {
                 if (!selected) {
@@ -244,7 +287,10 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
                 const found = leadsOptions.find((u) => String(u.id ?? u.value) === String(selected));
                 return found ? (found.name || found.full_name || found.label) : selected;
               }}
-              sx={selectFieldStyles}
+              sx={{
+                ...selectFieldStyles,
+                ...(errors.lead ? { border: "1px solid #EF4444" } : {}),
+              }}
             >
               {leadsOptions.map((u) => (
                 <MenuItem key={u.id ?? u.value} value={u.id ?? u.value}>
@@ -252,19 +298,29 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
                 </MenuItem>
               ))}
             </Select>
+            {errors.lead && (
+              <Typography sx={{ color: "#EF4444", fontSize: "11.5px", mt: 0.5, fontFamily: "Inter, sans-serif" }}>
+                {errors.lead}
+              </Typography>
+            )}
           </Box>
         </Box>
 
         {/* Add Members Row */}
         <Box>
-          <Typography sx={labelStyles}>Add Members</Typography>
+          <Typography sx={labelStyles}>
+            Add Members <span style={{ color: "#EF4444" }}>*</span>
+          </Typography>
           <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
             <Select
               fullWidth
               multiple
               displayEmpty
               value={memberIds}
-              onChange={(e) => setMemberIds(e.target.value)}
+              onChange={(e) => {
+                setMemberIds(e.target.value);
+                if (errors.members) setErrors((prev) => ({ ...prev, members: "" }));
+              }}
               IconComponent={KeyboardArrowDownIcon}
               renderValue={(selected) => {
                 if (!selected || selected.length === 0) {
@@ -279,7 +335,11 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
                   .map((u) => u.name || u.full_name || u.label);
                 return selectedNames.length > 0 ? selectedNames.join(", ") : `${selected.length} members selected`;
               }}
-              sx={{ ...selectFieldStyles, flex: 1 }}
+              sx={{
+                ...selectFieldStyles,
+                flex: 1,
+                ...(errors.members ? { border: "1px solid #EF4444" } : {}),
+              }}
             >
               {usersList.map((u) => (
                 <MenuItem key={u.id ?? u.value} value={u.id ?? u.value}>
@@ -305,6 +365,11 @@ export default function CreateTeamModal({ open, onClose, onSave, leadsList = [],
               <PersonAddOutlinedIcon sx={{ fontSize: 20, color: "#000000" }} />
             </Box>
           </Box>
+          {errors.members && (
+            <Typography sx={{ color: "#EF4444", fontSize: "11.5px", mt: 0.5, fontFamily: "Inter, sans-serif" }}>
+              {errors.members}
+            </Typography>
+          )}
         </Box>
 
         {/* Action Buttons */}

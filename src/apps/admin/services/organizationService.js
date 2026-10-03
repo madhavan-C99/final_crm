@@ -53,14 +53,14 @@ const buildOrgFormData = (data = {}) => {
   appendIfPresent("address_line2", data.addressLine2 || data.address_line2);
   appendIfPresent("city", data.city);
   appendIfPresent("state", data.stateVal || data.state);
-  appendIfPresent("country", data.countryVal || data.country || "India");
+  appendIfPresent("country", data.countryVal || data.country);
   appendIfPresent("pincode", data.pincode);
   appendIfPresent("official_email", data.officialEmail || data.official_email);
   appendIfPresent("official_contact", data.officialContact || data.official_contact);
   appendIfPresent("gst_in", data.gstIn || data.gst_in);
   appendIfPresent("company_pan", data.companyPan || data.company_pan);
-  appendIfPresent("date_format", data.dateFormat || data.date_format || "DD/MM/YYYY");
-  appendIfPresent("time_format", data.timeFormat || data.time_format || "24hrs");
+  appendIfPresent("date_format", data.dateFormat || data.date_format);
+  appendIfPresent("time_format", data.timeFormat || data.time_format);
 
   if (data.id) {
     formData.append("id", String(data.id));

@@ -115,40 +115,31 @@ export const fetchLossLeadApprovalRequests = async (payload = {}) => {
   return await api.post("/adm/fetch_loss_lead_approval_requests_admin", payload);
 };
 
-// 15. Export Loss Lead Approval Requests (/adm/export_loss_lead_approval_requests_admin)
+// 15. Export Loss Lead Approval Requests (/adm/export_data_api)
 export const exportLossLeadApprovalRequests = async (payload = {}) => {
-  return await api.post("/adm/export_loss_lead_approval_requests_admin", payload);
+  return await api.post("/adm/export_data_api", payload);
 };
 
 // 16. Fetch Loss Lead Approval Filter Dropdowns (/adm/get_filter_dropdowns_admin)
 export const fetchLossLeadApprovalFilterDropdowns = async () => {
-  const [telecallers, reasons, courseNames, coursePlans, sources, courseTimes] = await Promise.all([
+  const [telecallers, reasons, courses, sources] = await Promise.all([
     getSelectOptions("L_TELECALLERS"),
     getSelectOptions("L_LOSS_REASONS"),
     getSelectOptions("L_COURSE_NAMES"),
-    getSelectOptions("L_COURSE_PLANS"),
     getSelectOptions("L_LEAD_SOURCES"),
-    getSelectOptions("L_COURSE_TIMES"),
   ]);
 
-  let courses = courseNames;
-  let plans = coursePlans;
-
-  if (courses.length === 0) {
-    courses = await getSelectOptions("L_COURSES");
-  }
-  if (plans.length === 0) {
-    plans = courses;
+  let courseList = courses;
+  if (courseList.length === 0) {
+    courseList = await getSelectOptions("L_COURSES").catch(() => []);
   }
 
   return {
     data: {
       telecallers,
       reasons,
-      courses,
-      course_plans: plans,
+      courses: courseList,
       sources,
-      course_times: courseTimes,
     },
   };
 };

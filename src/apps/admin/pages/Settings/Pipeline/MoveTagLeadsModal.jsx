@@ -36,7 +36,7 @@ export default function MoveTagLeadsModal({
   useEffect(() => {
     if (open) {
       const currentStageExists = availableStages.find((s) => String(s.id) === String(stage?.id));
-      const initialStageId = currentStageExists ? stage.id : (availableStages[0]?.id || "");
+      const initialStageId = currentStageExists ? stage?.id : (availableStages[0]?.id || "");
       setTargetStageId(initialStageId);
 
       // Select first eligible tag

@@ -134,7 +134,7 @@ export default function UserTable({
       minWidth: 140,
       renderCell: (row) => (
         <Typography sx={{ fontSize: "14px", color: "#374151" }}>
-          {row.emp_id || row.employee_id || "-"}
+          {row.emp_id || row.employee_id || ""}
         </Typography>
       ),
     },
@@ -144,7 +144,7 @@ export default function UserTable({
       minWidth: 120,
       renderCell: (row) => (
         <Typography sx={{ fontSize: "14px", color: "#374151", fontWeight: 500 }}>
-          {row.name || row.full_name || "-"}
+          {row.name || row.full_name || ""}
         </Typography>
       ),
     },
@@ -154,7 +154,7 @@ export default function UserTable({
       minWidth: 140,
       renderCell: (row) => (
         <Typography sx={{ fontSize: "14px", color: "#374151" }}>
-          {row.mobile_no || row.phone_no || "-"}
+          {row.mobile_no || row.phone_no || ""}
         </Typography>
       ),
     },
@@ -164,7 +164,7 @@ export default function UserTable({
       minWidth: 130,
       renderCell: (row) => (
         <Typography sx={{ fontSize: "14px", color: "#374151" }}>
-          {row.location || "-"}
+          {row.location || ""}
         </Typography>
       ),
     },
@@ -174,7 +174,7 @@ export default function UserTable({
       minWidth: 200,
       renderCell: (row) => (
         <Typography sx={{ fontSize: "14px", color: "#374151" }}>
-          {row.email || "-"}
+          {row.email || ""}
         </Typography>
       ),
     },
@@ -184,7 +184,7 @@ export default function UserTable({
       minWidth: 130,
       renderCell: (row) => (
         <Typography sx={{ fontSize: "14px", color: "#374151" }}>
-          {row.role || "-"}
+          {row.role || ""}
         </Typography>
       ),
     },
@@ -196,8 +196,8 @@ export default function UserTable({
         const val = row.reporting_to;
         const display =
           typeof val === "object" && val !== null
-            ? val.name || val.full_name || val.username || "-"
-            : val || "-";
+            ? val.name || val.full_name || val.username || ""
+            : val || "";
         return (
           <Typography sx={{ fontSize: "14px", color: "#374151" }}>
             {display}
@@ -226,7 +226,7 @@ export default function UserTable({
               minWidth: "80px",
             }}
           >
-            {row.status || "Active"}
+            {row.status || ""}
           </Box>
         );
       },

@@ -81,6 +81,45 @@ const COLOR_OPTIONS = [
 
 import { fetchTeamDropdownsAdmin } from "@/apps/admin/services/teamService";
 
+const extractLeadIdFromTeam = (team, leadsOptions = []) => {
+  if (!team) return "";
+  if (team.lead_id) return team.lead_id;
+  if (team.rawLead && typeof team.rawLead === "object" && (team.rawLead.id || team.rawLead.value)) {
+    return team.rawLead.id || team.rawLead.value;
+  }
+  if (team.lead && typeof team.lead === "object" && (team.lead.id || team.lead.value)) {
+    return team.lead.id || team.lead.value;
+  }
+  if (typeof team.lead === "number") return team.lead;
+  if (typeof team.lead === "string" && leadsOptions.length > 0) {
+    const found = leadsOptions.find(
+      (u) => (u.name || u.full_name || u.label || "").toLowerCase() === team.lead.toLowerCase()
+    );
+    if (found) return found.id ?? found.value;
+  }
+  return "";
+};
+
+const extractMemberIdsFromTeam = (team, usersList = []) => {
+  const rawMem = team?.rawMembers || team?.members || [];
+  const result = [];
+  if (Array.isArray(rawMem)) {
+    rawMem.forEach((m) => {
+      if (typeof m === "number") {
+        result.push(m);
+      } else if (typeof m === "object" && m !== null && (m.id || m.value)) {
+        result.push(m.id || m.value);
+      } else if (typeof m === "string" && usersList.length > 0) {
+        const found = usersList.find(
+          (u) => (u.name || u.full_name || u.label || "").toLowerCase() === m.toLowerCase()
+        );
+        if (found) result.push(found.id ?? found.value);
+      }
+    });
+  }
+  return result;
+};
+
 export default function EditTeamModal({ open, onClose, onSave, team, leadsList = [], usersList = [] }) {
   const [teamName, setTeamName] = useState("");
   const [teamColor, setTeamColor] = useState("#6366F1");
@@ -88,6 +127,7 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
   const [memberIds, setMemberIds] = useState([]);
   const [fetchedTeamUsers, setFetchedTeamUsers] = useState(null);
   const [fetchedTeamLeads, setFetchedTeamLeads] = useState(null);
+  const [errors, setErrors] = useState({ name: "", color: "", lead: "", members: "" });
 
   const leadsOptions = leadsList.length > 0 ? leadsList : usersList;
 
@@ -102,43 +142,9 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
     if (open && team) {
       setTeamName(team.name || "");
       setTeamColor(team.color || "#6366F1");
-
-      // Extract Lead ID
-      let detectedLeadId = "";
-      if (team.lead_id) {
-        detectedLeadId = team.lead_id;
-      } else if (team.rawLead && typeof team.rawLead === "object" && (team.rawLead.id || team.rawLead.value)) {
-        detectedLeadId = team.rawLead.id || team.rawLead.value;
-      } else if (team.lead && typeof team.lead === "object" && (team.lead.id || team.lead.value)) {
-        detectedLeadId = team.lead.id || team.lead.value;
-      } else if (typeof team.lead === "number") {
-        detectedLeadId = team.lead;
-      } else if (typeof team.lead === "string") {
-        const found = leadsOptions.find(
-          (u) => (u.name || u.full_name || u.label || "").toLowerCase() === team.lead.toLowerCase()
-        );
-        if (found) detectedLeadId = found.id ?? found.value;
-      }
-      setLeadId(detectedLeadId || "");
-
-      // Extract Member IDs
-      const rawMem = team.rawMembers || team.members || [];
-      const extractedMemberIds = [];
-      if (Array.isArray(rawMem)) {
-        rawMem.forEach((m) => {
-          if (typeof m === "number") {
-            extractedMemberIds.push(m);
-          } else if (typeof m === "object" && m !== null && (m.id || m.value)) {
-            extractedMemberIds.push(m.id || m.value);
-          } else if (typeof m === "string" && usersList.length > 0) {
-            const found = usersList.find(
-              (u) => (u.name || u.full_name || u.label || "").toLowerCase() === m.toLowerCase()
-            );
-            if (found) extractedMemberIds.push(found.id ?? found.value);
-          }
-        });
-      }
-      setMemberIds(extractedMemberIds);
+      setLeadId(extractLeadIdFromTeam(team, leadsOptions));
+      setMemberIds(extractMemberIdsFromTeam(team, usersList));
+      setErrors({ name: "", color: "", lead: "", members: "" });
 
       // Fetch team-specific dropdowns by passing team_id to backend API
       if (!hasFetchedRef.current) {
@@ -194,16 +200,25 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
   if (!open) return null;
 
   const handleUpdate = () => {
-    if (!teamName.trim()) {
-      toast.error("Please enter Team Name");
+    const newErrors = {
+      name: !teamName.trim() ? "Team Name is required" : "",
+      color: !teamColor ? "Please select Team Color" : "",
+      lead: !leadId ? "Please select Team Lead" : "",
+      members: !memberIds || memberIds.length === 0 ? "Please select at least one member" : "",
+    };
+
+    if (newErrors.name || newErrors.color || newErrors.lead || newErrors.members) {
+      setErrors(newErrors);
+      toast.error("Please fill all mandatory fields");
       return;
     }
+
     if (onSave && team) {
       onSave({
         id: team.id,
-        name: teamName,
+        name: teamName.trim(),
         color: teamColor || "#6366F1",
-        lead_id: leadId ? Number(leadId) : null,
+        lead_id: Number(leadId),
         member_ids: memberIds.map(Number),
       });
     }
@@ -262,24 +277,43 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
       >
         {/* Team Name */}
         <Box>
-          <Typography sx={labelStyles}>Team Name</Typography>
+          <Typography sx={labelStyles}>
+            Team Name <span style={{ color: "#EF4444" }}>*</span>
+          </Typography>
           <TextField
             fullWidth
             placeholder="Enter Name"
             value={teamName}
-            onChange={(e) => setTeamName(e.target.value)}
-            sx={fieldStyles}
+            onChange={(e) => {
+              setTeamName(e.target.value);
+              if (errors.name) setErrors((prev) => ({ ...prev, name: "" }));
+            }}
+            error={Boolean(errors.name)}
+            helperText={errors.name}
+            sx={{
+              ...fieldStyles,
+              ...(errors.name
+                ? {
+                    "& .MuiOutlinedInput-root fieldset": { borderColor: "#EF4444 !important" },
+                  }
+                : {}),
+            }}
           />
         </Box>
 
         {/* Row 2: Team Color & Team Lead */}
         <Box sx={{ display: "flex", gap: 2.5, width: "100%" }}>
           <Box sx={{ flex: 1 }}>
-            <Typography sx={labelStyles}>Team Color</Typography>
+            <Typography sx={labelStyles}>
+              Team Color <span style={{ color: "#EF4444" }}>*</span>
+            </Typography>
             <Select
               fullWidth
               value={teamColor}
-              onChange={(e) => setTeamColor(e.target.value)}
+              onChange={(e) => {
+                setTeamColor(e.target.value);
+                if (errors.color) setErrors((prev) => ({ ...prev, color: "" }));
+              }}
               IconComponent={KeyboardArrowDownIcon}
               renderValue={(selected) => {
                 const found = COLOR_OPTIONS.find(
@@ -300,7 +334,10 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
                   </Box>
                 );
               }}
-              sx={selectFieldStyles}
+              sx={{
+                ...selectFieldStyles,
+                ...(errors.color ? { border: "1px solid #EF4444" } : {}),
+              }}
             >
               {COLOR_OPTIONS.map((c) => (
                 <MenuItem key={c.value} value={c.value}>
@@ -319,10 +356,17 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
                 </MenuItem>
               ))}
             </Select>
+            {errors.color && (
+              <Typography sx={{ color: "#EF4444", fontSize: "11.5px", mt: 0.5, fontFamily: "Inter, sans-serif" }}>
+                {errors.color}
+              </Typography>
+            )}
           </Box>
 
           <Box sx={{ flex: 1 }}>
-            <Typography sx={labelStyles}>Team Lead</Typography>
+            <Typography sx={labelStyles}>
+              Team Lead <span style={{ color: "#EF4444" }}>*</span>
+            </Typography>
             {(() => {
               const currentLeadIdVal = leadId || team?.lead_id || (typeof team?.rawLead === "object" ? team?.rawLead?.id || team?.rawLead?.value : null);
               const currentLeadNameVal = team?.lead_name || (typeof team?.rawLead === "object" ? team?.rawLead?.name || team?.rawLead?.full_name : null) || (typeof team?.lead === "string" ? team?.lead : null) || "Team Lead";
@@ -342,7 +386,10 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
                   fullWidth
                   displayEmpty
                   value={leadId}
-                  onChange={(e) => setLeadId(e.target.value)}
+                  onChange={(e) => {
+                    setLeadId(e.target.value);
+                    if (errors.lead) setErrors((prev) => ({ ...prev, lead: "" }));
+                  }}
                   IconComponent={KeyboardArrowDownIcon}
                   renderValue={(selected) => {
                     if (!selected) {
@@ -362,7 +409,10 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
                     if (typeof team?.rawLead === "object") return team.rawLead.name || team.rawLead.full_name || selected;
                     return selected;
                   }}
-                  sx={selectFieldStyles}
+                  sx={{
+                    ...selectFieldStyles,
+                    ...(errors.lead ? { border: "1px solid #EF4444" } : {}),
+                  }}
                 >
                   {combinedLeadsOptions.map((u) => (
                     <MenuItem key={u.id ?? u.value} value={u.id ?? u.value}>
@@ -372,19 +422,29 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
                 </Select>
               );
             })()}
+            {errors.lead && (
+              <Typography sx={{ color: "#EF4444", fontSize: "11.5px", mt: 0.5, fontFamily: "Inter, sans-serif" }}>
+                {errors.lead}
+              </Typography>
+            )}
           </Box>
         </Box>
 
         {/* Row 3: Add Members (Full Width) + Icon Button */}
         <Box>
-          <Typography sx={labelStyles}>Add Members</Typography>
+          <Typography sx={labelStyles}>
+            Add Members <span style={{ color: "#EF4444" }}>*</span>
+          </Typography>
           <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
             <Select
               fullWidth
               multiple
               displayEmpty
               value={memberIds}
-              onChange={(e) => setMemberIds(e.target.value)}
+              onChange={(e) => {
+                setMemberIds(e.target.value);
+                if (errors.members) setErrors((prev) => ({ ...prev, members: "" }));
+              }}
               IconComponent={KeyboardArrowDownIcon}
               renderValue={(selected) => {
                 if (!selected || selected.length === 0) {
@@ -401,7 +461,11 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
                   ? selectedNames.join(", ")
                   : `${selected.length} members selected`;
               }}
-              sx={{ ...selectFieldStyles, flex: 1 }}
+              sx={{
+                ...selectFieldStyles,
+                flex: 1,
+                ...(errors.members ? { border: "1px solid #EF4444" } : {}),
+              }}
             >
               {rawUsersToUse.map((u) => (
                 <MenuItem key={u.id ?? u.value} value={u.id ?? u.value}>
@@ -428,6 +492,11 @@ export default function EditTeamModal({ open, onClose, onSave, team, leadsList =
               <PersonAddOutlinedIcon sx={{ fontSize: 20, color: "#000000" }} />
             </Box>
           </Box>
+          {errors.members && (
+            <Typography sx={{ color: "#EF4444", fontSize: "11.5px", mt: 0.5, fontFamily: "Inter, sans-serif" }}>
+              {errors.members}
+            </Typography>
+          )}
         </Box>
 
         {/* 3. Footer Action Buttons */}

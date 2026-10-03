@@ -228,14 +228,14 @@ export default function EditOrganizationModal({
       setAddressLine2(initialData.addressLine2 || "");
       setCity(initialData.city || "");
       setStateVal(initialData.stateVal || "");
-      setCountryVal(initialData.countryVal || "India");
+      setCountryVal(initialData.countryVal || initialData.country || "");
       setPincode(initialData.pincode || "");
       setOfficialEmail(initialData.officialEmail || "");
       setOfficialContact(initialData.officialContact || "");
       setGstIn(initialData.gstIn || "");
       setCompanyPan(initialData.companyPan || "");
-      setDateFormat(initialData.dateFormat || "DD/MM/YYYY");
-      setTimeFormat(initialData.timeFormat || "24hrs");
+      setDateFormat(initialData.dateFormat || initialData.date_format || "");
+      setTimeFormat(initialData.timeFormat || initialData.time_format || "");
     }
   }, [open, initialData]);
 
@@ -576,21 +576,19 @@ export default function EditOrganizationModal({
               fullWidth
               value={gstIn}
               onChange={(e) => setGstIn(e.target.value)}
+              placeholder="Enter GST IN"
               sx={fieldStyles}
             />
           </Box>
           <Box sx={{ flex: 1 }}>
             <FieldLabel required>Company Pan Card</FieldLabel>
-            <Select
+            <TextField
               fullWidth
               value={companyPan}
               onChange={(e) => setCompanyPan(e.target.value)}
-              IconComponent={KeyboardArrowDownIcon}
-              sx={selectFieldStyles}
-            >
-              <MenuItem value="Tamilnadu">Tamilnadu</MenuItem>
-              <MenuItem value="Karnataka">Karnataka</MenuItem>
-            </Select>
+              placeholder="e.g. ABCDE1234F"
+              sx={fieldStyles}
+            />
           </Box>
         </Box>
 
@@ -605,19 +603,23 @@ export default function EditOrganizationModal({
               IconComponent={KeyboardArrowDownIcon}
               sx={selectFieldStyles}
             >
-              <MenuItem value="India">India</MenuItem>
               <MenuItem value="DD/MM/YYYY">DD/MM/YYYY</MenuItem>
               <MenuItem value="MM/DD/YYYY">MM/DD/YYYY</MenuItem>
+              <MenuItem value="YYYY-MM-DD">YYYY-MM-DD</MenuItem>
             </Select>
           </Box>
           <Box sx={{ flex: 1 }}>
             <FieldLabel required>Time Format</FieldLabel>
-            <TextField
+            <Select
               fullWidth
               value={timeFormat}
               onChange={(e) => setTimeFormat(e.target.value)}
-              sx={fieldStyles}
-            />
+              IconComponent={KeyboardArrowDownIcon}
+              sx={selectFieldStyles}
+            >
+              <MenuItem value="12hrs">12hrs</MenuItem>
+              <MenuItem value="24hrs">24hrs</MenuItem>
+            </Select>
           </Box>
         </Box>
       </Box>

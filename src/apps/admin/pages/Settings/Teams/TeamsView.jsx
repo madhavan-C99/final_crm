@@ -51,6 +51,28 @@ function getIconColors(colorHex) {
   return { iconBg: colorHex + "1F", iconColor: colorHex };
 }
 
+const extractTeamsResponseList = (teamsRes) => {
+  const rawRes = teamsRes?.data;
+  const innerData = rawRes?.data || rawRes || {};
+  if (Array.isArray(innerData)) return innerData;
+  if (Array.isArray(innerData.data)) return innerData.data;
+  if (Array.isArray(innerData.teams)) return innerData.teams;
+  if (Array.isArray(innerData.team_list)) return innerData.team_list;
+  if (Array.isArray(innerData.results)) return innerData.results;
+  if (Array.isArray(rawRes?.data)) return rawRes.data;
+  if (Array.isArray(rawRes?.teams)) return rawRes.teams;
+  if (Array.isArray(rawRes)) return rawRes;
+  return [];
+};
+
+const resolveLeadDisplayName = (item) => {
+  if (item?.lead_name) return item.lead_name;
+  if (item?.lead_obj && typeof item.lead_obj === "object" && item.lead_obj.name) return item.lead_obj.name;
+  if (item?.lead && typeof item.lead === "object" && item.lead.name) return item.lead.name;
+  if (typeof item?.lead === "string") return item.lead;
+  return "Unassigned";
+};
+
 export default function TeamsView() {
   const [teamsList, setTeamsList] = useState([]);
   const [leadsList, setLeadsList] = useState([]);
@@ -114,40 +136,10 @@ export default function TeamsView() {
 
       // Fetch Teams from backend
       const teamsRes = await fetchAllTeamsAdmin();
-      const rawRes = teamsRes?.data;
-      const innerData = rawRes?.data || rawRes || {};
-
-      let list = [];
-      if (Array.isArray(innerData)) {
-        list = innerData;
-      } else if (Array.isArray(innerData.data)) {
-        list = innerData.data;
-      } else if (Array.isArray(innerData.teams)) {
-        list = innerData.teams;
-      } else if (Array.isArray(innerData.team_list)) {
-        list = innerData.team_list;
-      } else if (Array.isArray(innerData.results)) {
-        list = innerData.results;
-      } else if (Array.isArray(rawRes?.data)) {
-        list = rawRes.data;
-      } else if (Array.isArray(rawRes?.teams)) {
-        list = rawRes.teams;
-      } else if (Array.isArray(rawRes)) {
-        list = rawRes;
-      }
+      const list = extractTeamsResponseList(teamsRes);
 
       const formattedTeams = list.map((item) => {
-        // Lead display
-        let leadName = "Unassigned";
-        if (item.lead_name) {
-          leadName = item.lead_name;
-        } else if (item.lead_obj && typeof item.lead_obj === "object" && item.lead_obj.name) {
-          leadName = item.lead_obj.name;
-        } else if (item.lead && typeof item.lead === "object" && item.lead.name) {
-          leadName = item.lead.name;
-        } else if (typeof item.lead === "string") {
-          leadName = item.lead;
-        }
+        const leadName = resolveLeadDisplayName(item);
 
         // Members array
         let memberNames = [];
@@ -163,7 +155,6 @@ export default function TeamsView() {
         return {
           id: item.id,
           name: item.name || "Unnamed Team",
-          region: item.region || "North Region",
           lead: leadName,
           rawLead: item.lead_obj || item.lead,
           membersCount: item.membersCount !== undefined ? item.membersCount : memberNames.length,

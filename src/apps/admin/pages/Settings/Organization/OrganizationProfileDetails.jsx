@@ -204,7 +204,7 @@ function ReadOnlyField({ label, value, required = true }) {
           boxSizing: "border-box",
         }}
       >
-        {value || "-"}
+        {value || ""}
       </Box>
     </Box>
   );
@@ -351,7 +351,7 @@ export default function OrganizationProfileDetails({ data = {}, onEdit }) {
                   lineHeight: 1.2,
                 }}
               >
-                {data.orgName || "-"}
+                {data.orgName || ""}
               </Typography>
               <Typography
                 sx={{
@@ -361,7 +361,7 @@ export default function OrganizationProfileDetails({ data = {}, onEdit }) {
                   mt: 0.4,
                 }}
               >
-                {data.industryType || "-"}
+                {data.industryType || ""}
               </Typography>
             </Box>
           </Box>
@@ -438,7 +438,7 @@ export default function OrganizationProfileDetails({ data = {}, onEdit }) {
               boxSizing: "border-box",
             }}
           >
-            {data.companyDesc || "-"}
+            {data.companyDesc || ""}
           </Box>
         </Box>
       </Paper>

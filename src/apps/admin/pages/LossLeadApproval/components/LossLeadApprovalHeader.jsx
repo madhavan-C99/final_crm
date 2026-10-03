@@ -5,15 +5,8 @@ import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined
 import { useAuth } from "@/shared/context/AuthContext";
 
 const LossLeadApprovalHeader = ({ onExport, pipelines = [], selectedPipeline, onPipelineChange }) => {
-  let hasPermission = () => true;
-  try {
-    const auth = useAuth();
-    if (auth && auth.hasPermission) {
-      hasPermission = auth.hasPermission;
-    }
-  } catch (err) {
-    // AuthContext optional fallback
-  }
+  const auth = useAuth();
+  const hasPermission = auth?.hasPermission ? auth.hasPermission : () => false;
 
   const handlePipelineSelect = (e) => {
     if (onPipelineChange) {
@@ -106,9 +99,7 @@ const LossLeadApprovalHeader = ({ onExport, pipelines = [], selectedPipeline, on
               },
             }}
           >
-            <MenuItem value="" disabled sx={{ color: "#9CA3AF" }}>
-              Select Pipeline
-            </MenuItem>
+            
             {Array.isArray(pipelines) && pipelines.length > 0 ? (
               pipelines.map((pipe) => {
                 const val = pipe.id ?? pipe.value;
@@ -160,4 +151,4 @@ const LossLeadApprovalHeader = ({ onExport, pipelines = [], selectedPipeline, on
   );
 };
 
-export default LossLeadApprovalHeader;
+export default LossLeadApprovalHeader;

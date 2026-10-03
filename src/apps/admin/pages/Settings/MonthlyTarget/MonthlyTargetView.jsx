@@ -106,6 +106,14 @@ export default function MonthlyTargetView() {
     }
   }, [progressTab, summaryData, teamList, individualList]);
 
+  const maxTargetVal = React.useMemo(() => {
+    if (!barChartData || barChartData.length === 0) return 200;
+    const maxVal = Math.max(
+      ...barChartData.map((d) => Math.max(Number(d.Target || 0), Number(d.Achieved || 0)))
+    );
+    return Math.max(100, Math.ceil((maxVal * 1.15) / 50) * 50);
+  }, [barChartData]);
+
   const loadMonthlyTargetData = useCallback(async () => {
     try {
       setLoading(true);
@@ -735,8 +743,7 @@ export default function MonthlyTargetView() {
                       tickLine={{ stroke: "#000000", strokeWidth: 1.5 }}
                     />
                     <YAxis
-                      domain={[0, 280]}
-                      ticks={[0, 70, 140, 210, 280]}
+                      domain={[0, maxTargetVal]}
                       tick={{ fontSize: 12, fontWeight: 500, fill: "#000000" }}
                       axisLine={{ stroke: "#000000", strokeWidth: 1.5 }}
                       tickLine={{ stroke: "#000000", strokeWidth: 1.5 }}
@@ -1374,7 +1381,7 @@ export default function MonthlyTargetView() {
           </Box>
 
           <Typography sx={{ fontSize: "13px", color: "#64748B" }}>
-            1-10 of 10
+            {currentDisplayList.length > 0 ? `1-${currentDisplayList.length} of ${currentDisplayList.length}` : "0-0 of 0"}
           </Typography>
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -1399,8 +1406,8 @@ export default function MonthlyTargetView() {
         open={isSetTargetOpen}
         onClose={() => setIsSetTargetOpen(false)}
         onSave={handleSaveTarget}
-        teamsList={teamList.length > 0 ? teamList : dropdownOptions.teams}
-        employeesList={individualList.length > 0 ? individualList : dropdownOptions.employees}
+        teamsList={dropdownOptions.teams.length > 0 ? dropdownOptions.teams : teamList}
+        employeesList={dropdownOptions.employees.length > 0 ? dropdownOptions.employees : individualList}
       />
 
       {/* Date Range Picker Dialog */}

@@ -10,6 +10,7 @@ import {
   Radio,
   RadioGroup,
   FormControlLabel,
+  Checkbox,
   IconButton,
   InputAdornment,
   Avatar,
@@ -115,6 +116,8 @@ export default function SetTargetModal({
   const [leadTarget, setLeadTarget] = useState("");
   const [amountTarget, setAmountTarget] = useState("");
   const [customMemberAllocations, setCustomMemberAllocations] = useState({});
+  const [distributeToMembers, setDistributeToMembers] = useState(false);
+  const [errors, setErrors] = useState({ team: "", employee: "", target: "" });
 
   useEffect(() => {
     if (open) {
@@ -127,6 +130,8 @@ export default function SetTargetModal({
       setLeadTarget("");
       setAmountTarget("");
       setCustomMemberAllocations({});
+      setDistributeToMembers(false);
+      setErrors({ team: "", employee: "", target: "" });
     }
   }, [open, currentMonthName]);
 
@@ -144,8 +149,17 @@ export default function SetTargetModal({
   };
 
   const handleSubmit = () => {
-    if (!leadTarget && !amountTarget) {
-      toast.error("Please enter a valid target value");
+    const newErrors = {
+      team: targetFor === "Team" && !team ? "Please select a Team" : "",
+      employee: targetFor === "Individual" && !employee ? "Please select an Employee" : "",
+      target: !leadTarget.toString().trim() && !amountTarget.toString().trim() ? "Please enter Lead Target or Amount Target" : "",
+    };
+
+    if (newErrors.team || newErrors.employee || newErrors.target) {
+      setErrors(newErrors);
+      if (newErrors.team) toast.error("Please select Team");
+      else if (newErrors.employee) toast.error("Please select Employee");
+      else toast.error("Please enter a Target value");
       return;
     }
 
@@ -153,13 +167,21 @@ export default function SetTargetModal({
     const selectedTeamObj = teamsList.find(
       (t) => (typeof t === "object" ? t.team || t.name || t.team_name || t.label || String(t.id) : String(t)) === team
     );
-    const selectedEmpObj = employeesList.find(
-      (e) => (typeof e === "object" ? e.name || e.full_name : String(e)) === employee
-    );
+    const selectedEmpObj = employeesList.find((e) => {
+      if (typeof e === "object") {
+        return (
+          String(e.id) === String(employee) ||
+          String(e.value) === String(employee) ||
+          e.name === employee ||
+          e.label === employee
+        );
+      }
+      return String(e) === String(employee);
+    });
 
     // Construct individual_allocations for Team Target scenario matching Django Serializer spec
     let individualAllocations = [];
-    if (targetFor === "Team" && team) {
+    if (targetFor === "Team" && team && distributeToMembers) {
       let members = [];
       if (selectedTeamObj && typeof selectedTeamObj === "object") {
         if (Array.isArray(selectedTeamObj.members) && selectedTeamObj.members.length > 0) {
@@ -394,12 +416,17 @@ export default function SetTargetModal({
         {/* Dynamic Field based on Target For Selection */}
         {targetFor === "Team" ? (
           <Box>
-            <Typography sx={labelStyles}>Team</Typography>
+            <Typography sx={labelStyles}>
+              Team <span style={{ color: "#EF4444" }}>*</span>
+            </Typography>
             <Select
               fullWidth
               displayEmpty
               value={team}
-              onChange={(e) => setTeam(e.target.value)}
+              onChange={(e) => {
+                setTeam(e.target.value);
+                if (e.target.value) setErrors((prev) => ({ ...prev, team: "" }));
+              }}
               IconComponent={KeyboardArrowDownIcon}
               renderValue={(selected) => {
                 if (!selected) {
@@ -411,7 +438,15 @@ export default function SetTargetModal({
                 }
                 return selected;
               }}
-              sx={selectFieldStyles}
+              sx={{
+                ...selectFieldStyles,
+                ...(errors.team
+                  ? {
+                      "& fieldset": { border: "1px solid #EF4444 !important" },
+                      "&:hover fieldset": { border: "1px solid #EF4444 !important" },
+                    }
+                  : {}),
+              }}
             >
               <MenuItem value="">Start from blank</MenuItem>
               {teamsList.map((t, idx) => {
@@ -423,15 +458,25 @@ export default function SetTargetModal({
                 );
               })}
             </Select>
+            {errors.team && (
+              <Typography sx={{ color: "#EF4444", fontSize: "12px", mt: 0.5, fontFamily: "Inter, sans-serif" }}>
+                {errors.team}
+              </Typography>
+            )}
           </Box>
         ) : (
           <Box>
-            <Typography sx={labelStyles}>Employee</Typography>
+            <Typography sx={labelStyles}>
+              Employee <span style={{ color: "#EF4444" }}>*</span>
+            </Typography>
             <Select
               fullWidth
               displayEmpty
               value={employee}
-              onChange={(e) => setEmployee(e.target.value)}
+              onChange={(e) => {
+                setEmployee(e.target.value);
+                if (e.target.value) setErrors((prev) => ({ ...prev, employee: "" }));
+              }}
               IconComponent={KeyboardArrowDownIcon}
               renderValue={(selected) => {
                 if (!selected) {
@@ -441,26 +486,56 @@ export default function SetTargetModal({
                     </Typography>
                   );
                 }
+                const foundEmp = employeesList.find((e) => {
+                  if (typeof e === "object") {
+                    return (
+                      String(e.id) === String(selected) ||
+                      String(e.value) === String(selected) ||
+                      e.name === selected ||
+                      e.label === selected
+                    );
+                  }
+                  return String(e) === String(selected);
+                });
+                if (foundEmp && typeof foundEmp === "object") {
+                  return foundEmp.name || foundEmp.label || foundEmp.full_name || selected;
+                }
                 return selected;
               }}
-              sx={selectFieldStyles}
+              sx={{
+                ...selectFieldStyles,
+                ...(errors.employee
+                  ? {
+                      "& fieldset": { border: "1px solid #EF4444 !important" },
+                      "&:hover fieldset": { border: "1px solid #EF4444 !important" },
+                    }
+                  : {}),
+              }}
             >
               <MenuItem value="">Start from blank</MenuItem>
               {employeesList.map((emp, idx) => {
-                const val = typeof emp === "object" ? emp.name || emp.full_name || emp.username || emp.id : String(emp);
+                const val = typeof emp === "object" ? emp.id ?? emp.value ?? emp.name : String(emp);
+                const label = typeof emp === "object" ? emp.name || emp.label || emp.full_name || emp.user_name || String(emp.id ?? emp.value) : String(emp);
                 return (
                   <MenuItem key={idx} value={val}>
-                    {val}
+                    {label}
                   </MenuItem>
                 );
               })}
             </Select>
+            {errors.employee && (
+              <Typography sx={{ color: "#EF4444", fontSize: "12px", mt: 0.5, fontFamily: "Inter, sans-serif" }}>
+                {errors.employee}
+              </Typography>
+            )}
           </Box>
         )}
 
         {/* Lead Target */}
         <Box>
-          <Typography sx={labelStyles}>Lead Target</Typography>
+          <Typography sx={labelStyles}>
+            Lead Target <span style={{ color: "#EF4444" }}>*</span>
+          </Typography>
           <TextField
             fullWidth
             placeholder="Start from blank"
@@ -468,8 +543,17 @@ export default function SetTargetModal({
             onChange={(e) => {
               setLeadTarget(e.target.value);
               setCustomMemberAllocations({});
+              if (e.target.value || amountTarget) setErrors((prev) => ({ ...prev, target: "" }));
             }}
-            sx={fieldStyles}
+            sx={{
+              ...fieldStyles,
+              ...(errors.target
+                ? {
+                    "& .MuiOutlinedInput-root fieldset": { border: "1px solid #EF4444 !important" },
+                    "& .MuiOutlinedInput-root:hover fieldset": { border: "1px solid #EF4444 !important" },
+                  }
+                : {}),
+            }}
           />
         </Box>
 
@@ -480,13 +564,59 @@ export default function SetTargetModal({
             fullWidth
             placeholder="Start from blank"
             value={amountTarget}
-            onChange={(e) => setAmountTarget(e.target.value)}
-            sx={fieldStyles}
+            onChange={(e) => {
+              setAmountTarget(e.target.value);
+              if (e.target.value || leadTarget) setErrors((prev) => ({ ...prev, target: "" }));
+            }}
+            sx={{
+              ...fieldStyles,
+              ...(errors.target
+                ? {
+                    "& .MuiOutlinedInput-root fieldset": { border: "1px solid #EF4444 !important" },
+                    "& .MuiOutlinedInput-root:hover fieldset": { border: "1px solid #EF4444 !important" },
+                  }
+                : {}),
+            }}
           />
+          {errors.target && (
+            <Typography sx={{ color: "#EF4444", fontSize: "12px", mt: 0.5, fontFamily: "Inter, sans-serif" }}>
+              {errors.target}
+            </Typography>
+          )}
         </Box>
 
-        {/* Distribution Summary Card matching Image 1 */}
+        {/* Checkbox to opt-in to individual member lead distribution */}
         {targetFor === "Team" && team && (
+          <Box sx={{ mt: 1.5, mb: 0.5 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={distributeToMembers}
+                  onChange={(e) => setDistributeToMembers(e.target.checked)}
+                  sx={{
+                    color: ACCENT,
+                    "&.Mui-checked": { color: ACCENT },
+                  }}
+                />
+              }
+              label={
+                <Typography
+                  sx={{
+                    fontFamily: "Inter, sans-serif",
+                    fontWeight: 500,
+                    fontSize: "13.5px",
+                    color: "#2B2B2B",
+                  }}
+                >
+                  Distribute lead target to individual team members
+                </Typography>
+              }
+            />
+          </Box>
+        )}
+
+        {/* Distribution Summary Card matching Image 1 */}
+        {targetFor === "Team" && team && distributeToMembers && (
           (() => {
             const selectedTeamObj = teamsList.find(
               (t) =>

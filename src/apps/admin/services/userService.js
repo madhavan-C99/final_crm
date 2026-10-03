@@ -29,7 +29,7 @@ export const createUserAdmin = async (userData) => {
     location: userData.location || "",
     role: userData.role || "",
     reporting_to: userData.reportingToId || userData.reporting_to_id || userData.reportingTo || userData.reporting_to || "",
-    status: userData.status || "Active",
+    status: userData.status || "",
     joined_date: userData.joinedDate || userData.joined_date || "",
     emp_id: userData.employeeId || userData.emp_id || "",
     team: userData.team || "",
@@ -53,7 +53,7 @@ export const editUserAdmin = async (userData) => {
     location: userData.location || "",
     role: userData.role || "",
     reporting_to: userData.reportingToId || userData.reporting_to_id || userData.reportingTo || userData.reporting_to || "",
-    status: userData.status || "Active",
+    status: userData.status || "",
     joined_date: userData.joinedDate || userData.joined_date || "",
     emp_id: userData.employeeId || userData.emp_id || "",
     team: userData.team || "",
@@ -94,7 +94,7 @@ import dropdownService from "./dropdownService";
 export const fetchUserDropdownsAdmin = async () => {
   const [roles, reporting_users, teams] = await Promise.all([
     dropdownService.getSelectOptions("L_ROLES"),
-    dropdownService.getSelectOptions("L_TELECALLERS"),
+    dropdownService.getSelectOptions("L_REPORTING_MANAGERS"),
     dropdownService.getSelectOptions("L_TEAMS"),
   ]);
 

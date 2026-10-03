@@ -37,6 +37,10 @@ const EMPTY_TERMINALS = {
   closed: { id: "closed", name: "Loss", tags: [] },
 };
 
+const getCategoryDisplayName = (cat) => cat?.display_name || cat?.category_name || "";
+const getJoinedTerminalName = (terminals) => terminals?.joined?.name || "Won";
+const getClosedTerminalName = (terminals) => terminals?.closed?.name || "Loss";
+
 const CACHE_KEY = "cached_settings_pipelines_v1";
 
 const getCachedPipelineData = () => {
@@ -148,7 +152,7 @@ export default function PipelineView() {
               : EMPTY_TERMINALS;
 
           newMap[cat.id] = {
-            name: cat.display_name || cat.category_name,
+            name: getCategoryDisplayName(cat),
             is_default: Boolean(cat.is_default),
             stages: cStages,
             terminals: cTerminals,
@@ -169,7 +173,7 @@ export default function PipelineView() {
 
         if (target) {
           const activeId = target.id;
-          const activeName = target.display_name || target.category_name;
+          const activeName = getCategoryDisplayName(target);
           setSelectedPipelineId(activeId);
           setPipelineName(activeName);
 
@@ -249,7 +253,7 @@ export default function PipelineView() {
     setIsEditMode(false);
     setSelectedPipelineId(pipelineId);
     const found = pipelineList.find((p) => p.id === pipelineId);
-    const pName = found ? (found.display_name || found.category_name) : "";
+    const pName = found ? getCategoryDisplayName(found) : "";
     setPipelineName(pName);
 
     // Retrieve stages & terminals linked to this pipeline
@@ -514,7 +518,7 @@ export default function PipelineView() {
         } else {
           handleSelectStage({
             id: "joined",
-            name: terminals?.joined?.name || "Won",
+            name: getJoinedTerminalName(terminals),
             tags: terminals?.joined?.tags || [],
           });
         }
@@ -674,9 +678,9 @@ export default function PipelineView() {
 
     const currentStage =
       selectedStageId === "joined"
-        ? terminals?.joined || { id: "joined", name: "Won", tags: [] }
+        ? terminals?.joined || { id: "joined", name: getJoinedTerminalName(terminals), tags: [] }
         : selectedStageId === "closed"
-        ? terminals?.closed || { id: "closed", name: "Loss", tags: [] }
+        ? terminals?.closed || { id: "closed", name: getClosedTerminalName(terminals), tags: [] }
         : stages.find((s) => s.id === selectedStageId) || {
             id: selectedStageId,
             name: editStageName,
@@ -712,7 +716,7 @@ export default function PipelineView() {
         tag_id: tag.id,
         tag_name: tag.name,
       });
-      const leadCount = res?.data?.data?.lead_count ?? 0;
+      const leadCount = res?.data?.data?.lead_count ?? res?.data?.lead_count ?? 0;
       setDeleteTagModalState((prev) => ({
         ...prev,
         leadCount: leadCount,
@@ -983,7 +987,7 @@ export default function PipelineView() {
               onChange={(e) => handlePipelineChange(e.target.value)}
               renderValue={(val) => {
                 const found = pipelineList.find((p) => p.id === val);
-                return found ? (found.display_name || found.category_name) : "";
+                return found ? getCategoryDisplayName(found) : "";
               }}
               sx={{
                 height: "34px",
@@ -1014,7 +1018,7 @@ export default function PipelineView() {
                       gap: 2,
                     }}
                   >
-                    <span>{p.display_name || p.category_name}</span>
+                    <span>{getCategoryDisplayName(p)}</span>
                     {p.is_default && (
                       <Box
                         component="span"
@@ -1366,7 +1370,7 @@ export default function PipelineView() {
                   onClick={() =>
                     handleSelectStage({
                       id: "joined",
-                      name: terminals?.joined?.name || "Joined",
+                      name: getJoinedTerminalName(terminals),
                       tags: terminals?.joined?.tags || [],
                     })
                   }
@@ -1394,7 +1398,7 @@ export default function PipelineView() {
                       fontFamily: "Inter, sans-serif",
                     }}
                   >
-                    {terminals?.joined?.name || "Joined"}
+                    {getJoinedTerminalName(terminals)}
                   </Typography>
                 </Box>
 
@@ -1426,7 +1430,7 @@ export default function PipelineView() {
                   onClick={() =>
                     handleSelectStage({
                       id: "closed",
-                      name: terminals?.closed?.name || "Closed",
+                      name: getClosedTerminalName(terminals),
                       tags: terminals?.closed?.tags || [],
                     })
                   }
@@ -1454,7 +1458,7 @@ export default function PipelineView() {
                       fontFamily: "Inter, sans-serif",
                     }}
                   >
-                    {terminals?.closed?.name || "Closed"}
+                    {getClosedTerminalName(terminals)}
                   </Typography>
                 </Box>
               </Box>
@@ -1781,9 +1785,9 @@ export default function PipelineView() {
         tag={deleteTagModalState.tag}
         stageName={
           selectedStageId === "joined"
-            ? terminals?.joined?.name || "Won"
+            ? getJoinedTerminalName(terminals)
             : selectedStageId === "closed"
-            ? terminals?.closed?.name || "Loss"
+            ? getClosedTerminalName(terminals)
             : stages.find((s) => s.id === selectedStageId)?.name || editStageName || "Stage"
         }
         leadCount={deleteTagModalState.leadCount}

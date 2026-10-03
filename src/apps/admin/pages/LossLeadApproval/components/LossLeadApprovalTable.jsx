@@ -93,7 +93,7 @@ const LossLeadApprovalTable = ({
       minWidth: 160,
       renderCell: (row) => (
         <Typography sx={{ fontSize: "14px", fontWeight: 700, color: "#000000" }}>
-          {row?.effort_summary || row?.calls_count || "12 Calls Done"}
+          {row?.effort_summary || (row?.calls_count !== undefined && row?.calls_count !== null ? `${row.calls_count} Calls Done` : "-")}
         </Typography>
       ),
     },
@@ -141,7 +141,7 @@ const LossLeadApprovalTable = ({
           >
             {row?.last_contacted ||
               row?.last_call_date ||
-              "31 Jan, 10:55 AM"}
+              "-"}
           </Typography>
         </Box>
       ),
@@ -166,7 +166,7 @@ const LossLeadApprovalTable = ({
             {row?.inquiry_date ||
               row?.created_at ||
               row?.joining_date ||
-              "31 Jan, 10:55 AM"}
+              "-"}
           </Typography>
         </Box>
       ),
@@ -177,7 +177,7 @@ const LossLeadApprovalTable = ({
       minWidth: 130,
       renderCell: (row) => (
         <Typography sx={{ fontSize: "14px", fontWeight: 700, color: "#000000" }}>
-          {row?.lead_age || row?.age || "3 Months"}
+          {row?.lead_age || row?.age || "-"}
         </Typography>
       ),
     },
