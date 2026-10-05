@@ -557,7 +557,11 @@ def action_loss_lead_approval_admin(user=None, **data):
         prev_assigned_to = lead.assigned_to
 
         if action_type in ["approve", "accept", "confirm"]:
-            loss_stage = PipelineStage.objects.filter(id=4).first() or PipelineStage.objects.filter(Q(name__icontains="loss") | Q(name__icontains="lost")).first()
+            loss_stage = (
+                PipelineStage.objects.filter(stage_type='closed_lost').first() or
+                PipelineStage.objects.filter(Q(name__icontains="loss") | Q(name__icontains="lost")).first() or 
+                PipelineStage.objects.filter(id=5).first()
+            )
             if loss_stage:
                 lead.pipeline_stage = loss_stage
             lead.current_status = "Loss"

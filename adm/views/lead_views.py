@@ -317,15 +317,15 @@ class MarkAsWonAdmin(APIView):
 
         result = mark_as_won_admin(**serializer.validated_data)
 
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status"), "message": result.get("message")},
-            'status_code': 200
-        }
-        api_history_log(log_data)
+        # log_data = {
+        #     'user_id': request.user.id if request.user.id else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': serializer.validated_data,
+        #     'response_payload': {"status": result.get("status"), "message": result.get("message")},
+        #     'status_code': 200
+        # }
+        # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
     
@@ -350,25 +350,22 @@ class GetMarkAsLostInfoAdmin(APIView):
         lead_id = serializer.validated_data.get("lead_id")
         result = get_mark_as_lost_info_admin(lead_id)
 
-        log_data = {
-            'user_id': request.user.id if request.user.id else None,
-            'api_name': request.path,
-            'method': request.method,
-            'request_payload': serializer.validated_data,
-            'response_payload': {"status": result.get("status")},
-            'status_code': 200
-        }
-        api_history_log(log_data)
-
+        # log_data = {
+        #     'user_id': request.user.id if request.user.id else None,
+        #     'api_name': request.path,
+        #     'method': request.method,
+        #     'request_payload': serializer.validated_data,
+        #      'response_payload': {"status": result.get("status")},
+            # 'status_code': 200
+        # }
+        
         return Response(result, status=status.HTTP_200_OK)
 
 
 # @authentication_classes([])
 # @permission_classes([])
 class MarkAsLostAdmin(APIView):
-    """
-    Submit Mark as Lost Modal API.
-    """
+    
     class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=False, allow_null=True)
         id = serializers.IntegerField(required=False, allow_null=True)
@@ -410,9 +407,7 @@ class MarkAsLostAdmin(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class EditLeadAdmin(APIView):
-    """
-    Admin Leads Page -> Edit Lead Modal Save API.
-    """
+  
     class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=False, allow_null=True)
         id = serializers.IntegerField(required=False, allow_null=True)

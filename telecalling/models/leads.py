@@ -117,7 +117,7 @@ class CampaignName(SafeDeleteModel):
     # 🌟 4. Multiple Agents Link
     assigned_agents = models.ManyToManyField(
         settings.AUTH_USER_MODEL, 
-        through='adm.CampaignAssignedAgent', 
+        through='adm.campaign_assigned_agent', 
         related_name='assigned_campaigns', 
         blank=True
     )

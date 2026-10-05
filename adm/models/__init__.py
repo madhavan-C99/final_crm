@@ -10,7 +10,7 @@ from .user_role import UserRole
 from .user import User
 from .collection_query import CollectionQuery
 from .pipeline_category import PipelineCategory
-from .CampaignAssignedAgent import CampaignAssignedAgent
+from .campaign_assigned_agent import campaign_assigned_agent
 from .organization import Organization
 from .payment_mode import PaymentMode
 
@@ -30,7 +30,7 @@ __all__ = [
     'User',
     'CollectionQuery',
     'PipelineCategory',
-    'CampaignAssignedAgent',
+    'campaign_assigned_agent',
     'Organization',
     'PaymentMode',
     'PipelineStageTranferedData',

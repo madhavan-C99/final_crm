@@ -93,3 +93,113 @@ def update_loss_reason_admin_service(admin_user, data):
         }
     except Exception as e:
         raise APIException(str(e))
+
+
+def get_loss_reasons_by_pipeline_service(pipeline_id):
+    try:
+        if not pipeline_id:
+            raise APIException("pipeline_id is required")
+
+        reasons = LossReason.objects.filter(
+            pipeline_id=pipeline_id,
+            is_active=True
+        ).order_by('id')
+
+        data = [
+            {
+                "id": r.id,
+                "pipeline_id": r.pipeline_id,
+                "reason": r.name
+            }
+            for r in reasons
+        ]
+
+        return {
+            "status": "success",
+            "pipeline_id": int(pipeline_id),
+            "data": data
+        }
+    except Exception as e:
+        raise APIException(str(e))
+
+
+def add_loss_reason_by_pipeline_service(pipeline_id, reason_text, user=None):
+    try:
+        if not pipeline_id:
+            raise APIException("pipeline_id is required")
+        if not reason_text or not str(reason_text).strip():
+            raise APIException("reason is required")
+
+        reason_clean = str(reason_text).strip()
+        org = getattr(user, 'organization', None) if user else None
+        created_by_str = (user.get_full_name() or user.username) if user else "Admin"
+
+        existing = LossReason.objects.filter(
+            pipeline_id=pipeline_id,
+            name__iexact=reason_clean
+        ).first()
+
+        if existing:
+            if not existing.is_active:
+                existing.is_active = True
+                existing.updated_by = created_by_str
+                existing.save()
+                return {
+                    "status": "success",
+                    "message": f"Loss reason added successfully for pipeline {pipeline_id}",
+                    "data": {
+                        "id": existing.id,
+                        "pipeline_id": existing.pipeline_id,
+                        "reason": existing.name
+                    }
+                }
+            raise APIException(f"Loss reason '{reason_clean}' already exists for this pipeline")
+
+        obj = LossReason.objects.create(
+            name=reason_clean,
+            pipeline_id=pipeline_id,
+            is_active=True,
+            organization=org,
+            created_by=created_by_str,
+            updated_by=created_by_str
+        )
+
+        return {
+            "status": "success",
+            "message": f"Loss reason added successfully for pipeline {pipeline_id}",
+            "data": {
+                "id": obj.id,
+                "pipeline_id": obj.pipeline_id,
+                "reason": obj.name
+            }
+        }
+    except Exception as e:
+        raise APIException(str(e))
+
+
+def delete_loss_reason_by_pipeline_service(pipeline_id, reason_id=None, reason_text=None, user=None):
+    try:
+        if not pipeline_id:
+            raise APIException("pipeline_id is required")
+
+        qs = LossReason.objects.filter(pipeline_id=pipeline_id)
+
+        if reason_id:
+            obj = qs.filter(id=reason_id).first()
+        elif reason_text:
+            obj = qs.filter(name__iexact=str(reason_text).strip()).first()
+        else:
+            raise APIException("reason_id or reason is required")
+
+        if not obj:
+            raise APIException("Loss reason not found for the given pipeline")
+
+        user_id = getattr(user, 'id', None) if user else None
+        obj.save_delete(user_id=user_id)
+
+        return {
+            "status": "success",
+            "message": "Loss reason deleted successfully"
+        }
+    except Exception as e:
+        raise APIException(str(e))

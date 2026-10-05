@@ -1,101 +1,21 @@
 from django.urls import path
-from .views.team_views import (
-    FetchAllTeamsAdminApi, CreateTeamAdminApi, EditTeamAdminApi, DeleteTeamAdminApi,
-    # FetchTeamDropdownsAdminApi,
-)
-from .views.organization_views import (
-    CreateOrganizationProfileAdminApi, GetOrganizationProfileAdminApi, EditOrganizationProfileAdminApi,
-)
-from .views.lead_views import (
-    AddNewLeadAdmin, UploadLeadExcelAdmin, ExportAllLeadsAdmin, EditLeadAdmin, DeleteLeadAdmin,
-    FetchAllLeadsAdmin, FetchPipelineLeadsAdmin,
-    FetchLeadDetailsAdmin, GetMarkAsWonInfoAdmin, MarkAsWonAdmin,
-    GetMarkAsLostInfoAdmin, MarkAsLostAdmin, ReassignLeadAdmin,
-    # GetFilterDropdownsAdmin,
-)
-from .views.payment_views import (
-    FetchAllPendingPaymentsAdmin, ExportPendingPaymentsAdmin,
-    # GetPendingPaymentFilterDropdownsAdmin,
-)
-from .views.loss_lead_approval_views import (
-    FetchLossLeadApprovalRequestsAdmin, ActionLossLeadApprovalAdmin,
-    ExportLossLeadApprovalRequestsAdmin,
-)
-from .views.performance_views import (
-    FetchPerformanceOverviewAdmin, AssignUsersToTeamAdmin,
-    UpdateTelecallerTargetAdmin, FetchMonthlyTargetAdmin, SetMonthlyTargetAdmin,
-    FetchTargetDropdownsAdmin, ExportPerformanceOverviewAdmin,
-)
-from .views.permission_views import (
-    GetRolesAndPermissionsApi, UpdateRolePermissionApi,
-    AddPermAPIView, FetchPermsListAPIView, FetchRolesListAPIView, AssignRolePermAPIView,
-)
-from .views.query_views import GetSelectOptions, GetGenericList
-
-from .views.user_views import (
-    CreateToken,
-    RefreshTokenView,
-    FetchUserPermissionsView,
-    CreateUserView,
-    CreateRoleView,
-    FetchAllUsersAdminApi,
-    CreateUserAdminApi,
-    EditUserAdminApi,
-    ToggleUserStatusAdminApi,
-    ChangeUserPasswordAdminApi,
-    EnableDisableLeadAssignmentAdminApi,
-    TransferLeadsAdminApi,
-    DeleteUserAdminApi,
-    FetchUserCampaignsAdminApi,
-    FetchUserTransferCampaignsAdminApi,
-    FetchTransferTelecallersAdminApi,
-    TransferSingleCampaignLeadsAdminApi,
-    TransferAllCampaignsLeadsAdminApi,
-    FetchUserDeleteSummaryAdminApi,
-    # FetchUserDropdownsAdminApi,
-)
-from .views.loss_reason_views import (
-    FetchLossReasonsAdminApi,
-    CreateLossReasonAdminApi,
-    UpdateLossReasonAdminApi,
-)
-from .views.settings_pipeline_views import (
-    FetchPipelineCategoriesView,
-    CreatePipelineCategoryView,
-    UpdatePipelineStagesView,
-    CheckStageLeadsView,
-    TransferPipelineStageDataView,
-    CheckTagLeadsView,
-    TransferPipelineTagDataView,
-    FetchPipelineStageTranferedDataView,
-)
-
-# Poomani
-from .views.campaign_stats_views import EducationPipelineStats, CampaignCardsList
-from .views.enquiry_sheet_views import (
-    CampaignEnquirySheetView,
-    LeadSummaryReportView,
-    UpdateLeadSummaryView,
-    DeleteLeadSummaryView,
-    CallLogReportView,
-    DispositionLogView,
-    MoveLeadCampaignView,
-    AssignLeadTelecallerView,
-    ChangeLeadStatusView,
-)
-
-from .views.campaign_management_views import (
-    CreateCampaignView,
-    ToggleCampaignStatusView,
-    FetchCampaignDetailView,
-    UpdateCampaignDetailView,
-    # PipelineCategoriesView,
-    # CampaignManagersView,
-    # CampaignAgentsView,
-)
-
-from .views.add_new_lead_views import AddNewLeadView
-from .views.generic_engine_views import FetchLeadsApi, ExportDataApi, ActionLeadManagementApi, CreateLeadApi
+from .views.team_views import *
+from .views.organization_views import *
+from .views.lead_views import *
+from .views.payment_views import *
+from .views.loss_lead_approval_views import *
+from .views.performance_views import *
+from .views.permission_views import *
+from .views.query_views import *
+from .views.user_views import *
+from .views.loss_reason_views import *
+from .views.settings_pipeline_views import *
+from .views.campaign_stats_views import *
+from .views.enquiry_sheet_views import *
+from .views.campaign_management_views import *
+from .views.add_new_lead_views import *
+from .views.generic_engine_views import *
+from .views.lead_import_views import *
 
 urlpatterns = [
     
@@ -130,7 +50,7 @@ urlpatterns = [
     path('add_new_lead_admin', AddNewLeadAdmin.as_view()),
     path('upload_lead_excel_admin', UploadLeadExcelAdmin.as_view()),
     path('upload_leads_excel_admin', UploadLeadExcelAdmin.as_view()),
-    path('export_all_leads_admin', ExportAllLeadsAdmin.as_view()),
+    # path('export_all_leads_admin', ExportAllLeadsAdmin.as_view()), # 🔄 Replaced by /adm/export_data_api
     # path('get_filter_dropdowns_admin', GetFilterDropdownsAdmin.as_view()), # 🔄 Replaced by get_select_options
     path('fetch_pipeline_leads_admin', FetchPipelineLeadsAdmin.as_view()),
     path('fetch_lead_details_admin', FetchLeadDetailsAdmin.as_view()),
@@ -141,6 +61,8 @@ urlpatterns = [
     path('edit_lead_admin', EditLeadAdmin.as_view()),
     path('delete_lead_admin', DeleteLeadAdmin.as_view()),
     path('reassign_lead_admin', ReassignLeadAdmin.as_view()),
+    path('verify_lead_import', VerifyLeadImportView.as_view()),
+    path('submit_lead_import', SubmitLeadImportView.as_view()),
     
     # 📌 Pending Payments APIs
     path('fetch_all_pending_payments_admin', FetchAllPendingPaymentsAdmin.as_view()),
@@ -217,6 +139,9 @@ urlpatterns = [
     path('fetch_loss_reasons_admin', FetchLossReasonsAdminApi.as_view()),
     path('create_loss_reason_admin', CreateLossReasonAdminApi.as_view()),
     path('update_loss_reason_admin', UpdateLossReasonAdminApi.as_view()),
+    path('get_loss_reasons_admin', GetLossReasonsAdminApi.as_view()),
+    path('add_loss_reason_admin', AddLossReasonAdminApi.as_view()),
+    path('delete_loss_reason_admin', DeleteLossReasonAdminApi.as_view()),
 
     # 📌 Dedicated Settings Pipeline APIs
     path('settings_pipeline_categories', FetchPipelineCategoriesView.as_view()),

@@ -1282,14 +1282,10 @@ def get_mark_as_won_info_admin(lead_id):
             "payment_status": current_payment_status
         }
 
-        # Restrict lead_stages ONLY to ["Won"]
-        lead_stages = ["Won"]
-
         return {
             "status": "success",
             "data": {
-                "lead_info": lead_info,
-                "lead_stages": lead_stages
+                "lead_info": lead_info
             }
         }
     except Exception as e:
@@ -1529,9 +1525,11 @@ def mark_as_lost_admin(**data):
             raise APIException("Selected loss reason was not found for this organization.")
 
         # 1. Update Lead Pipeline Stage to LOST.
-        lost_stage = PipelineStage.objects.filter(id=4).first() or PipelineStage.objects.filter(
-            Q(name__icontains="loss") | Q(name__icontains="lost")
-        ).first()
+        lost_stage = (
+            PipelineStage.objects.filter(stage_type='closed_lost').first() or
+            PipelineStage.objects.filter(Q(name__icontains="loss") | Q(name__icontains="lost")).first() or
+            PipelineStage.objects.filter(id=5).first()
+        )
         if lost_stage:
             lead.pipeline_stage = lost_stage
             lead.save()

@@ -2,7 +2,7 @@ from django.db.models import Q
 from rest_framework.exceptions import APIException
 from django.utils import timezone
 from datetime import datetime, date
-from adm.models import CampaignAssignedAgent, PipelineCategory, User
+from adm.models import campaign_assigned_agent, PipelineCategory, User
 from telecalling.models.leads import Lead, CampaignName, LeadSource, PipelineStage
 
 
@@ -48,7 +48,7 @@ def fetch_add_lead_dropdowns(user, **data):
         if campaign:
             assigned_map = {
                 ca.agent_user_id: ca.is_active
-                for ca in CampaignAssignedAgent.objects.filter(campaign=campaign)
+                for ca in campaign_assigned_agent.objects.filter(campaign=campaign)
             }
 
         users_list = []
@@ -106,7 +106,7 @@ def create_new_lead(user, **data):
                 raise APIException("Selected telecaller has lead assignment disabled!")
 
         if assigned_to_id and campaign_id:
-            ca = CampaignAssignedAgent.objects.filter(campaign_id=campaign_id, agent_user_id=assigned_to_id).first()
+            ca = campaign_assigned_agent.objects.filter(campaign_id=campaign_id, agent_user_id=assigned_to_id).first()
             if ca and not ca.is_active:
                 raise APIException("Selected telecaller is currently paused/disabled for this campaign!")
 

@@ -20,7 +20,13 @@ def generate_excel_file(file_path, export_cols, raw_rows):
     headers = [str(column).replace("_", " ").title() for column in export_cols]
     worksheet.append(headers)
     for row in raw_rows:
-        worksheet.append([row.get(column, "") for column in export_cols])
+        clean_row = []
+        for column in export_cols:
+            val = row.get(column, "")
+            if hasattr(val, "tzinfo") and val.tzinfo is not None:
+                val = val.replace(tzinfo=None)
+            clean_row.append(val)
+        worksheet.append(clean_row)
 
     header_fill = PatternFill(fill_type="solid", fgColor="84C225")
     header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")

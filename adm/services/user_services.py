@@ -5,7 +5,7 @@ from rest_framework.exceptions import APIException, AuthenticationFailed
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import Q
-from adm.models import User, Role, UserRole, Team, CampaignAssignedAgent, Organization, AdminApprovedLossLead, AdminLeadReassignHistory
+from adm.models import User, Role, UserRole, Team, campaign_assigned_agent, Organization, AdminApprovedLossLead, AdminLeadReassignHistory
 from telecalling.models import Lead, CampaignName, CallDetails, FollowUp, PipelineStage, DeletedDataLog
 from adm.services.lead_services import get_user_display_name
 import math
@@ -1040,7 +1040,7 @@ def fetch_user_campaigns_admin(data, admin_user=None):
         lname = (target_user.last_name or "").strip()
         user_name = f"{fname} {lname}".strip() or target_user.username
 
-        ca_qs = CampaignAssignedAgent.objects.select_related('campaign', 'campaign__pipeline_category').filter(agent_user=target_user).order_by('campaign_id')
+        ca_qs = campaign_assigned_agent.objects.select_related('campaign', 'campaign__pipeline_category').filter(agent_user=target_user).order_by('campaign_id')
 
         seen_campaigns = set()
         campaigns_list = []

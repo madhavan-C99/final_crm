@@ -4,6 +4,13 @@ from .delete_base_model import SafeDeleteModel
 
 class LossReason(SafeDeleteModel):
     name = models.CharField(max_length=150)
+    pipeline = models.ForeignKey(
+        'adm.PipelineCategory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='loss_reasons'
+    )
     is_active = models.BooleanField(default=True)
     organization = models.ForeignKey(
         'adm.Organization',
