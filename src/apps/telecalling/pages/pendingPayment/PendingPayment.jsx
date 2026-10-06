@@ -81,8 +81,8 @@ const PendingPayments = () => {
             course_plan_id: selectedFilters.course_plan_id,
             payment_stage_id: selectedFilters.payment_stage_id,
             pending_amount_id: selectedFilters.pending_amount_id,
-            course_time_id: selectedFilters.course_time_id
-
+            course_time_id: selectedFilters.course_time_id,
+            pipeline_id: 0,
         };
     };
 

@@ -30,6 +30,9 @@ import {
   deleteSettingsPipelineStage,
   checkSettingsTagLeads,
   deleteSettingsTag,
+  getSettingsLossReasons,
+  addSettingsLossReason,
+  deleteSettingsLossReason,
 } from "@/apps/admin/services/settingsPipelineService";
 
 const EMPTY_TERMINALS = {
@@ -129,6 +132,104 @@ export default function PipelineView() {
     setSelectedStageId(stage.id);
     setEditStageName(stage.name || "");
     setEditStageTags(stage.tags || []);
+  };
+
+  const [lossReasonInput, setLossReasonInput] = useState("");
+  const [lossReasonObjectsList, setLossReasonObjectsList] = useState([]);
+
+  useEffect(() => {
+    if (selectedPipelineId) {
+      getSettingsLossReasons({ pipeline_id: selectedPipelineId })
+        .then((res) => {
+          const rawList = res?.data?.data || res?.data || [];
+          if (Array.isArray(rawList) && rawList.length > 0) {
+            setLossReasonObjectsList(rawList);
+            const textList = rawList
+              .map((item) => (typeof item === "string" ? item : item.reason || item.reason_name || ""))
+              .filter(Boolean);
+
+            setTerminals((prevT) => {
+              const closedTerminal = prevT.closed || { id: "closed", name: "Loss", tags: [], reasons: [] };
+              return {
+                ...prevT,
+                closed: {
+                  ...closedTerminal,
+                  reasons: textList,
+                  loss_reasons: textList,
+                },
+              };
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedPipelineId]);
+
+  const handleAddLossReason = async () => {
+    const trimmed = lossReasonInput.trim();
+    if (!trimmed || !selectedPipelineId) return;
+
+    setLossReasonInput("");
+
+    try {
+      const res = await addSettingsLossReason({
+        pipeline_id: selectedPipelineId,
+        reason: trimmed,
+      });
+
+      const addedObj = res?.data?.data || res?.data?.result || { id: Date.now(), pipeline_id: selectedPipelineId, reason: trimmed };
+
+      setLossReasonObjectsList((prev) => [...prev, addedObj]);
+      setTerminals((prevT) => {
+        const closedTerminal = prevT.closed || { id: "closed", name: "Loss", tags: [], reasons: [] };
+        const currentReasons = Array.isArray(closedTerminal.reasons) ? closedTerminal.reasons : [];
+        if (currentReasons.includes(trimmed)) return prevT;
+        const nextReasons = [...currentReasons, trimmed];
+        return {
+          ...prevT,
+          closed: {
+            ...closedTerminal,
+            reasons: nextReasons,
+            loss_reasons: nextReasons,
+          },
+        };
+      });
+    } catch (err) {
+      console.warn("addSettingsLossReason API notice:", err?.message || err);
+    }
+  };
+
+  const handleDeleteLossReason = async (reasonToDelete) => {
+    const reasonText = typeof reasonToDelete === "string" ? reasonToDelete : reasonToDelete?.reason || "";
+    const foundObj = lossReasonObjectsList.find(
+      (item) => (item.reason || item.reason_name || item) === reasonText || item.id === reasonToDelete?.id
+    );
+    const reasonId = foundObj?.id || reasonToDelete?.id || reasonToDelete?.reason_id || 0;
+
+    setLossReasonObjectsList((prev) => prev.filter((item) => (item.reason || item) !== reasonText && item.id !== reasonId));
+    setTerminals((prevT) => {
+      const closedTerminal = prevT.closed || { id: "closed", name: "Loss", tags: [], reasons: [] };
+      const currentReasons = Array.isArray(closedTerminal.reasons) ? closedTerminal.reasons : [];
+      const nextReasons = currentReasons.filter((r) => r !== reasonText);
+      return {
+        ...prevT,
+        closed: {
+          ...closedTerminal,
+          reasons: nextReasons,
+          loss_reasons: nextReasons,
+        },
+      };
+    });
+
+    try {
+      await deleteSettingsLossReason({
+        pipeline_id: selectedPipelineId,
+        reason_id: reasonId,
+        reason: reasonText,
+      });
+    } catch (err) {
+      console.warn("deleteSettingsLossReason API notice:", err?.message || err);
+    }
   };
 
   // 1. Fetch Pipelines dynamically from DB
@@ -498,8 +599,14 @@ export default function PipelineView() {
 
   // Delete a stage from flow - checks lead count and opens DeleteStageModal
   const handleDeleteStage = async (stage, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     if (!stage) return;
+
+    // Prevent deletion of New Lead (first stage) or terminals (Won / Loss)
+    const firstStageId = stages[0]?.id;
+    if (stage.id === "joined" || stage.id === "closed" || stage.id === firstStageId || stage.isFirst) {
+      return;
+    }
 
     // If local temporary stage (unsaved)
     if (String(stage.id).startsWith("temp_")) {
@@ -1224,8 +1331,8 @@ export default function PipelineView() {
                         {stage.name}
                       </Typography>
 
-                      {/* Delete icon (shows on hover in edit mode for all stages including New Lead) */}
-                      {isEditMode && (
+                      {/* Delete icon (shows on hover in edit mode for non-first stages) */}
+                      {isEditMode && !isFirstStage && (
                         <Tooltip title="Delete Stage">
                           <IconButton
                             className="stage-delete-btn"
@@ -1556,172 +1663,344 @@ export default function PipelineView() {
                 />
               </Box>
 
-              {/* Tags Field */}
-              <Box>
-                <Typography
-                  sx={{
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "#475569",
-                    mb: 1,
-                    fontFamily: "Inter, sans-serif",
-                  }}
-                >
-                  Tags:
-                </Typography>
+              {/* Loss Reasons Section - Only for Loss / Closed Terminal */}
+              {selectedStageId === "closed" && (
+                <Box sx={{ mt: 2.5 }}>
+                  <Typography
+                    sx={{
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      color: "#475569",
+                      mb: 1,
+                      fontFamily: "Inter, sans-serif",
+                    }}
+                  >
+                    Loss Reasons:
+                  </Typography>
 
-                <Box
-                  sx={{
-                    backgroundColor: "#F8FAFC",
-                    border: "1px solid #F1F5F9",
-                    borderRadius: "8px",
-                    p: 1.5,
-                    display: "flex",
-                    gap: 1.2,
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                  }}
-                >
-                  {editStageTags.length === 0 && (
-                    <Typography
-                      sx={{
-                        fontSize: "13px",
-                        color: "#94A3B8",
-                        fontFamily: "Inter, sans-serif",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      {isEditMode ? "No tags (click Add Tags below)" : "No tags configured"}
-                    </Typography>
-                  )}
+                  <Box
+                    sx={{
+                      backgroundColor: "#F8FAFC",
+                      border: "1px solid #F1F5F9",
+                      borderRadius: "8px",
+                      p: 1.5,
+                    }}
+                  >
+                    {/* List of Reasons */}
+                    {(() => {
+                      const currentClosedTerminal = terminals?.closed || {};
+                      const lossReasons = Array.isArray(currentClosedTerminal.reasons)
+                        ? currentClosedTerminal.reasons
+                        : Array.isArray(currentClosedTerminal.loss_reasons)
+                        ? currentClosedTerminal.loss_reasons
+                        : [];
 
-                  {editStageTags.map((tag) => (
-                    <Box
-                      key={tag.name}
-                      sx={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 0.5,
-                        px: 1.8,
-                        py: 0.4,
-                        borderRadius: "16px",
-                        backgroundColor: "#FFFFFF",
-                        border: `1.5px solid ${tag.borderColor}`,
-                        color: tag.textColor,
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        fontFamily: "Inter, sans-serif",
-                        lineHeight: 1.2,
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <span
-                        onClick={() => {
-                          if (isEditMode) handleOpenEditTag(tag);
-                        }}
-                        style={{
-                          cursor: isEditMode ? "pointer" : "default",
-                          userSelect: "none",
-                        }}
-                      >
-                        {tag.name}
-                      </span>
-                      {isEditMode && (
+                      return (
                         <>
-                          <Tooltip title="Edit Tag">
-                            <Box
-                              component="span"
-                              onClick={() => handleOpenEditTag(tag)}
+                          {lossReasons.length === 0 ? (
+                            <Typography
                               sx={{
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                ml: 0.4,
-                                opacity: 0.55,
-                                "&:hover": {
-                                  opacity: 1,
-                                  color: "#84CC16",
+                                fontSize: "13px",
+                                color: "#94A3B8",
+                                fontFamily: "Inter, sans-serif",
+                                fontStyle: "italic",
+                                mb: isEditMode ? 1.5 : 0,
+                              }}
+                            >
+                              {isEditMode ? "No loss reasons added yet (add reasons below)." : "No loss reasons configured."}
+                            </Typography>
+                          ) : (
+                            <Box
+                              sx={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 1,
+                                mb: isEditMode ? 1.5 : 0,
+                                maxHeight: "135px",
+                                overflowY: "auto",
+                                pr: 0.5,
+                                "&::-webkit-scrollbar": {
+                                  width: "5px",
+                                },
+                                "&::-webkit-scrollbar-thumb": {
+                                  backgroundColor: "#CBD5E1",
+                                  borderRadius: "4px",
+                                },
+                                "&::-webkit-scrollbar-track": {
+                                  backgroundColor: "transparent",
                                 },
                               }}
                             >
-                              <EditOutlinedIcon sx={{ fontSize: 13 }} />
-                            </Box>
-                          </Tooltip>
+                              {lossReasons.map((reasonStr, idx) => (
+                                <Box
+                                  key={reasonStr + idx}
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    px: 1.5,
+                                    py: 0.8,
+                                    borderRadius: "6px",
+                                    backgroundColor: "#FFFFFF",
+                                    border: "1px solid #E2E8F0",
+                                  }}
+                                >
+                                  <Typography
+                                    sx={{
+                                      fontSize: "13px",
+                                      fontWeight: 500,
+                                      color: "#1E293B",
+                                      fontFamily: "Inter, sans-serif",
+                                    }}
+                                  >
+                                    {reasonStr}
+                                  </Typography>
 
-                          <Tooltip title="Delete Tag">
-                            <Box
-                              component="span"
-                              onClick={() => handleRequestDeleteTag(tag)}
-                              sx={{
-                                cursor: "pointer",
-                                fontSize: "14px",
-                                fontWeight: 700,
-                                ml: 0.2,
-                                opacity: 0.55,
-                                "&:hover": {
-                                  opacity: 1,
-                                  color: "#EF4444",
-                                },
-                              }}
-                            >
-                              ×
+                                  {isEditMode && (
+                                    <Tooltip title="Delete Reason">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDeleteLossReason(reasonStr)}
+                                        sx={{
+                                          color: "#EF4444",
+                                          p: 0.3,
+                                          "&:hover": { backgroundColor: "#FEE2E2" },
+                                        }}
+                                      >
+                                        <DeleteOutlinedIcon sx={{ fontSize: 16 }} />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+                                </Box>
+                              ))}
                             </Box>
-                          </Tooltip>
+                          )}
+
+                          {/* Add Reason controls (only in Edit Mode) */}
+                          {isEditMode && (
+                            <Box sx={{ display: "flex", gap: 1, mt: lossReasons.length > 0 ? 1 : 0 }}>
+                              <TextField
+                                size="small"
+                                fullWidth
+                                placeholder="Enter loss reason"
+                                value={lossReasonInput}
+                                onChange={(e) => setLossReasonInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleAddLossReason();
+                                  }
+                                }}
+                                sx={{
+                                  "& .MuiOutlinedInput-root": {
+                                    backgroundColor: "#FFFFFF",
+                                    borderRadius: "6px",
+                                    fontSize: "13px",
+                                  },
+                                }}
+                              />
+                              <Button
+                                variant="contained"
+                                onClick={handleAddLossReason}
+                                sx={{
+                                  backgroundColor: "#84CC16",
+                                  color: "#FFFFFF",
+                                  textTransform: "none",
+                                  fontWeight: 600,
+                                  fontSize: "13px",
+                                  px: 2,
+                                  borderRadius: "6px",
+                                  whiteSpace: "nowrap",
+                                  boxShadow: "none",
+                                  "&:hover": {
+                                    backgroundColor: "#65A30D",
+                                    boxShadow: "none",
+                                  },
+                                }}
+                              >
+                                + Add Reason
+                              </Button>
+                            </Box>
+                          )}
                         </>
-                      )}
-                    </Box>
-                  ))}
+                      );
+                    })()}
+                  </Box>
+                </Box>
+              )}
 
-                  {/* + Add Tags Button (only in edit mode) */}
-                  {isEditMode && (
-                    <Box
-                      onClick={() => {
-                        setEditingTag(null);
-                        setIsAddTagOpen(true);
-                      }}
-                      sx={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 0.6,
-                        cursor: "pointer",
-                        px: 1,
-                        py: 0.4,
-                        "&:hover": {
-                          opacity: 0.8,
-                        },
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: "16px",
-                          height: "16px",
-                          borderRadius: "50%",
-                          backgroundColor: "#84CC16",
-                          color: "#FFFFFF",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "12px",
-                          fontWeight: 700,
-                        }}
-                      >
-                        +
-                      </Box>
+              {/* Tags Field (only for middle custom stages, hidden for New Lead, Won, Loss) */}
+              {!(
+                selectedStageId === "joined" ||
+                selectedStageId === "closed" ||
+                selectedStageId === stages[0]?.id ||
+                Boolean(stages.find((s) => s.id === selectedStageId)?.isFirst)
+              ) && (
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      color: "#475569",
+                      mb: 1,
+                      fontFamily: "Inter, sans-serif",
+                    }}
+                  >
+                    Tags:
+                  </Typography>
+
+                  <Box
+                    sx={{
+                      backgroundColor: "#F8FAFC",
+                      border: "1px solid #F1F5F9",
+                      borderRadius: "8px",
+                      p: 1.5,
+                      display: "flex",
+                      gap: 1.2,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
+                    {editStageTags.length === 0 && (
                       <Typography
                         sx={{
-                          fontSize: "12px",
-                          fontWeight: 500,
-                          color: "#64748B",
+                          fontSize: "13px",
+                          color: "#94A3B8",
                           fontFamily: "Inter, sans-serif",
+                          fontStyle: "italic",
                         }}
                       >
-                        Add Tags
+                        {isEditMode ? "No tags (click Add Tags below)" : "No tags configured"}
                       </Typography>
-                    </Box>
-                  )}
-                </Box>
+                    )}
 
-              </Box>
+                    {editStageTags.map((tag) => (
+                      <Box
+                        key={tag.name}
+                        sx={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                          px: 1.8,
+                          py: 0.4,
+                          borderRadius: "16px",
+                          backgroundColor: "#FFFFFF",
+                          border: `1.5px solid ${tag.borderColor}`,
+                          color: tag.textColor,
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          fontFamily: "Inter, sans-serif",
+                          lineHeight: 1.2,
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <span
+                          onClick={() => {
+                            if (isEditMode) handleOpenEditTag(tag);
+                          }}
+                          style={{
+                            cursor: isEditMode ? "pointer" : "default",
+                            userSelect: "none",
+                          }}
+                        >
+                          {tag.name}
+                        </span>
+                        {isEditMode && (
+                          <>
+                            <Tooltip title="Edit Tag">
+                              <Box
+                                component="span"
+                                onClick={() => handleOpenEditTag(tag)}
+                                sx={{
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  ml: 0.4,
+                                  opacity: 0.55,
+                                  "&:hover": {
+                                    opacity: 1,
+                                    color: "#84CC16",
+                                  },
+                                }}
+                              >
+                                <EditOutlinedIcon sx={{ fontSize: 13 }} />
+                              </Box>
+                            </Tooltip>
+
+                            <Tooltip title="Delete Tag">
+                              <Box
+                                component="span"
+                                onClick={() => handleRequestDeleteTag(tag)}
+                                sx={{
+                                  cursor: "pointer",
+                                  fontSize: "14px",
+                                  fontWeight: 700,
+                                  ml: 0.2,
+                                  opacity: 0.55,
+                                  "&:hover": {
+                                    opacity: 1,
+                                    color: "#EF4444",
+                                  },
+                                }}
+                              >
+                                ×
+                              </Box>
+                            </Tooltip>
+                          </>
+                        )}
+                      </Box>
+                    ))}
+
+                    {/* + Add Tags Button (only in edit mode) */}
+                    {isEditMode && (
+                      <Box
+                        onClick={() => {
+                          setEditingTag(null);
+                          setIsAddTagOpen(true);
+                        }}
+                        sx={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 0.6,
+                          cursor: "pointer",
+                          px: 1,
+                          py: 0.4,
+                          "&:hover": {
+                            opacity: 0.8,
+                          },
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: "16px",
+                            height: "16px",
+                            borderRadius: "50%",
+                            backgroundColor: "#84CC16",
+                            color: "#FFFFFF",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                          }}
+                        >
+                          +
+                        </Box>
+                        <Typography
+                          sx={{
+                            fontSize: "12px",
+                            fontWeight: 500,
+                            color: "#64748B",
+                            fontFamily: "Inter, sans-serif",
+                          }}
+                        >
+                          Add Tags
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+              )}
             </Paper>
           </Box>
         </Box>

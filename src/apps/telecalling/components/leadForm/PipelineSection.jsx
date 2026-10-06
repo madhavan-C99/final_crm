@@ -29,7 +29,7 @@ const PipelineSection = ({
     const [priorityOptions, setPriorityOptions] = useState([]);
     useEffect(() => {
         getPipelineStageOptions();
-    }, []);
+    }, [leadData?.pipeline_category_id]);
 
     useEffect(() => {
         if (formData?.pipeline_stage_id) {
@@ -180,9 +180,14 @@ const PipelineSection = ({
     };
     const getPipelineStageOptions = async () => {
         try {
+            const activePipelineId =
+                leadData?.pipeline_category_id ||
+                sessionStorage.getItem("telecalling_pipeline_selected_pipeline") ||
+                "";
+
             const payload = {
                 dropdown_category: "pipeline_stage",
-                filter_id: "",
+                filter_id: activePipelineId,
             };
 
             const response = await getDropdownOptions(payload);

@@ -28,9 +28,8 @@ const PendingPaymentStats = () => {
         }
 
         try {
-
             const response =
-                await getPendingPaymentStats();
+                await getPendingPaymentStats({});
 
             console.log("PEND_PAY_TILE", response);
 

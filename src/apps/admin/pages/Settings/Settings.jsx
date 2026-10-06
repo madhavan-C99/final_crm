@@ -16,6 +16,7 @@ import PipelineView from "./Pipeline/PipelineView";
 import TeamsView from "./Teams/TeamsView";
 import MonthlyTargetView from "./MonthlyTarget/MonthlyTargetView";
 import RolesAndPermissionsView from "./RolesAndPermissions/RolesAndPermissionsView";
+import CourseManagementView from "./CourseManagement/CourseManagementView";
 import {
   fetchUsersAdmin,
   createUserAdmin,
@@ -461,6 +462,9 @@ export default function Settings() {
 
       {/* Render Monthly Target View when activeTab === "target" */}
       {activeTab === "target" && <MonthlyTargetView />}
+
+      {/* Render Course Management View when activeTab === "course_mgmt" */}
+      {activeTab === "course_mgmt" && <CourseManagementView />}
     </Box>
   );
 }

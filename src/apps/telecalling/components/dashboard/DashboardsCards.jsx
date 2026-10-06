@@ -71,10 +71,7 @@ export const DashboardsCards = () => {
     }, [filterType]);
 
     useEffect(() => {
-
-        fetchDashboardCards(filterType)
-
-
+        fetchDashboardCards(filterType, fromDate, toDate);
     }, []);
 
     // FETCH FUNCTION
@@ -87,9 +84,7 @@ export const DashboardsCards = () => {
         ) => {
 
             try {
-
                 const payload = {
-
                     filter_type: type,
                 };
 

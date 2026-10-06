@@ -250,9 +250,9 @@ export default function PendingPayment() {
 
     const pendingPaymentExportColumns = [
         { id: "s_no", label: "S.No" },
-        { id: "name", label: "Lead Name" },
-        { id: "contact", label: "Contact No" },
-        { id: "assigned_to", label: "Assigned To" },
+        { id: "name", label: "Name" },
+        { id: "contact", label: "Contact" },
+        { id: "assigned_to", label: "Assign To" },
         { id: "campaign", label: "Campaign" },
         { id: "course_plan", label: "Course Plan" },
         { id: "course", label: "Course" },
@@ -262,10 +262,11 @@ export default function PendingPayment() {
         { id: "pending_amount", label: "Pending Amount" },
         { id: "status", label: "Status" },
         { id: "next_followup", label: "Next Follow up" },
+        { id: "last_conversation", label: "Last Conversation" },
     ];
 
     // EXPORT HANDLER (BACKEND EXPORT ONLY)
-    const handleExport = async () => {
+    const handleExport = async (selectedKeys) => {
         try {
             setExportLoading(true);
             const dates = getComputedDates(filterType, fromDate, toDate);
@@ -285,6 +286,10 @@ export default function PendingPayment() {
                 pending_amount: selectedFilters.pending_amount !== "All" ? selectedFilters.pending_amount : "",
                 page_size: "all",
             };
+
+            if (selectedKeys && Array.isArray(selectedKeys) && selectedKeys.length > 0) {
+                payload.columns = selectedKeys;
+            }
 
             const response = await exportAdminPendingPaymentsFile(payload);
 

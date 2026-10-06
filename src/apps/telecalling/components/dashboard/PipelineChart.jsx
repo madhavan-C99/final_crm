@@ -28,9 +28,10 @@ function PipelineChart() {
         }
 
         try {
+            const payload = {};
 
             const response =
-                await getPipelineData();
+                await getPipelineData(payload);
 
             const funnelData = response.data.data.funnel || [];
 

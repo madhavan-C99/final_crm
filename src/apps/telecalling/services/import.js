@@ -23,7 +23,7 @@ import api from "@/shared/services/axios";
 export const confirmLeadImport = async (leads) => {
  
   return api.post(
-    "adm/lead_upload_excel",
+    "telecalling/lead_upload_excel",
     { leads },
     {
       headers: {
@@ -40,7 +40,7 @@ export const previewLeadsFile = async (file) => {
   formData.append("file", file);
  
   return api.post(
-    "adm/lead_preview_excel", 
+    "telecalling/lead_preview_excel", 
     formData, 
     {
     headers: { "Content-Type": "multipart/form-data" },

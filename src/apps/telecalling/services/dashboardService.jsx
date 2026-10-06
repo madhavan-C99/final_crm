@@ -7,3 +7,11 @@ export const getDashboardCards = async (payload) => {
         payload
     );
 };
+
+export const getActivePipelines = async () => {
+
+    return api.post(
+        "/telecalling/get_active_pipelines",
+        {}
+    );
+};

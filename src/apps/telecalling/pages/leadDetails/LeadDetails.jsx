@@ -110,6 +110,16 @@ const LeadDetailsPage = () => {
 
     }, [id]);
 
+    useEffect(() => {
+        if (
+            activeTab === "lead_view" ||
+            activeTab === "lead_form" ||
+            activeTab === "call_details"
+        ) {
+            getLeadDetails();
+        }
+    }, [activeTab]);
+
     const getLeadDetails = async () => {
         setLoading(true);
 
@@ -220,8 +230,8 @@ const LeadDetailsPage = () => {
                 lead_source: formData?.lead_source ?? leadData?.lead_source ?? null,
                 campaign_name_id: formData?.campaign_name_id ?? leadData?.campaign_name_id ?? null,
                 campaign_name: formData?.campaign_name ?? leadData?.campaign_name ?? null,
-                course_plan_id: formData?.course_plan_id ?? leadData?.course_plan_id ?? 3,
-                course_plan: formData?.course_plan ?? leadData?.course_plan ?? "General",
+                course_plan_id: formData?.course_plan_id ?? leadData?.course_plan_id ?? null,
+                course_plan: formData?.course_plan ?? leadData?.course_plan ?? null,
                 course_name_id: formData?.course_name_id ?? leadData?.course_name_id ?? null,
                 course_name: formData?.course_name ?? leadData?.course_name ?? null,
                 course_fees: formData?.course_fees ?? null,

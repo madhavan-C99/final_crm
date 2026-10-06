@@ -219,7 +219,7 @@ const LeadTable = ({
       minWidth: 140,
       renderCell: (row) => (
         <Typography sx={{ fontSize: "14px", color: "#374151" }}>
-          {row.pipeline || row.pipeline_name || row.pipeline_stage || "Education"}
+          {row.pipeline || row.pipeline_name || row.pipeline_stage || row.category_name || "-"}
         </Typography>
       ),
     },

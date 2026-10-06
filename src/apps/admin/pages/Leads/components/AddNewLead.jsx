@@ -556,7 +556,7 @@ const AddNewLeadModal = ({
 
             {/* Telecallers / User Dropdown */}
             <Box>
-              <Typography sx={labelStyle}>User*</Typography>
+              <Typography sx={labelStyle}>Assign To*</Typography>
               <TextField
                 select
                 fullWidth

@@ -44,6 +44,51 @@ export default function CreatePipelineModal({ open, onClose, onCreate }) {
   const [editStageTags, setEditStageTags] = useState([]);
   const [isAddTagOpen, setIsAddTagOpen] = useState(false);
   const [editingTag, setEditingTag] = useState(null);
+  const [lossReasonInput, setLossReasonInput] = useState("");
+
+  const handleAddLossReason = () => {
+    const trimmed = lossReasonInput.trim();
+    if (!trimmed) return;
+    setTerminals((prevT) => {
+      const closedTerminal = prevT.closed || { id: "closed", name: "Loss", tags: [], reasons: [] };
+      const currentReasons = Array.isArray(closedTerminal.reasons)
+        ? closedTerminal.reasons
+        : Array.isArray(closedTerminal.loss_reasons)
+        ? closedTerminal.loss_reasons
+        : [];
+      if (currentReasons.includes(trimmed)) return prevT;
+      const nextReasons = [...currentReasons, trimmed];
+      return {
+        ...prevT,
+        closed: {
+          ...closedTerminal,
+          reasons: nextReasons,
+          loss_reasons: nextReasons,
+        },
+      };
+    });
+    setLossReasonInput("");
+  };
+
+  const handleDeleteLossReason = (reasonToDelete) => {
+    setTerminals((prevT) => {
+      const closedTerminal = prevT.closed || { id: "closed", name: "Loss", tags: [], reasons: [] };
+      const currentReasons = Array.isArray(closedTerminal.reasons)
+        ? closedTerminal.reasons
+        : Array.isArray(closedTerminal.loss_reasons)
+        ? closedTerminal.loss_reasons
+        : [];
+      const nextReasons = currentReasons.filter((r) => r !== reasonToDelete);
+      return {
+        ...prevT,
+        closed: {
+          ...closedTerminal,
+          reasons: nextReasons,
+          loss_reasons: nextReasons,
+        },
+      };
+    });
+  };
 
   // Reset to pristine clean state whenever modal opens
   useEffect(() => {
@@ -62,12 +107,13 @@ export default function CreatePipelineModal({ open, onClose, onCreate }) {
       setStages([initialStage]);
       setTerminals({
         joined: { id: "joined", name: "Won", tags: [] },
-        closed: { id: "closed", name: "Loss", tags: [] },
+        closed: { id: "closed", name: "Loss", tags: [], reasons: [] },
       });
 
       setSelectedStageId(initialStage.id);
       setEditStageName("New Lead");
       setEditStageTags([]);
+      setLossReasonInput("");
     }
   }, [open]);
 
@@ -109,7 +155,11 @@ export default function CreatePipelineModal({ open, onClose, onCreate }) {
 
   // Delete a stage
   const handleDeleteStage = (stageId, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
+    const targetStage = stages.find((s) => s.id === stageId);
+    if (stageId === "joined" || stageId === "closed" || targetStage?.isFirst || stages[0]?.id === stageId) {
+      return;
+    }
     const nextStages = stages.filter((s) => s.id !== stageId);
     setStages(nextStages);
 
@@ -515,28 +565,30 @@ export default function CreatePipelineModal({ open, onClose, onCreate }) {
                         {stage.name}
                       </Typography>
 
-                      {/* Delete Icon on hover for all stages including New Lead */}
-                      <Tooltip title="Delete Stage">
-                        <IconButton
-                          className="stage-delete-btn"
-                          size="small"
-                          onClick={(e) => handleDeleteStage(stage.id, e)}
-                          sx={{
-                            position: "absolute",
-                            right: 12,
-                            color: "#EF4444",
-                            p: 0.3,
-                            opacity: 0.7,
-                            transition: "opacity 0.2s ease",
-                            "&:hover": {
-                              backgroundColor: "#FEE2E2",
-                              opacity: 1,
-                            },
-                          }}
-                        >
-                          <DeleteOutlinedIcon sx={{ fontSize: 17 }} />
-                        </IconButton>
-                      </Tooltip>
+                      {/* Delete Icon on hover for non-first stages */}
+                      {!isFirstStage && (
+                        <Tooltip title="Delete Stage">
+                          <IconButton
+                            className="stage-delete-btn"
+                            size="small"
+                            onClick={(e) => handleDeleteStage(stage.id, e)}
+                            sx={{
+                              position: "absolute",
+                              right: 12,
+                              color: "#EF4444",
+                              p: 0.3,
+                              opacity: 0.7,
+                              transition: "opacity 0.2s ease",
+                              "&:hover": {
+                                backgroundColor: "#FEE2E2",
+                                opacity: 1,
+                              },
+                            }}
+                          >
+                            <DeleteOutlinedIcon sx={{ fontSize: 17 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </Box>
 
                     {/* Connector Arrow Line (No '+' button in create modal) */}
@@ -810,97 +862,266 @@ export default function CreatePipelineModal({ open, onClose, onCreate }) {
               />
             </Box>
 
-            {/* Tags Section */}
-            <Box>
-              <Typography
-                sx={{
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  color: "#475569",
-                  mb: 0.8,
-                  fontFamily: "Inter, sans-serif",
-                }}
-              >
-                Tags (Sub-status):
-              </Typography>
+            {/* Loss Reasons Section - Only for Loss / Closed Terminal */}
+            {selectedStageId === "closed" && (
+              <Box sx={{ mt: 2.5 }}>
+                <Typography
+                  sx={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: "#475569",
+                    mb: 1,
+                    fontFamily: "Inter, sans-serif",
+                  }}
+                >
+                  Loss Reasons:
+                </Typography>
 
-              {/* Tag Pills List */}
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
-                {editStageTags.map((tag, idx) => (
-                  <Box
-                    key={tag.name || idx}
-                    sx={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 0.8,
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: "6px",
-                      border: `1.5px solid ${tag.borderColor || "#3B82F6"}`,
-                      backgroundColor: tag.bgColor || "rgba(59, 130, 246, 0.1)",
-                      color: tag.textColor || tag.borderColor || "#1E40AF",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      fontFamily: "Inter, sans-serif",
-                    }}
-                  >
-                    <span>{tag.name}</span>
-                    <Tooltip title="Edit Tag">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenEditTag(tag)}
-                        sx={{
-                          p: 0.2,
-                          color: tag.textColor || tag.borderColor || "#1E40AF",
-                          "&:hover": { backgroundColor: "rgba(0,0,0,0.06)" },
-                        }}
-                      >
-                        <EditOutlinedIcon sx={{ fontSize: 13 }} />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete Tag">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleRemoveTag(tag.name)}
-                        sx={{
-                          p: 0.2,
-                          color: "#EF4444",
-                          "&:hover": { backgroundColor: "#FEE2E2" },
-                        }}
-                      >
-                        <CloseIcon sx={{ fontSize: 13 }} />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                ))}
+                <Box
+                  sx={{
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid #F1F5F9",
+                    borderRadius: "8px",
+                    p: 1.5,
+                  }}
+                >
+                  {/* List of Reasons */}
+                  {(() => {
+                    const currentClosedTerminal = terminals?.closed || {};
+                    const lossReasons = Array.isArray(currentClosedTerminal.reasons)
+                      ? currentClosedTerminal.reasons
+                      : Array.isArray(currentClosedTerminal.loss_reasons)
+                      ? currentClosedTerminal.loss_reasons
+                      : [];
+
+                    return (
+                      <>
+                        {lossReasons.length === 0 ? (
+                          <Typography
+                            sx={{
+                              fontSize: "13px",
+                              color: "#94A3B8",
+                              fontFamily: "Inter, sans-serif",
+                              fontStyle: "italic",
+                              mb: 1.5,
+                            }}
+                          >
+                            No loss reasons added yet (add reasons below).
+                          </Typography>
+                        ) : (
+                          <Box
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 1,
+                              mb: 1.5,
+                              maxHeight: "135px",
+                              overflowY: "auto",
+                              pr: 0.5,
+                              "&::-webkit-scrollbar": {
+                                width: "5px",
+                              },
+                              "&::-webkit-scrollbar-thumb": {
+                                backgroundColor: "#CBD5E1",
+                                borderRadius: "4px",
+                              },
+                              "&::-webkit-scrollbar-track": {
+                                backgroundColor: "transparent",
+                              },
+                            }}
+                          >
+                            {lossReasons.map((reasonStr, idx) => (
+                              <Box
+                                key={reasonStr + idx}
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  px: 1.5,
+                                  py: 0.8,
+                                  borderRadius: "6px",
+                                  backgroundColor: "#FFFFFF",
+                                  border: "1px solid #E2E8F0",
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: "13px",
+                                    fontWeight: 500,
+                                    color: "#1E293B",
+                                    fontFamily: "Inter, sans-serif",
+                                  }}
+                                >
+                                  {reasonStr}
+                                </Typography>
+
+                                <Tooltip title="Delete Reason">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDeleteLossReason(reasonStr)}
+                                    sx={{
+                                      color: "#EF4444",
+                                      p: 0.3,
+                                      "&:hover": { backgroundColor: "#FEE2E2" },
+                                    }}
+                                  >
+                                    <DeleteOutlinedIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            ))}
+                          </Box>
+                        )}
+
+                        {/* Add Reason controls */}
+                        <Box sx={{ display: "flex", gap: 1, mt: lossReasons.length > 0 ? 1 : 0 }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            placeholder="Enter loss reason"
+                            value={lossReasonInput}
+                            onChange={(e) => setLossReasonInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddLossReason();
+                              }
+                            }}
+                            sx={{
+                              "& .MuiOutlinedInput-root": {
+                                backgroundColor: "#FFFFFF",
+                                borderRadius: "6px",
+                                fontSize: "13px",
+                              },
+                            }}
+                          />
+                          <Button
+                            variant="contained"
+                            onClick={handleAddLossReason}
+                            sx={{
+                              backgroundColor: "#84CC16",
+                              color: "#FFFFFF",
+                              textTransform: "none",
+                              fontWeight: 600,
+                              fontSize: "13px",
+                              px: 2,
+                              borderRadius: "6px",
+                              whiteSpace: "nowrap",
+                              boxShadow: "none",
+                              "&:hover": {
+                                backgroundColor: "#65A30D",
+                                boxShadow: "none",
+                              },
+                            }}
+                          >
+                            + Add Reason
+                          </Button>
+                        </Box>
+                      </>
+                    );
+                  })()}
+                </Box>
               </Box>
+            )}
 
-              {/* Add Tag Button */}
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => {
-                  setEditingTag(null);
-                  setIsAddTagOpen(true);
-                }}
-                sx={{
-                  borderColor: "#84CC16",
-                  color: "#65A30D",
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: "12px",
-                  height: "30px",
-                  px: 2,
-                  borderRadius: "6px",
-                  "&:hover": {
-                    borderColor: "#65A30D",
-                    backgroundColor: "#F7FEE7",
-                  },
-                }}
-              >
-                + Add Tag
-              </Button>
-            </Box>
+            {/* Tags Section (only for middle custom stages, hidden for New Lead, Won, Loss) */}
+            {!(
+              selectedStageId === "joined" ||
+              selectedStageId === "closed" ||
+              selectedStageId === stages[0]?.id ||
+              Boolean(stages.find((s) => s.id === selectedStageId)?.isFirst)
+            ) && (
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: "#475569",
+                    mb: 0.8,
+                    fontFamily: "Inter, sans-serif",
+                  }}
+                >
+                  Tags (Sub-status):
+                </Typography>
+
+                {/* Tag Pills List */}
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
+                  {editStageTags.map((tag, idx) => (
+                    <Box
+                      key={tag.name || idx}
+                      sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 0.8,
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: "6px",
+                        border: `1.5px solid ${tag.borderColor || "#3B82F6"}`,
+                        backgroundColor: tag.bgColor || "rgba(59, 130, 246, 0.1)",
+                        color: tag.textColor || tag.borderColor || "#1E40AF",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        fontFamily: "Inter, sans-serif",
+                      }}
+                    >
+                      <span>{tag.name}</span>
+                      <Tooltip title="Edit Tag">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenEditTag(tag)}
+                          sx={{
+                            p: 0.2,
+                            color: tag.textColor || tag.borderColor || "#1E40AF",
+                            "&:hover": { backgroundColor: "rgba(0,0,0,0.06)" },
+                          }}
+                        >
+                          <EditOutlinedIcon sx={{ fontSize: 13 }} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete Tag">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleRemoveTag(tag.name)}
+                          sx={{
+                            p: 0.2,
+                            color: "#EF4444",
+                            "&:hover": { backgroundColor: "#FEE2E2" },
+                          }}
+                        >
+                          <CloseIcon sx={{ fontSize: 13 }} />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  ))}
+                </Box>
+
+                {/* Add Tag Button */}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    setEditingTag(null);
+                    setIsAddTagOpen(true);
+                  }}
+                  sx={{
+                    borderColor: "#84CC16",
+                    color: "#65A30D",
+                    textTransform: "none",
+                    fontWeight: 600,
+                    fontSize: "12px",
+                    height: "30px",
+                    px: 2,
+                    borderRadius: "6px",
+                    "&:hover": {
+                      borderColor: "#65A30D",
+                      backgroundColor: "#F7FEE7",
+                    },
+                  }}
+                >
+                  + Add Tag
+                </Button>
+              </Box>
+            )}
           </Paper>
         </Box>
       </DialogContent>

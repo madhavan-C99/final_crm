@@ -127,6 +127,8 @@ const LeadActionBar = ({ isEdit, setIsEdit, leadData, formData }) => {
                 <WonDetailsModal
                     open={openWonModal}
                     handleClose={() => setOpenWonModal(false)}
+                    leadData={leadData}
+                    pipelineId={leadData?.pipeline_category_id || sessionStorage.getItem("telecalling_pipeline_selected_pipeline")}
                 />
 
                 <Button
@@ -155,6 +157,8 @@ const LeadActionBar = ({ isEdit, setIsEdit, leadData, formData }) => {
                 <LossDetailsModal
                     open={openLossModal}
                     handleClose={() => setOpenLossModal(false)}
+                    leadData={leadData}
+                    pipelineId={leadData?.pipeline_category_id || sessionStorage.getItem("telecalling_pipeline_selected_pipeline")}
                 />
 
                 {/* <Button

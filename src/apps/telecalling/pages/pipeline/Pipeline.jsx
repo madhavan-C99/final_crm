@@ -12,6 +12,9 @@ import MainLayout
 import PipelineCards
     from "@/apps/telecalling/components/pipeline/PipelineCards";
 
+import { getActivePipelines }
+    from "@/apps/telecalling/services/pipelinepageservice";
+
 function Pipeline() {
 
     // ✅ sessionStorage la irundhu saved value edukum, illana default "today"
@@ -56,12 +59,85 @@ function Pipeline() {
 
     useEffect(() => {
         sessionStorage.setItem("last_pipeline_path", "/telecalling/pipeline");
+    }, []);
+
+    // ✅ ORU VALUE MAARUMBODHU sessionStorage LA SAVE PANNUM
+
+    useEffect(() => {
         sessionStorage.setItem("pipeline_filterType", filterType);
+    }, [filterType]);
+
+    useEffect(() => {
         sessionStorage.setItem("pipeline_fromDate", fromDate || "");
+    }, [fromDate]);
+
+    useEffect(() => {
         sessionStorage.setItem("pipeline_toDate", toDate || "");
-        sessionStorage.setItem("pipeline_payload", JSON.stringify(payload));
-        sessionStorage.setItem("pipeline_selectedFilters", JSON.stringify(selectedFilters));
-    }, [filterType, fromDate, toDate, payload, selectedFilters]);
+    }, [toDate]);
+
+    useEffect(() => {
+        sessionStorage.setItem(
+            "pipeline_payload",
+            JSON.stringify(payload)
+        );
+    }, [payload]);
+
+    useEffect(() => {
+        sessionStorage.setItem(
+            "pipeline_selectedFilters",
+            JSON.stringify(selectedFilters)
+        );
+    }, [selectedFilters]);
+
+    const [pipelines, setPipelines] = useState([]);
+    const [selectedPipelineId, setSelectedPipelineId] = useState(() => {
+        const userSwitched = sessionStorage.getItem("telecalling_pipeline_user_switched");
+        const saved = sessionStorage.getItem("telecalling_pipeline_selected_pipeline");
+        return (userSwitched && saved) ? Number(saved) : 0;
+    });
+
+    useEffect(() => {
+        const loadPipelines = async () => {
+            try {
+                const res = await getActivePipelines();
+                const list = res?.data?.data || (Array.isArray(res?.data) ? res.data : []);
+                setPipelines(list);
+
+                if (list.length > 0) {
+                    const defaultPipe = list.find((p) => p.is_default) || list[0];
+                    const userSwitched = sessionStorage.getItem("telecalling_pipeline_user_switched");
+                    const savedId = sessionStorage.getItem("telecalling_pipeline_selected_pipeline");
+
+                    let currentPipeId;
+                    if (userSwitched && savedId && list.some((p) => String(p.id) === String(savedId))) {
+                        currentPipeId = Number(savedId);
+                    } else {
+                        currentPipeId = defaultPipe.id;
+                        sessionStorage.setItem("telecalling_pipeline_selected_pipeline", String(currentPipeId));
+                    }
+
+                    setSelectedPipelineId(currentPipeId);
+                    setPayload((prev) => ({
+                        ...prev,
+                        pipeline_id: currentPipeId,
+                    }));
+                }
+            } catch (err) {
+                console.error("Failed to fetch pipelines in Pipeline page:", err);
+            }
+        };
+        loadPipelines();
+    }, []);
+
+    const handlePipelineChange = (newPipeId) => {
+        setSelectedPipelineId(newPipeId);
+        sessionStorage.setItem("telecalling_pipeline_selected_pipeline", String(newPipeId));
+        sessionStorage.setItem("telecalling_pipeline_user_switched", "true");
+        setPayload((prev) => ({
+            ...prev,
+            pipeline_id: newPipeId,
+        }));
+    };
 
     return (
 
@@ -85,10 +161,17 @@ function Pipeline() {
 
                 setPayload={setPayload}
                 refreshPipeline={refreshPipeline}
+
+                pipelines={pipelines}
+                selectedPipelineId={selectedPipelineId}
+                handlePipelineChange={handlePipelineChange}
             />
 
             <PipelineCards
-                payload={payload}
+                payload={{
+                    ...payload,
+                    pipeline_id: selectedPipelineId,
+                }}
                 refresh={refresh}
             />
 

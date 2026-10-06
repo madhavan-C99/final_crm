@@ -239,9 +239,12 @@ const CallOutcomeSection = ({
     message: "",
   });
   useEffect(() => {
-    getConversationStageOptions();
-    // getSelectTagOptions()
-  }, []);
+    const pId =
+      leadData?.pipeline_category_id ||
+      sessionStorage.getItem("telecalling_pipeline_selected_pipeline") ||
+      "";
+    getConversationStageOptions(pId);
+  }, [leadData?.pipeline_category_id]);
   const [openLossModal, setOpenLossModal] = useState(false);
   useEffect(() => {
     const loadSavedOutcome = async () => {
@@ -255,16 +258,21 @@ const CallOutcomeSection = ({
         }
 
         if (currentLead) {
-          // 1. Stage Options-ஐ முதலில் Fetch பண்ணுகிறோம்
+          const pId =
+            currentLead.pipeline_category_id ||
+            leadData?.pipeline_category_id ||
+            sessionStorage.getItem("telecalling_pipeline_selected_pipeline") ||
+            "";
+          // 1. Stage Options-ஐ அந்த Pipeline-க்கு Fetch பண்ணுகிறோம்
           const stageRes = await getDropdownOptions({
             dropdown_category: "pipeline_stage",
-            filter_id: "",
+            filter_id: pId,
           });
           const stages = stageRes?.data?.data || [];
-          // 🟢 Contact Attempt & Call Not Connected ஆகியவற்றை Dropdown-ல் இருந்து மறைக்க:
+          // 🟢 Call Not Connected ஆகியவற்றை Dropdown-ல் இருந்து மறைக்க:
           const filteredStages = stages.filter(
             (item) =>
-              !["contact attempt", "call not connected"].includes(
+              !["call not connected"].includes(
                 item.label?.toLowerCase()?.trim(),
               ),
           );
@@ -468,18 +476,24 @@ const CallOutcomeSection = ({
       });
     }
   };
-  const getConversationStageOptions = async () => {
+  const getConversationStageOptions = async (pId) => {
     try {
+      const activePipelineId =
+        pId ||
+        leadData?.pipeline_category_id ||
+        sessionStorage.getItem("telecalling_pipeline_selected_pipeline") ||
+        "";
+
       const payload = {
         dropdown_category: "pipeline_stage",
-        filter_id: "",
+        filter_id: activePipelineId,
       };
 
       const response = await getDropdownOptions(payload);
 
       const filtered = (response.data.data || []).filter(
         (item) =>
-          !["contact attempt", "call not connected"].includes(
+          !["call not connected"].includes(
             item.label?.toLowerCase()?.trim(),
           ),
       );
@@ -1102,11 +1116,15 @@ const CallOutcomeSection = ({
         <WonDetailsModal
           open={openWonModal}
           handleClose={() => setOpenWonModal(false)}
+          leadData={leadData}
+          pipelineId={leadData?.pipeline_category_id || sessionStorage.getItem("telecalling_pipeline_selected_pipeline")}
         />
         {/* ✅ Loss Lead Detail Modal */}
         <LossDetailsModal
           open={openLossModal}
           handleClose={() => setOpenLossModal(false)}
+          leadData={leadData}
+          pipelineId={leadData?.pipeline_category_id || sessionStorage.getItem("telecalling_pipeline_selected_pipeline")}
         />
       </Box>
     </>

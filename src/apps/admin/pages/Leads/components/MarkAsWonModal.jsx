@@ -17,17 +17,20 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { getMarkAsWonInfo } from "../../../services/leadService";
+import { getSelectOptions } from "../../../services/dropdownService";
 
 const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
   const [wonInfoData, setWonInfoData] = useState(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [stage, setStage] = useState("");
   const [paidThrough, setPaidThrough] = useState("");
+  const [paymentModesOptions, setPaymentModesOptions] = useState([]);
   const [amountPaid, setAmountPaid] = useState("");
   const [isFullPayment, setIsFullPayment] = useState(false);
   const [pendingAmount, setPendingAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
+  const [nextFollowup, setNextFollowup] = useState("");
   const [quickFollowup, setQuickFollowup] = useState("");
   const [manualFollowup, setManualFollowup] = useState("");
   const [summary, setSummary] = useState("");
@@ -56,6 +59,9 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
     }
     setErrorMsg("");
 
+    const initialStage = lead?.current_stage || lead?.stage || lead?.stage_name || "";
+    if (initialStage) setStage(initialStage);
+
     const fetchInfo = async () => {
       try {
         setLoadingInfo(true);
@@ -67,7 +73,7 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
             setWonInfoData(resData);
             const leadInfo = resData.lead_info || resData.lead_details || resData.lead || resData;
             
-            const extractedStage = leadInfo.stage || leadInfo.current_stage || resData.stage;
+            const extractedStage = leadInfo.current_stage || leadInfo.stage || leadInfo.stage_name || resData.current_stage || resData.stage;
             if (extractedStage) setStage(extractedStage);
 
             const extractedPaid = leadInfo.amount_paid ?? leadInfo.paid_amount ?? resData.amount_paid;
@@ -90,6 +96,9 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
             const extractedPaymentStatus = leadInfo.payment_status || resData.payment_status;
             if (extractedPaymentStatus) setPaymentStatus(extractedPaymentStatus);
 
+            const extractedNextFollowup = leadInfo.next_followup_reminder || leadInfo.next_followup || leadInfo.next_followup_date || leadInfo.reminder_date || resData.next_followup_reminder || resData.next_followup;
+            if (extractedNextFollowup) setNextFollowup(extractedNextFollowup);
+
             const extractedSummary = leadInfo.summary || leadInfo.remarks || resData.summary || resData.remarks;
             if (extractedSummary) setSummary(extractedSummary);
           }
@@ -100,6 +109,14 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
         setLoadingInfo(false);
       }
     };
+
+    getSelectOptions("L_PAYMENT_MODES")
+      .then((modes) => {
+        if (Array.isArray(modes) && modes.length > 0) {
+          setPaymentModesOptions(modes);
+        }
+      })
+      .catch((err) => console.warn("L_PAYMENT_MODES fetch error:", err));
 
     fetchInfo();
   }, [open, lead]);
@@ -189,11 +206,8 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
       setErrorMsg("Due Date is required for pending amount!");
       return;
     }
-    if (!paymentStatus) {
-      setErrorMsg("Payment Status is required!");
-      return;
-    }
-    const followupVal = manualFollowup || quickFollowup || null;
+    const followupVal = nextFollowup ? formatDateToISO(nextFollowup) : (manualFollowup || quickFollowup || null);
+    const effectivePaymentStatus = paymentStatus || leadInfoData?.payment_status || wonInfoData?.payment_status || "Completed";
 
     setSubmitting(true);
     try {
@@ -210,8 +224,11 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
         paid_amount: numAmountPaid,
         pending_amount: numPendingAmount,
         due_date: numPendingAmount > 0 ? formatDateToISO(dueDate) : null,
-        payment_status: paymentStatus,
+        payment_status: effectivePaymentStatus,
         next_followup: followupVal,
+        next_followup_reminder: followupVal,
+        reminder_date: followupVal,
+        next_followup_reminder_date: followupVal,
         summary: summary || "",
         remarks: summary || "",
       };
@@ -348,14 +365,16 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
                 "& .MuiSvgIcon-root": { color: "#FFFFFF" },
               }}
             >
-              {(wonInfoData?.lead_stages || wonInfoData?.priority_tags || []).map((opt) => {
-                const val = typeof opt === "object" ? opt.name || opt.label : opt;
-                return (
+              {(() => {
+                const rawStages = wonInfoData?.lead_stages || wonInfoData?.priority_tags || [];
+                const stageList = rawStages.map((opt) => (typeof opt === "object" ? opt.name || opt.label || opt.value : opt));
+                const stageOptions = Array.from(new Set([...(stage ? [stage] : []), ...stageList].filter(Boolean)));
+                return stageOptions.map((val) => (
                   <MenuItem key={val} value={val}>
                     {val}
                   </MenuItem>
-                );
-              })}
+                ));
+              })()}
             </TextField>
           </Box>
 
@@ -378,10 +397,11 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
                 },
               }}
             >
-              {(wonInfoData?.payment_modes || []).map((opt) => {
-                const val = typeof opt === "object" ? opt.name || opt.label : opt;
+              {((paymentModesOptions.length > 0 ? paymentModesOptions : wonInfoData?.payment_modes) || []).map((opt, idx) => {
+                const val = typeof opt === "object" ? opt.name || opt.label || opt.value || opt.mode_name : opt;
+                const key = typeof opt === "object" ? opt.id || opt.value || idx : idx;
                 return (
-                  <MenuItem key={val} value={val}>
+                  <MenuItem key={key} value={val}>
                     {val}
                   </MenuItem>
                 );
@@ -476,75 +496,19 @@ const MarkAsWonModal = ({ open, onClose, lead, onSubmitSuccess }) => {
             />
           </Box>
 
-          {/* Payment Status */}
-          <Box>
-            <Typography sx={{ fontSize: "13px", fontWeight: 600, color: "#334155", mb: 0.8 }}>
-              Payment Status<span style={{ color: "#EF4444" }}>*</span>
-            </Typography>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              value={paymentStatus}
-              onChange={(e) => setPaymentStatus(e.target.value)}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  backgroundColor: "#F1F5F9",
-                  borderRadius: "8px",
-                  "& fieldset": { border: "none" },
-                },
-              }}
-            >
-              {(wonInfoData?.payment_statuses || wonInfoData?.payment_status_list || []).map((opt) => {
-                const val = typeof opt === "object" ? opt.name || opt.label : opt;
-                return (
-                  <MenuItem key={val} value={val}>
-                    {val}
-                  </MenuItem>
-                );
-              })}
-            </TextField>
-          </Box>
 
-          {/* Next Follow Up (Quick selector buttons + manual input) */}
+          {/* Next Follow Up Reminder (Date picker) */}
           <Box>
             <Typography sx={{ fontSize: "13px", fontWeight: 600, color: "#334155", mb: 0.8 }}>
-              Next Follow Up <span style={{ color: "#94A3B8", fontWeight: 400 }}>(Optional)</span>
+              Next Follow Up Reminder <span style={{ color: "#94A3B8", fontWeight: 400 }}>(Optional)</span>
             </Typography>
-            <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
-              {(wonInfoData?.quick_followups || wonInfoData?.followup_options || []).map((label) => (
-                <Button
-                  key={label}
-                  size="small"
-                  onClick={() => {
-                    setQuickFollowup(label);
-                    setManualFollowup("");
-                  }}
-                  sx={{
-                    backgroundColor: quickFollowup === label ? "#84CC16" : "#ECFCCB",
-                    color: quickFollowup === label ? "#FFFFFF" : "#3F6212",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    borderRadius: "6px",
-                    textTransform: "none",
-                    px: 1.8,
-                    py: 0.6,
-                    "&:hover": { backgroundColor: "#84CC16", color: "#FFFFFF" },
-                  }}
-                >
-                  {label}
-                </Button>
-              ))}
-            </Box>
             <TextField
               fullWidth
               size="small"
-              placeholder="Enter Manual"
-              value={manualFollowup}
-              onChange={(e) => {
-                setManualFollowup(e.target.value);
-                setQuickFollowup("");
-              }}
+              type="date"
+              value={nextFollowup}
+              onChange={(e) => setNextFollowup(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               sx={{
                 "& .MuiOutlinedInput-root": {
                   backgroundColor: "#F1F5F9",

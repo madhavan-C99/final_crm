@@ -180,6 +180,9 @@ function Login() {
             ? "/admin/Educatiionpipeline"
             : "/telecalling/dashboard";
 
+        sessionStorage.removeItem("telecalling_pipeline_selected_pipeline");
+        sessionStorage.removeItem("telecalling_pipeline_user_switched");
+
         // 🌟 window.location.href பயன்படுத்துவதால் தானாகவே Refresh ஆகி
         // Permissions உடனேயே Dashboard-இல் கிடைத்துவிடும்!
         window.location.href = targetPath;

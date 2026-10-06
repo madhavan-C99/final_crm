@@ -32,6 +32,8 @@ import { useAuth } from "@/shared/context/AuthContext";
 export const LossDetailsModal = ({
     open = false,
     handleClose,
+    leadData,
+    pipelineId,
 }) => {
     const { hasPermission } = useAuth();
     const { id } = useParams();
@@ -256,8 +258,15 @@ export const LossDetailsModal = ({
 
     const getPipelineStageOptions = async () => {
         try {
+            const activePipelineId =
+                pipelineId ||
+                leadData?.pipeline_category_id ||
+                sessionStorage.getItem("telecalling_pipeline_selected_pipeline") ||
+                "";
+
             const payload = {
                 dropdown_category: "pipeline_stage",
+                filter_id: activePipelineId,
             };
 
             const response = await getDropdownOptions(payload);

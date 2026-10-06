@@ -121,21 +121,21 @@ const Leads = () => {
 
   const leadExportColumns = [
     { id: "s_no", label: "S.No" },
-    { id: "name", label: "Full Name" },
-    { id: "mobile", label: "Mobile No" },
-    { id: "assigned_to", label: "Assigned To" },
+    { id: "name", label: "Name" },
+    { id: "mobile_no", label: "Contact" },
+    { id: "assigned_to", label: "Assigned to" },
     { id: "stage", label: "Stage" },
-    { id: "tag", label: "Tag" },
-    { id: "campaign", label: "Campaign" },
+    { id: "pipeline", label: "Pipeline" },
+    { id: "campaign_name", label: "Campaign" },
     { id: "source", label: "Source" },
     { id: "course_plan", label: "Course Plan" },
-    { id: "course", label: "Course" },
-    { id: "next_followup", label: "Next Followup" },
-    { id: "amount", label: "Course Fee" },
+    { id: "course_name", label: "Course" },
+    { id: "next_follow_up", label: "Next Follow-Up" },
+    { id: "amount", label: "Amount" },
     { id: "pending_amount", label: "Pending Amount" },
     { id: "last_contacted", label: "Last Contacted" },
-    { id: "last_conv", label: "Last Conversation" },
-    { id: "created_date", label: "Created Date" },
+    { id: "last_conversation_outcome", label: "Last Conversation Outcome" },
+    { id: "created", label: "Created" },
   ];
 
   const handleOpenLeadDetail = (lead) => {

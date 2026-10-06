@@ -10,6 +10,7 @@ export const SETTINGS_TABS = [
   { id: "teams", label: "Teams" },
   { id: "roles", label: "Roles & Permissions" },
   { id: "target", label: "Monthly Target" },
+  { id: "course_mgmt", label: "Course Management" },
 ];
 
 export default function SettingsTabs({ activeTab = "users", onTabChange }) {

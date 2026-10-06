@@ -169,12 +169,16 @@ const AddNewLead = ({ open, setOpen, refreshPipeline }) => {
     }
 
     try {
+      const selectedPipeline = sessionStorage.getItem(
+        "telecalling_pipeline_selected_pipeline"
+      );
       const payload = {
         full_name: form.fullName || "",
         mobile: `+91${form.mobileNo}`,
         campaign_id: form.campaign_id,
         lead_source_id: form.lead_source_id,
         enquiry_date: form.enquiryDate || null,
+        pipeline_id: selectedPipeline ? Number(selectedPipeline) : null,
       };
 
       await addnewlead(payload);

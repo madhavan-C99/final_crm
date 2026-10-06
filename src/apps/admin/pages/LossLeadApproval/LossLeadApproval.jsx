@@ -232,9 +232,9 @@ export default function LossLeadApproval() {
 
   const lossLeadExportColumns = [
     { id: "s_no", label: "S.No" },
-    { id: "name", label: "Lead Name" },
-    { id: "contact", label: "Contact No" },
-    { id: "assigned_to", label: "Assigned To" },
+    { id: "name", label: "Name" },
+    { id: "contact", label: "Contact" },
+    { id: "assigned_to", label: "Assigned to" },
     { id: "effort_summary", label: "Effort Summary" },
     { id: "loss_reason", label: "Loss Reason" },
     { id: "last_conversation_outcome", label: "Last Conversation Outcome" },

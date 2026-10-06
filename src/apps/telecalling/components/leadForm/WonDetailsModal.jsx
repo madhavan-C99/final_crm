@@ -30,7 +30,7 @@ import { fetchOneWonData, submitWonLead } from "@/apps/telecalling/services/fetc
 import { getDropdownOptions } from "@/apps/telecalling/services/dropdownService";
 import { useAuth } from "@/shared/context/AuthContext";
 
-const WonDetailsModal = ({ open, handleClose }) => {
+const WonDetailsModal = ({ open, handleClose, leadData, pipelineId }) => {
   const { hasPermission } = useAuth();
   const { id } = useParams();
 
@@ -305,9 +305,15 @@ const WonDetailsModal = ({ open, handleClose }) => {
   };
   const getPipelineStageOptions = async () => {
     try {
+      const activePipelineId =
+        pipelineId ||
+        leadData?.pipeline_category_id ||
+        sessionStorage.getItem("telecalling_pipeline_selected_pipeline") ||
+        "";
+
       const payload = {
         dropdown_category: "pipeline_stage",
-        filter_id: "",
+        filter_id: activePipelineId,
       };
 
       const response = await getDropdownOptions(payload);

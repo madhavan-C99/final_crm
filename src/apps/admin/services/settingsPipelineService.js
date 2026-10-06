@@ -76,3 +76,33 @@ export const deleteSettingsTag = async ({ pipeline_id, stage_id, tag_id, tag_nam
     invalidateSelectOptions("L_TAGS");
     return res;
 };
+
+/**
+ * Fetch all loss reasons filtered by pipeline_id (/adm/get_loss_reasons_admin)
+ */
+export const getSettingsLossReasons = async (payload = {}) => {
+    const finalPayload = typeof payload === "object" ? payload : { pipeline_id: payload };
+    try {
+        return await api.post("/adm/get_loss_reasons_admin", finalPayload);
+    } catch (err) {
+        return await api.post("/adm/get_select_options", { field: "L_LOSS_REASONS" });
+    }
+};
+
+/**
+ * Add a new loss reason linked to pipeline_id (/adm/add_loss_reason_admin)
+ */
+export const addSettingsLossReason = async (payload) => {
+    const res = await api.post("/adm/add_loss_reason_admin", payload);
+    invalidateSelectOptions("L_LOSS_REASONS");
+    return res;
+};
+
+/**
+ * Delete a loss reason with pipeline_id, reason_id & reason (/adm/delete_loss_reason_admin)
+ */
+export const deleteSettingsLossReason = async (payload) => {
+    const res = await api.post("/adm/delete_loss_reason_admin", payload);
+    invalidateSelectOptions("L_LOSS_REASONS");
+    return res;
+};

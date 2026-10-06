@@ -103,7 +103,7 @@ const CommonFilters = ({
 
           <TextField
             fullWidth
-            placeholder="Search by name, phone, email......"
+            placeholder="Search by name or phone"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             size="small"

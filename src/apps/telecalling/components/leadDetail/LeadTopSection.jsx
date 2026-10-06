@@ -176,7 +176,9 @@ const LeadTopSection = ({
 
                   <Box
                     sx={{
-                      width: "60px",
+                      minWidth: "60px",
+                      width: "fit-content",
+                      px: 1,
                       height: "15px",
                       borderRadius: "4px",
                       border: "1px solid #9091FD",
@@ -186,6 +188,7 @@ const LeadTopSection = ({
                       alignItems: "center",
                       justifyContent: "center",
                       fontSize: "9px",
+                      textTransform: "capitalize",
                     }}
                   >
                     {leadData?.pipeline_stage}

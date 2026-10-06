@@ -8,6 +8,7 @@ import {
     Button,
     MenuItem,
     TextField,
+    Select,
 } from "@mui/material";
 
 import AddOutlinedIcon
@@ -55,7 +56,11 @@ const PipelineFilters = ({
     selectedFilters,        // 👈 ADD
     setSelectedFilters, 
 
-    setPayload
+    setPayload,
+
+    pipelines = [],
+    selectedPipelineId = 0,
+    handlePipelineChange,
 
 }) => {
     const [filterAnchor, setFilterAnchor] = useState(null);
@@ -163,7 +168,7 @@ const handleColumnChange = (key) => {
             course_plan_id: selectedFilters.course_plan_id,
             payment_status: selectedFilters.payment_status,
             campaign_name_id: selectedFilters.campaign_name_id,
-
+            pipeline_id: selectedPipelineId || 0,
         };
 
         if (filterType === "custom") {
@@ -180,6 +185,7 @@ const handleColumnChange = (key) => {
         fromDate,
         toDate,
         selectedFilters,      // ✅ ADD THIS
+        selectedPipelineId,
     ]);
 
     const handleExport = async () => {
@@ -203,6 +209,7 @@ const handleColumnChange = (key) => {
                 course_plan_id: selectedFilters.course_plan_id ?? 0,
                 payment_status: selectedFilters.payment_status ?? 0,
                 campaign_name_id: selectedFilters.campaign_name_id ?? 0,
+                pipeline_id: selectedPipelineId ?? 0,
             };
 
             if (filterType === "custom" && fromDate && toDate) {
@@ -484,6 +491,48 @@ const handleClearAll = () => {
                         flexWrap: "wrap",
                     }}
                 >
+
+                    {/* PIPELINE SWITCHER DROPDOWN */}
+                    <Select
+                        size="small"
+                        value={selectedPipelineId || (pipelines.length > 0 ? pipelines[0].id : "")}
+                        displayEmpty
+                        renderValue={(val) => {
+                            if (!val) return "Select Pipeline";
+                            const found = pipelines.find((p) => String(p.id) === String(val));
+                            return found ? (found.display_name || found.name || found.category_name) : "Select Pipeline";
+                        }}
+                        onChange={(e) => handlePipelineChange && handlePipelineChange(Number(e.target.value))}
+                        IconComponent={KeyboardArrowDownOutlinedIcon}
+                        sx={{
+                            minWidth: "150px",
+                            height: "31px",
+                            borderRadius: "6px",
+                            background: "#E6E6E6",
+                            "& fieldset": {
+                                border: "none",
+                            },
+                            fontSize: "14px",
+                        }}
+                    >
+                        {pipelines.map((pipeline) => (
+                            <MenuItem
+                                key={pipeline.id}
+                                value={pipeline.id}
+                                sx={{
+                                    "&.Mui-selected": {
+                                        backgroundColor: "#90D916 !important",
+                                        color: '#FFF'
+                                    },
+                                    "&.Mui-selected:hover": {
+                                        backgroundColor: "#b9e76f !important",
+                                    },
+                                }}
+                            >
+                                {pipeline.name || pipeline.category_name} {pipeline.is_default ? " (Default)" : ""}
+                            </MenuItem>
+                        ))}
+                    </Select>
 
                     {/* DATE FILTER */}
 

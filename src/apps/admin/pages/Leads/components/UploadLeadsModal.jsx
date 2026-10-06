@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import {
   Dialog,
@@ -20,6 +20,7 @@ import {
   Paper,
   Chip,
   Tooltip,
+  TextField,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import NorthIcon from "@mui/icons-material/North";
@@ -28,16 +29,105 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircleOutlined";
 import WarningIcon from "@mui/icons-material/WarningOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useAuth } from "@/shared/context/AuthContext";
+import UploadLeadsDialog from "./UploadLeadsDialog";
+import { getSelectOptions } from "@/apps/admin/services/dropdownService";
+import { verifyLeadImport, submitLeadImport } from "@/apps/admin/services/leadService";
 
 const UploadLeadsModal = ({ open, onClose, onUpload }) => {
   const { hasPermission } = useAuth();
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [step, setStep] = useState("select"); // "select" | "preview"
+  const [verifying, setVerifying] = useState(false);
+  const [step, setStep] = useState("select"); // "select" | "campaign_select" | "preview"
   const [previewRows, setPreviewRows] = useState([]);
   const [fileHeaders, setFileHeaders] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
+  const [sources, setSources] = useState([]);
+  const [selectedCampaign, setSelectedCampaign] = useState("");
+  const [selectedSource, setSelectedSource] = useState("");
+  const [fieldMapping, setFieldMapping] = useState({
+    contactName: "",
+    primaryNumber: "",
+    alternateNumber1: "",
+    email: "",
+  });
   const fileInputRef = useRef(null);
+
+  const handleMappingSubmit = (submission) => {
+    const mappingObj = submission?.mapping || {};
+    setFieldMapping(mappingObj);
+    if (submission?.campaignId) {
+      setSelectedCampaign(submission.campaignId);
+    }
+    if (submission?.sourceId) {
+      setSelectedSource(submission.sourceId);
+    }
+
+    setPreviewRows((prevRows) => {
+      return prevRows.map((r) => {
+        const rawObj = r.rawObj || {};
+        const contactName = mappingObj.contactName ? rawObj[mappingObj.contactName] : r.fullName;
+        let primaryNo = mappingObj.primaryNumber ? rawObj[mappingObj.primaryNumber] : r.mobileNo;
+        const altNo = mappingObj.alternateNumber1 ? rawObj[mappingObj.alternateNumber1] : r.alternateNo;
+        const email = mappingObj.email ? rawObj[mappingObj.email] : r.email;
+
+        let cleanDigits = String(primaryNo || "").replace(/\D/g, "");
+        if (cleanDigits.startsWith("91") && cleanDigits.length > 10) {
+          cleanDigits = cleanDigits.slice(2);
+        }
+        if (cleanDigits.length > 10) {
+          cleanDigits = cleanDigits.slice(-10);
+        }
+        const formattedMobile = cleanDigits
+          ? cleanDigits.length === 10
+            ? `+91 ${cleanDigits}`
+            : cleanDigits
+          : primaryNo;
+
+        return {
+          ...r,
+          fullName: contactName || r.fullName || "",
+          mobileNo: formattedMobile || "",
+          alternateNo: altNo || "",
+          email: email || "",
+          status: "unverified",
+          reason: "Click Verify to validate with backend.",
+        };
+      });
+    });
+
+    setStep("preview");
+  };
+
+  useEffect(() => {
+    if (open && step === "campaign_select") {
+      Promise.all([
+        getSelectOptions("L_CAMPAIGN_NAMES").catch(() => []),
+        getSelectOptions("L_LEAD_SOURCES").catch(() => []),
+      ]).then(([campRes, srcRes]) => {
+        if (Array.isArray(campRes)) {
+          setCampaigns(
+            campRes.map((c) => ({
+              id: String(c.id || c.value || c.name),
+              name: String(c.name || c.label || c.campaign_name || c.value),
+            }))
+          );
+        }
+        if (Array.isArray(srcRes)) {
+          setSources(
+            srcRes.map((s) => ({
+              id: String(s.id || s.value || s.name),
+              name: String(s.name || s.label || s.source_name || s.value),
+            }))
+          );
+          if (srcRes.length > 0 && !selectedSource) {
+            setSelectedSource(String(srcRes[0].id || srcRes[0].value || srcRes[0].name));
+          }
+        }
+      });
+    }
+  }, [open, step]);
 
   // Exact Lime Green Colors
   const LIME_GREEN = "#88D000";
@@ -45,9 +135,7 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
 
   const handleDownloadSampleFile = () => {
     const csvContent =
-      "First Name,Last Name,Mobile No,Email ID,Pipeline,Campaign,Source,User,Inquiry Date\n" +
-      "John,Doe,9876543210,john.doe@example.com,Pipeline 1,Campaign 1,Website,Agent 1,2026-07-31\n" +
-      "Jane,Smith,9123456789,jane.smith@example.com,Pipeline 1,Campaign 2,Social Media,Agent 2,2026-07-31\n";
+      "First Name,Last Name,Mobile No,Email ID,Pipeline,Campaign,Source,User,Inquiry Date\n";
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -82,6 +170,7 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       handleFile(e.target.files[0]);
+      e.target.value = "";
     }
   };
 
@@ -102,12 +191,24 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+          const rawHeaderRow = XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0] || [];
+          if (Array.isArray(rawHeaderRow) && rawHeaderRow.length > 0) {
+            detectedHeaders = rawHeaderRow
+              .map((h) => (h !== undefined && h !== null ? String(h).trim() : ""))
+              .filter((h) => h !== "");
+          }
         } else {
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: "array" });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+          const rawHeaderRow = XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0] || [];
+          if (Array.isArray(rawHeaderRow) && rawHeaderRow.length > 0) {
+            detectedHeaders = rawHeaderRow
+              .map((h) => (h !== undefined && h !== null ? String(h).trim() : ""))
+              .filter((h) => h !== "");
+          }
         }
       } catch (readErr) {
         console.warn("Primary XLSX read error:", readErr);
@@ -139,7 +240,16 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
       }
 
       try {
-        const headers = detectedHeaders.length > 0 ? detectedHeaders : Object.keys(jsonRows[0] || {});
+        const allRowKeys = new Set(detectedHeaders);
+        jsonRows.forEach((r) => {
+          if (r && typeof r === "object") {
+            Object.keys(r).forEach((k) => {
+              if (k && String(k).trim()) allRowKeys.add(String(k).trim());
+            });
+          }
+        });
+
+        const headers = Array.from(allRowKeys);
 
         const parsed = jsonRows.map((rowObj, idx) => {
           const safeObj = rowObj && typeof rowObj === "object" ? rowObj : {};
@@ -173,20 +283,7 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
           }
           const formattedMobile = cleanDigits ? (cleanDigits.length === 10 ? `+91 ${cleanDigits}` : cleanDigits) : rawMobile;
 
-          // Update mobile field in safeObj to have +91 prefix
-          const objKeys = Object.keys(safeObj);
-          const mobileHeaderMatch = objKeys.find(
-            (h) => h && ["mobileno", "mobile_no", "mobile", "phone", "phoneno", "contact"].includes(String(h).toLowerCase().replace(/[^a-z0-9]/g, ""))
-          );
-          if (mobileHeaderMatch && cleanDigits.length === 10) {
-            safeObj[mobileHeaderMatch] = formattedMobile;
-          }
-
           const source = getVal(["source", "leadsource", "lead_source", "channel"]);
-
-          const missingKeys = new Set(
-            Object.keys(safeObj).filter((k) => isMissingCellVal(safeObj[k]))
-          );
 
           return {
             id: idx + 1,
@@ -196,7 +293,8 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
             mobileNo: formattedMobile,
             source,
             rawObj: safeObj,
-            missingKeys,
+            status: "unverified",
+            reason: "Click Verify to validate with backend.",
           };
         });
 
@@ -220,8 +318,6 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
           return !isGarbage;
         });
 
-        const verified = runDuplicateCheck(cleanRows);
-
         const cleanHeaders = headers.filter((h) => {
           const hLow = String(h || "").toLowerCase();
           return (
@@ -234,11 +330,10 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
         });
 
         setFileHeaders(cleanHeaders.length > 0 ? cleanHeaders : headers);
-        setPreviewRows(verified);
-        setStep("preview");
+        setPreviewRows(cleanRows);
+        setStep("campaign_select");
       } catch (procErr) {
         console.error("Error processing rows:", procErr);
-        // Fallback display if an unexpected processing error occurs
         setFileHeaders(Object.keys(jsonRows[0] || {}));
         setPreviewRows(
           jsonRows.map((r, i) => ({
@@ -246,109 +341,15 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
             fullName: "Lead Record",
             mobileNo: "",
             rawObj: r || {},
-            status: "valid",
+            status: "unverified",
             reason: "Parsed Row",
           }))
         );
-        setStep("preview");
+        setStep("campaign_select");
       }
     };
 
     reader.readAsArrayBuffer(file);
-  };
-
-  const runDuplicateCheck = (rows = []) => {
-    const batchMobiles = new Set();
-    const batchEmails = new Set();
-
-    const isMissingVal = (val) => {
-      if (val === undefined || val === null) return true;
-      const str = String(val).trim().toLowerCase();
-      return (
-        str === "" ||
-        str === "-" ||
-        str === "--" ||
-        str === "n/a" ||
-        str === "null" ||
-        str === "undefined" ||
-        str === "lead candidate"
-      );
-    };
-
-    return (Array.isArray(rows) ? rows : []).map((row) => {
-      const rawObj = row && typeof row === "object" && row.rawObj ? row.rawObj : {};
-
-      const getFieldValue = (obj, keys = []) => {
-        if (!obj || typeof obj !== "object") return "";
-        try {
-          const objKeys = Object.keys(obj);
-          for (const k of keys) {
-            const match = objKeys.find((h) => {
-              if (!h) return false;
-              return String(h).toLowerCase().replace(/[^a-z0-9]/g, "") === k.toLowerCase().replace(/[^a-z0-9]/g, "");
-            });
-            if (match && obj[match] !== undefined && obj[match] !== null) {
-              return String(obj[match]).trim();
-            }
-          }
-        } catch {
-          /* ignore */
-        }
-        return "";
-      };
-
-      const nameVal = getFieldValue(rawObj, ["fullname", "full_name", "name", "firstname", "first_name"]) || row?.fullName || "";
-      let rawMobile = getFieldValue(rawObj, ["mobileno", "mobile_no", "mobile", "phone", "phoneno", "contact"]) || row?.mobileNo || "";
-      let rawEmail = getFieldValue(rawObj, ["email", "email_id", "emailid", "mail"]) || "";
-      let cleanDigits = rawMobile.replace(/\D/g, "");
-
-      if (cleanDigits.length >= 10) {
-        cleanDigits = cleanDigits.slice(-10);
-      }
-
-      const cleanEmail = rawEmail.trim().toLowerCase();
-      const sourceVal = getFieldValue(rawObj, ["source", "leadsource", "lead_source", "channel"]) || row?.source || "";
-      const campaignVal = getFieldValue(rawObj, ["campaign", "campaignname", "campaign_name"]) || row?.campaign || "";
-
-      const isNameMissing = isMissingVal(nameVal);
-      const isMobileInvalid = isMissingVal(cleanDigits) || cleanDigits.length < 10;
-      const isSourceMissing = isMissingVal(sourceVal);
-      const isCampaignMissing = isMissingVal(campaignVal);
-
-      if (isNameMissing || isMobileInvalid || isSourceMissing || isCampaignMissing) {
-        const missingFields = [];
-        if (isNameMissing) missingFields.push("Name");
-        if (isMobileInvalid) missingFields.push("Mobile No (at least 10 digits required)");
-        if (isSourceMissing) missingFields.push("Lead Source");
-        if (isCampaignMissing) missingFields.push("Campaign Name");
-
-        return {
-          ...(row || {}),
-          status: "mandatory_missing",
-          reason: `Mandatory missing/invalid: ${missingFields.join(", ")}`,
-        };
-      }
-
-      const mobileVal = cleanDigits;
-
-      const isBatchMobDup = mobileVal && batchMobiles.has(mobileVal);
-      const isBatchEmailDup = cleanEmail && batchEmails.has(cleanEmail);
-
-      if (mobileVal) batchMobiles.add(mobileVal);
-      if (cleanEmail) batchEmails.add(cleanEmail);
-
-      const isDup = isBatchMobDup || isBatchEmailDup;
-
-      let reasonStr = "Valid Lead";
-      if (isBatchMobDup) reasonStr = "Duplicate Mobile in Upload File";
-      else if (isBatchEmailDup) reasonStr = "Duplicate Email in Upload File";
-
-      return {
-        ...(row || {}),
-        status: isDup ? "duplicate" : "valid",
-        reason: reasonStr,
-      };
-    });
   };
 
   const handleFile = (file) => {
@@ -360,83 +361,138 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
     fileInputRef.current?.click();
   };
 
-  const handleCellEdit = (rowId, headerKey, newValue) => {
-    setPreviewRows((prevRows) => {
-      const updatedRows = prevRows.map((r) => {
-        if (r.id !== rowId) return r;
-
-        let valToSet = newValue;
-        const normKey = String(headerKey || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (["mobileno", "mobile_no", "mobile", "phone", "phoneno", "contact"].includes(normKey)) {
-          let digits = String(newValue || "").replace(/\D/g, "");
-          if (digits.startsWith("91") && digits.length > 10) {
-            digits = digits.slice(2);
-          }
-          if (digits.length > 10) {
-            digits = digits.slice(-10);
-          }
-          valToSet = digits ? (digits.length === 10 ? `+91 ${digits}` : digits) : "";
-        }
-
-        const newRawObj = { ...(r.rawObj || {}), [headerKey]: valToSet };
-
-        const getVal = (keys) => {
-          try {
-            const objKeys = Object.keys(newRawObj);
-            for (const k of keys) {
-              const match = objKeys.find(
-                (h) => h && String(h).toLowerCase().replace(/[^a-z0-9]/g, "") === k.toLowerCase().replace(/[^a-z0-9]/g, "")
-              );
-              if (match && newRawObj[match] !== undefined && newRawObj[match] !== null) {
-                return String(newRawObj[match]).trim();
-              }
-            }
-          } catch {
-          /* ignore */
-        }
-          return "";
-        };
-
-        const firstName = getVal(["firstname", "first_name"]);
-        const lastName = getVal(["lastname", "last_name"]);
-        const fullName = getVal(["fullname", "full_name", "name"]) || `${firstName} ${lastName}`.trim();
-        const mobileNo = getVal(["mobileno", "mobile_no", "mobile", "phone", "phoneno", "contact"]);
-        const source = getVal(["source", "leadsource", "lead_source", "channel"]);
-
-        return {
-          ...r,
-          fullName,
-          mobileNo,
-          source,
-          rawObj: newRawObj,
-        };
-      });
-
-      return runDuplicateCheck(updatedRows);
-    });
-  };
-
-  const isMissingCellVal = (val) => {
-    if (val === undefined || val === null) return true;
-    const str = String(val).trim().toLowerCase();
-    return (
-      str === "" ||
-      str === "-" ||
-      str === "--" ||
-      str === "n/a" ||
-      str === "null" ||
-      str === "undefined" ||
-      str === "lead candidate"
-    );
-  };
-
   const handleDeleteRow = (rowId) => {
     setPreviewRows((prev) => prev.filter((r) => r.id !== rowId));
   };
 
-  const handleReVerify = () => {
-    const updated = runDuplicateCheck(previewRows);
-    setPreviewRows(updated);
+  const handleRemoveAllInvalidRows = () => {
+    setPreviewRows((prev) =>
+      prev.filter(
+        (r) =>
+          r.status !== "duplicate" &&
+          r.status !== "error" &&
+          r.status !== "mandatory_missing"
+      )
+    );
+  };
+
+  const handleCellChange = (rowId, fieldId, newValue) => {
+    setPreviewRows((prev) =>
+      prev.map((r) => {
+        if (r.id === rowId) {
+          const rawHeader = fieldMapping[fieldId];
+          const updatedRaw = { ...(r.rawObj || {}) };
+          if (rawHeader) {
+            updatedRaw[rawHeader] = newValue;
+          }
+
+          let updatedFullName = r.fullName;
+          let updatedMobileNo = r.mobileNo;
+          let updatedAlternateNo = r.alternateNo;
+          let updatedEmail = r.email;
+
+          if (fieldId === "contactName") updatedFullName = newValue;
+          if (fieldId === "primaryNumber") updatedMobileNo = newValue;
+          if (fieldId === "alternateNumber1") updatedAlternateNo = newValue;
+          if (fieldId === "email") updatedEmail = newValue;
+
+          return {
+            ...r,
+            fullName: updatedFullName,
+            mobileNo: updatedMobileNo,
+            alternateNo: updatedAlternateNo,
+            email: updatedEmail,
+            rawObj: updatedRaw,
+            status: "unverified",
+            reason: "Click Verify to validate with backend.",
+          };
+        }
+        return r;
+      })
+    );
+  };
+
+  const handleBackendVerify = async () => {
+    if (previewRows.length === 0) return;
+
+    try {
+      setVerifying(true);
+
+      const rowsPayload = previewRows.map((r) => {
+        const rawName = fieldMapping.contactName ? r.rawObj?.[fieldMapping.contactName] : r.fullName || "";
+        const rawEmail = fieldMapping.email ? r.rawObj?.[fieldMapping.email] : r.email || "";
+        let rawMobile = fieldMapping.primaryNumber ? r.rawObj?.[fieldMapping.primaryNumber] : r.mobileNo || "";
+        let cleanDigits = String(rawMobile || "").replace(/\D/g, "");
+        if (cleanDigits.startsWith("91") && cleanDigits.length > 10) {
+          cleanDigits = cleanDigits.slice(2);
+        }
+        if (cleanDigits.length > 10) {
+          cleanDigits = cleanDigits.slice(-10);
+        }
+
+        return {
+          name: rawName || "",
+          email: rawEmail || "",
+          mobile: cleanDigits || rawMobile || "",
+        };
+      });
+
+      const jsonPayload = { rows: rowsPayload };
+
+      const res = await verifyLeadImport(jsonPayload);
+      const resData = res?.data?.data || res?.data || {};
+      const backendRows = resData?.rows || (Array.isArray(resData) ? resData : []);
+      const normalizedRows = resData?.normalized_rows || [];
+
+      if (Array.isArray(backendRows) && backendRows.length > 0) {
+        const errorMap = new Map();
+        backendRows.forEach((item, index) => {
+          const rowNum = item.row_number ?? (index + 1);
+          const rawErrs = Array.isArray(item.errors) ? item.errors : (item.error ? [item.error] : []);
+          const errList = rawErrs
+            .map((e) => {
+              if (typeof e === "string") return e;
+              if (e && typeof e === "object") return e.message || e.error || e.field || "";
+              return String(e || "");
+            })
+            .filter(Boolean);
+
+          errorMap.set(rowNum, errList);
+        });
+
+        setPreviewRows((prev) =>
+          prev.map((r, i) => {
+            const rowNum = i + 1;
+            const errList = errorMap.get(rowNum) || [];
+            const norm = normalizedRows[i];
+
+            const isErr = errList.length > 0;
+            return {
+              ...r,
+              fullName: norm?.name || r.fullName,
+              email: norm?.email || r.email,
+              mobileNo: norm?.mobile ? (norm.mobile.length === 10 ? `+91 ${norm.mobile}` : norm.mobile) : r.mobileNo,
+              status: isErr ? "duplicate" : "valid",
+              reason: isErr ? errList.join(", ") : "Valid Lead",
+            };
+          })
+        );
+      } else {
+        setPreviewRows((prev) =>
+          prev.map((r) => ({
+            ...r,
+            status: "valid",
+            reason: "Valid Lead",
+          }))
+        );
+      }
+    } catch (err) {
+      console.error("Backend verify API error:", err);
+      const errDetail = err?.response?.data?.message || err?.message || "Verification request failed";
+      alert(`Backend Verification Error: ${errDetail}`);
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const handleConfirmUpload = async () => {
@@ -450,74 +506,65 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
       return;
     }
 
-    const hasInvalid = previewRows.some(
-      (r) => r.status === "duplicate" || r.status === "mandatory_missing",
-    );
-    if (hasInvalid) {
-      alert(
-        "⚠️ Cannot submit! Please delete all Duplicate or Mandatory Missing rows before uploading clean leads.",
-      );
+    const isAllValid = previewRows.every((r) => r.status === "valid");
+    if (!isAllValid) {
+      alert("⚠️ Cannot submit! All rows must be verified as Valid by the backend before submitting.");
       return;
     }
 
     try {
       setUploading(true);
 
-      const headersList =
-        fileHeaders.length > 0
-          ? fileHeaders
-          : ["First Name", "Last Name", "Mobile No"];
-      const csvHeaders = headersList.join(",") + "\n";
-      const csvContent =
-        csvHeaders +
-        previewRows
-          .map((r) =>
-            headersList
-              .map((h) => {
-                let val = String(r.rawObj?.[h] ?? "");
-                const normH = String(h || "")
-                  .toLowerCase()
-                  .replace(/[^a-z0-9]/g, "");
-                if (
-                  [
-                    "mobileno",
-                    "mobile_no",
-                    "mobile",
-                    "phone",
-                    "phoneno",
-                    "contact",
-                  ].includes(normH)
-                ) {
-                  let digits = val.replace(/\D/g, "");
-                  if (digits.startsWith("91") && digits.length > 10) {
-                    digits = digits.slice(2);
-                  }
-                  if (digits.length >= 10) {
-                    digits = digits.slice(-10);
-                    val = `+91 ${digits}`;
-                  }
-                }
-                return `"${val.replace(/"/g, '""')}"`;
-              })
-              .join(","),
-          )
-          .join("\n");
+      const rowsPayload = previewRows.map((r) => {
+        const rawName = fieldMapping.contactName ? r.rawObj?.[fieldMapping.contactName] : r.fullName || "";
+        const rawEmail = fieldMapping.email ? r.rawObj?.[fieldMapping.email] : r.email || "";
+        let rawMobile = fieldMapping.primaryNumber ? r.rawObj?.[fieldMapping.primaryNumber] : r.mobileNo || "";
+        let cleanDigits = String(rawMobile || "").replace(/\D/g, "");
+        if (cleanDigits.startsWith("91") && cleanDigits.length > 10) {
+          cleanDigits = cleanDigits.slice(2);
+        }
+        if (cleanDigits.length > 10) {
+          cleanDigits = cleanDigits.slice(-10);
+        }
 
-      const cleanBlob = new Blob([csvContent], {
-        type: "text/csv;charset=utf-8;",
+        return {
+          name: rawName || "",
+          email: rawEmail || "",
+          mobile: cleanDigits || rawMobile || "",
+        };
       });
-      const cleanFile = new File(
-        [cleanBlob],
-        selectedFile?.name || "Cleaned_Leads.csv",
-        { type: "text/csv" },
-      );
+
+      if (!selectedCampaign) {
+        alert("Please select a campaign before submitting.");
+        return;
+      }
+
+      const parsedCampaignId = isNaN(Number(selectedCampaign))
+        ? selectedCampaign
+        : Number(selectedCampaign);
+
+      const parsedSourceId = isNaN(Number(selectedSource))
+        ? (selectedSource ? Number(selectedSource) || selectedSource : 1)
+        : Number(selectedSource);
+
+      const submitPayload = {
+        campaign_id: parsedCampaignId,
+        source_id: parsedSourceId,
+        rows: rowsPayload,
+      };
+
+      const res = await submitLeadImport(submitPayload);
+      const resMsg = res?.data?.data?.message || res?.data?.message || "Leads imported successfully!";
+      alert(`Success: ${resMsg}`);
 
       if (onUpload) {
-        await onUpload(cleanFile);
+        await onUpload(submitPayload);
       }
       handleModalClose();
     } catch (err) {
-      console.error("Upload leads error:", err);
+      console.error("Upload leads submit API error:", err);
+      const errDetail = err?.response?.data?.message || err?.message || "Submit request failed";
+      alert(`Backend Submit Error: ${errDetail}`);
     } finally {
       setUploading(false);
     }
@@ -526,16 +573,36 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
   const handleModalClose = () => {
     setSelectedFile(null);
     setUploading(false);
+    setVerifying(false);
     setStep("select");
     setPreviewRows([]);
     setFileHeaders([]);
     onClose();
   };
 
-  const duplicateCount = previewRows.filter((r) => r.status === "duplicate").length;
-  const missingCount = previewRows.filter((r) => r.status === "mandatory_missing").length;
   const validCount = previewRows.filter((r) => r.status === "valid").length;
-  const invalidTotal = duplicateCount + missingCount;
+  const invalidCount = previewRows.filter(
+    (r) => r.status === "duplicate" || r.status === "error" || r.status === "mandatory_missing"
+  ).length;
+  const unverifiedCount = previewRows.filter((r) => r.status === "unverified" || !r.status).length;
+  const isAllValid = previewRows.length > 0 && previewRows.every((r) => r.status === "valid");
+
+  if (step === "campaign_select") {
+    return (
+      <UploadLeadsDialog
+        open={open && step === "campaign_select"}
+        onClose={handleModalClose}
+        onBack={() => setStep("select")}
+        onNext={(option, campaign) => {
+          setSelectedCampaign(campaign);
+        }}
+        onSubmit={handleMappingSubmit}
+        campaigns={campaigns}
+        onRefreshCampaigns={(newCamps) => setCampaigns(newCamps)}
+        fileColumns={fileHeaders.length > 0 ? fileHeaders : ["First Name", "Last Name", "Mobile No", "Email ID", "Source", "Campaign"]}
+      />
+    );
+  }
 
   return (
     <Dialog
@@ -545,69 +612,166 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
       PaperProps={{
         sx: {
           borderRadius: "20px",
-          width: step === "preview" ? "920px" : "527px",
+          width: step === "preview" ? "960px" : "527px",
           maxWidth: "95vw",
+          height: step === "preview" ? "82vh" : "auto",
           maxHeight: "90vh",
-          boxShadow: "0 10px 40px rgba(0, 0, 0, 0.12)",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.15)",
           overflow: "hidden",
-          transition: "width 0.3s ease-in-out",
+          transition: "width 0.3s ease-in-out, height 0.3s ease-in-out",
         },
       }}
     >
-      <Container
-        maxWidth={false}
+      <Box
         sx={{
-          p: "24px 28px !important",
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          p: "24px 28px",
           boxSizing: "border-box",
+          overflow: "hidden",
         }}
       >
-        {/* Title & Close Button */}
-        <DialogTitle
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            p: 0,
-            mb: 2,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            {step === "preview" && (
-              <IconButton
-                onClick={() => setStep("select")}
-                size="small"
-                sx={{ color: "#475569" }}
-              >
-                <ArrowBackIcon fontSize="small" />
-              </IconButton>
-            )}
-            <Typography
-              sx={{
-                fontSize: "20px",
-                fontWeight: 700,
-                color: LIME_GREEN,
-                letterSpacing: "-0.2px",
-              }}
-            >
-              {step === "select" ? "Upload Excel Sheet" : "Verify & Review Upload Leads"}
-            </Typography>
-          </Box>
-          <IconButton
-            onClick={handleModalClose}
-            size="small"
+        {/* FIXED TOP SECTION: TITLE & VERIFICATION BANNER */}
+        <Box sx={{ flexShrink: 0 }}>
+          {/* Title & Close Button */}
+          <DialogTitle
             sx={{
-              color: LIME_GREEN,
-              p: 0.5,
-              "&:hover": { backgroundColor: "rgba(136, 208, 0, 0.08)" },
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              p: 0,
+              mb: step === "preview" ? 2 : 2.5,
             }}
           >
-            <CloseIcon sx={{ fontSize: "22px" }} />
-          </IconButton>
-        </DialogTitle>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              {step === "preview" && (
+                <IconButton
+                  onClick={() => setStep("select")}
+                  size="small"
+                  sx={{ color: "#475569" }}
+                >
+                  <ArrowBackIcon fontSize="small" />
+                </IconButton>
+              )}
+              <Typography
+                sx={{
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  color: LIME_GREEN,
+                  letterSpacing: "-0.2px",
+                }}
+              >
+                {step === "select" ? "Upload Excel Sheet" : "Verify & Review Upload Leads"}
+              </Typography>
+            </Box>
+            <IconButton
+              onClick={handleModalClose}
+              size="small"
+              sx={{
+                color: LIME_GREEN,
+                p: 0.5,
+                "&:hover": { backgroundColor: "rgba(136, 208, 0, 0.08)" },
+              }}
+            >
+              <CloseIcon sx={{ fontSize: "22px" }} />
+            </IconButton>
+          </DialogTitle>
+
+          {/* Verification Summary Banner (Fixed Top) */}
+          {step === "preview" && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#F8FAFC",
+                border: "1px solid #E2E8F0",
+                borderRadius: "14px",
+                p: "14px 20px",
+                mb: 2,
+              }}
+            >
+              <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
+                <Chip
+                  icon={<CheckCircleIcon style={{ color: "#16A34A", fontSize: 18 }} />}
+                  label={`Valid Leads: ${validCount}`}
+                  sx={{
+                    backgroundColor: "#DCFCE7",
+                    color: "#15803D",
+                    fontWeight: 700,
+                    fontSize: "12.5px",
+                    borderRadius: "20px",
+                    px: 0.5,
+                    py: 0.2,
+                  }}
+                />
+                {invalidCount > 0 && (
+                  <Chip
+                    icon={<WarningIcon style={{ color: "#DC2626", fontSize: 18 }} />}
+                    label={`Duplicate / Error Leads: ${invalidCount}`}
+                    sx={{
+                      backgroundColor: "#FEE2E2",
+                      color: "#B91C1C",
+                      fontWeight: 700,
+                      fontSize: "12.5px",
+                      borderRadius: "20px",
+                      px: 0.5,
+                      py: 0.2,
+                    }}
+                  />
+                )}
+                {unverifiedCount > 0 && (
+                  <Chip
+                    icon={<WarningIcon style={{ color: "#D97706", fontSize: 18 }} />}
+                    label={`Unverified Leads: ${unverifiedCount}`}
+                    sx={{
+                      backgroundColor: "#FEF3C7",
+                      color: "#92400E",
+                      fontWeight: 700,
+                      fontSize: "12.5px",
+                      borderRadius: "20px",
+                      px: 0.5,
+                      py: 0.2,
+                    }}
+                  />
+                )}
+              </Box>
+
+              {invalidCount > 0 && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<DeleteIcon sx={{ fontSize: 16 }} />}
+                  onClick={handleRemoveAllInvalidRows}
+                  sx={{
+                    color: "#DC2626",
+                    borderColor: "#FCA5A5",
+                    backgroundColor: "#FEF2F2",
+                    textTransform: "none",
+                    fontWeight: 700,
+                    fontSize: "12px",
+                    borderRadius: "10px",
+                    py: 0.6,
+                    px: 1.8,
+                    "&:hover": {
+                      backgroundColor: "#FEE2E2",
+                      borderColor: "#EF4444",
+                    },
+                  }}
+                >
+                  Remove All {invalidCount} Invalid Rows
+                </Button>
+              )}
+            </Box>
+          )}
+        </Box>
 
         {/* STEP 1: FILE SELECTION VIEW */}
         {step === "select" && (
-          <DialogContent sx={{ p: 0, overflow: "visible" }}>
+          <Box sx={{ p: 0, overflow: "visible" }}>
             <Box
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
@@ -616,9 +780,9 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
               sx={{
                 border: dragActive
                   ? `2px dashed ${LIME_GREEN}`
-                  : "1px dashed #B8B5FF",
+                  : "1.5px dashed #CBD5E1",
                 borderRadius: "14px",
-                backgroundColor: dragActive ? "#F6FCEB" : "#F3F5FE",
+                backgroundColor: dragActive ? "#F7FEE7" : "#F8FAFC",
                 py: "42px",
                 px: "20px",
                 display: "flex",
@@ -699,7 +863,7 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
                 justifyContent: "space-between",
                 alignItems: "center",
                 mt: 2,
-                mb: 2,
+                mb: 0.5,
                 px: 0.5,
               }}
             >
@@ -721,286 +885,322 @@ const UploadLeadsModal = ({ open, onClose, onUpload }) => {
                 Download Sample file
               </Typography>
             </Box>
-          </DialogContent>
+          </Box>
         )}
 
-        {/* STEP 2: PREVIEW & VERIFY DUPLICATES VIEW */}
+        {/* STEP 2: FLEXIBLE MIDDLE SCROLLABLE TABLE AREA */}
         {step === "preview" && (
-          <DialogContent sx={{ p: 0, overflow: "hidden" }}>
-            {/* Verification Summary Banner */}
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                backgroundColor: "#F8FAFC",
-                border: "1px solid #E2E8F0",
-                borderRadius: "12px",
-                p: 1.8,
-                mb: 2,
-              }}
-            >
-              <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
-                <Chip
-                  icon={<CheckCircleIcon style={{ color: "#16A34A" }} />}
-                  label={`Valid Leads: ${validCount}`}
+          <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", my: 1 }}>
+            {(() => {
+              const displayColumns = [
+                {
+                  id: "contactName",
+                  label: "Contact Name",
+                  getKey: (row) =>
+                    (fieldMapping.contactName ? row.rawObj?.[fieldMapping.contactName] : null) || row.fullName || "-",
+                },
+                {
+                  id: "primaryNumber",
+                  label: "Primary Contact Number *",
+                  getKey: (row) =>
+                    (fieldMapping.primaryNumber ? row.rawObj?.[fieldMapping.primaryNumber] : null) || row.mobileNo || "-",
+                },
+                {
+                  id: "alternateNumber1",
+                  label: "Alternate Contact Number 1",
+                  getKey: (row) =>
+                    fieldMapping.alternateNumber1
+                      ? row.rawObj?.[fieldMapping.alternateNumber1] || row.alternateNo || "-"
+                      : "-",
+                },
+                {
+                  id: "email",
+                  label: "Email Address",
+                  getKey: (row) =>
+                    fieldMapping.email
+                      ? row.rawObj?.[fieldMapping.email] || row.email || "-"
+                      : "-",
+                },
+              ];
+
+              return (
+                <TableContainer
+                  component={Paper}
+                  elevation={0}
                   sx={{
-                    backgroundColor: "#DCFCE7",
-                    color: "#15803D",
-                    fontWeight: 700,
-                    fontSize: "12.5px",
+                    flex: 1,
+                    height: "100%",
+                    borderRadius: "14px",
+                    border: "1px solid #E2E8F0",
+                    overflowY: "auto",
+                    overflowX: "auto",
+                    mb: 1,
+                    "&::-webkit-scrollbar": { width: "8px", height: "8px" },
+                    "&::-webkit-scrollbar-track": { backgroundColor: "#F1F5F9", borderRadius: "10px" },
+                    "&::-webkit-scrollbar-thumb": { backgroundColor: "#94A3B8", borderRadius: "10px" },
+                    "&::-webkit-scrollbar-thumb:hover": { backgroundColor: "#84CC16" },
                   }}
-                />
-                {duplicateCount > 0 && (
-                  <Chip
-                    icon={<WarningIcon style={{ color: "#DC2626" }} />}
-                    label={`Duplicate Leads: ${duplicateCount}`}
-                    sx={{
-                      backgroundColor: "#FEE2E2",
-                      color: "#B91C1C",
-                      fontWeight: 700,
-                      fontSize: "12.5px",
-                    }}
-                  />
-                )}
-                {missingCount > 0 && (
-                  <Chip
-                    icon={<WarningIcon style={{ color: "#EA580C" }} />}
-                    label={`Mandatory Missing: ${missingCount}`}
-                    sx={{
-                      backgroundColor: "#FFEDD5",
-                      color: "#C2410C",
-                      fontWeight: 700,
-                      fontSize: "12.5px",
-                    }}
-                  />
-                )}
-              </Box>
-
-              <Button
-                size="small"
-                onClick={handleReVerify}
-                sx={{
-                  color: LIME_GREEN,
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: "13px",
-                }}
-              >
-                Re-Verify Duplicates
-              </Button>
-            </Box>
-
-            {/* Dynamic Preview Table (Renders ALL Columns & Rows from Upload File) */}
-            <TableContainer
-              component={Paper}
-              variant="outlined"
-              sx={{
-                maxHeight: "360px",
-                borderRadius: "12px",
-                borderColor: "#E2E8F0",
-                overflowX: "auto",
-              }}
-            >
-              <Table stickyHeader size="small">
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: "#F1F5F9" }}>
-                    <TableCell sx={{ fontWeight: 700, fontSize: "12px", whiteSpace: "nowrap" }}>
-                      Status
-                    </TableCell>
-
-                    {/* Dynamic Headers from Uploaded File */}
-                    {fileHeaders.map((headerKey) => (
-                      <TableCell
-                        key={headerKey}
-                        sx={{ fontWeight: 700, fontSize: "12px", whiteSpace: "nowrap" }}
-                      >
-                        {headerKey}
-                      </TableCell>
-                    ))}
-
-                    <TableCell align="center" sx={{ fontWeight: 700, fontSize: "12px", whiteSpace: "nowrap" }}>
-                      Action
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {previewRows.map((row) => {
-                    const isDup = row.status === "duplicate";
-                    const isMissing = row.status === "mandatory_missing";
-                    return (
-                      <TableRow
-                        key={row.id}
-                        sx={{
-                          backgroundColor: "#FFFFFF",
-                          "&:hover": { backgroundColor: "#F8FAFC" },
-                        }}
-                      >
-                        <TableCell sx={{ whiteSpace: "nowrap" }}>
-                          <Chip
-                            size="small"
-                            label={isDup ? "Duplicate" : isMissing ? "Mandatory Missing" : "Valid"}
-                            title={row.reason}
-                            sx={{
-                              height: "22px",
-                              fontSize: "11px",
-                              fontWeight: 700,
-                              backgroundColor: isDup ? "#FCA5A5" : isMissing ? "#FED7AA" : "#86EFAC",
-                              color: isDup ? "#991B1B" : isMissing ? "#9A3412" : "#166534",
-                            }}
-                          />
+                >
+                  <Table stickyHeader size="small">
+                    <TableHead>
+                      <TableRow sx={{ "& th": { borderBottom: "2px solid #E2E8F0", py: "10px" } }}>
+                        <TableCell sx={{ fontWeight: 700, fontSize: "12px", whiteSpace: "nowrap", backgroundColor: "#F8FAFC", color: "#334155" }}>
+                          S.No
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontSize: "12px", whiteSpace: "nowrap", backgroundColor: "#F8FAFC", color: "#334155" }}>
+                          Status
                         </TableCell>
 
-                        {/* Dynamic Column Values with Persistent Inline Editing */}
-                        {fileHeaders.map((headerKey) => {
-                          const rawVal = row.rawObj?.[headerKey];
-                          const isCurrentlyEmpty = isMissingCellVal(rawVal);
-                          const kLow = String(headerKey).toLowerCase().replace(/[^a-z0-9]/g, "");
+                        {displayColumns.map((col) => (
+                          <TableCell
+                            key={col.id}
+                            sx={{ fontWeight: 700, fontSize: "12px", whiteSpace: "nowrap", backgroundColor: "#F8FAFC", color: "#0F172A" }}
+                          >
+                            {col.label}
+                          </TableCell>
+                        ))}
 
-                          const isExcludedNameKey =
-                            kLow.includes("course") ||
-                            kLow.includes("user") ||
-                            kLow.includes("plan") ||
-                            kLow.includes("company") ||
-                            kLow.includes("tag") ||
-                            kLow.includes("stage");
-
-                          const isMandatoryKey =
-                            !isExcludedNameKey &&
-                            (kLow.includes("name") ||
-                              kLow.includes("mobile") ||
-                              kLow.includes("phone") ||
-                              kLow.includes("contact") ||
-                              kLow.includes("source") ||
-                              kLow.includes("campaign"));
-
-                          const isMandatoryEmpty = isCurrentlyEmpty && isMandatoryKey;
-                          const isEditableCell = (row.missingKeys && row.missingKeys.has(headerKey)) || isCurrentlyEmpty;
-
-                          return (
-                            <TableCell
-                              key={headerKey}
-                              sx={{
-                                fontSize: "12.5px",
-                                whiteSpace: "nowrap",
-                                py: isEditableCell ? 0.4 : 1,
-                                px: 1,
-                              }}
-                            >
-                              {isEditableCell ? (
-                                <input
-                                  type="text"
-                                  value={rawVal === "-" ? "" : rawVal ?? ""}
-                                  placeholder={`Enter ${headerKey}...`}
-                                  onChange={(e) => handleCellEdit(row.id, headerKey, e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.target.blur();
-                                    }
-                                  }}
-                                  style={{
-                                    padding: "4px 8px",
-                                    borderRadius: "6px",
-                                    border: isMandatoryEmpty ? "1.5px solid #F97316" : "1px solid #CBD5E1",
-                                    backgroundColor: isMandatoryEmpty ? "#FFF7ED" : "#FFFFFF",
-                                    color: isMandatoryEmpty ? "#C2410C" : "#0F172A",
-                                    fontSize: "12px",
-                                    width: "135px",
-                                    outline: "none",
-                                    fontWeight: isMandatoryEmpty ? 600 : 400,
-                                    transition: "all 0.15s ease-in-out",
-                                  }}
-                                />
-                              ) : (
-                                <span
-                                  style={{
-                                    color: isDup ? "#991B1B" : "#334155",
-                                  }}
-                                >
-                                  {String(rawVal ?? "-") || "-"}
-                                </span>
-                              )}
-                            </TableCell>
-                          );
-                        })}
-
-                        <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
-                          <Tooltip title="Delete row from upload list">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDeleteRow(row.id)}
-                              sx={{
-                                color: "#EF4444",
-                                "&:hover": { backgroundColor: "#FEE2E2" },
-                              }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                        <TableCell align="center" sx={{ fontWeight: 700, fontSize: "12px", whiteSpace: "nowrap", backgroundColor: "#F8FAFC", color: "#334155" }}>
+                          Action
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
+                    </TableHead>
 
-                  {previewRows.length === 0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={fileHeaders.length + 2}
-                        align="center"
-                        sx={{ py: 3, color: "#64748B" }}
-                      >
-                        No lead records in preview table.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                    <TableBody>
+                      {previewRows.map((row, index) => {
+                        const isValid = row.status === "valid";
+                        const isUnverified = row.status === "unverified" || !row.status;
 
-            {/* Action Buttons */}
-            <DialogActions sx={{ pt: 2, pb: 0, px: 0, justifyContent: "space-between" }}>
+                        return (
+                          <TableRow
+                            key={row.id || index}
+                            sx={{
+                              backgroundColor: index % 2 === 0 ? "#FFFFFF" : "#FAFAFA",
+                              transition: "background-color 0.15s ease",
+                              "&:hover": { backgroundColor: "#F7FEE7" },
+                              "& td": { py: "8px" },
+                            }}
+                          >
+                            <TableCell sx={{ fontSize: "12.5px", color: "#64748B", fontWeight: 600 }}>
+                              {index + 1}
+                            </TableCell>
+                            <TableCell sx={{ minWidth: "160px" }}>
+                              <Tooltip title={row.reason || ""} arrow placement="top">
+                                <Chip
+                                  size="small"
+                                  label={isValid ? "Valid" : isUnverified ? "Unverified" : (row.reason || "Error")}
+                                  sx={{
+                                    height: "auto",
+                                    minHeight: "22px",
+                                    py: 0.3,
+                                    fontSize: "11px",
+                                    fontWeight: 700,
+                                    borderRadius: "10px",
+                                    maxWidth: "280px",
+                                    "& .MuiChip-label": {
+                                      whiteSpace: "normal",
+                                      wordBreak: "break-word",
+                                      px: 1,
+                                      py: 0.2,
+                                    },
+                                    backgroundColor: isValid ? "#DCFCE7" : isUnverified ? "#FEF3C7" : "#FEE2E2",
+                                    color: isValid ? "#166534" : isUnverified ? "#92400E" : "#991B1B",
+                                  }}
+                                />
+                              </Tooltip>
+                            </TableCell>
+
+                            {displayColumns.map((col) => {
+                              const rawVal =
+                                col.id === "contactName"
+                                  ? row.fullName
+                                  : col.id === "primaryNumber"
+                                  ? row.mobileNo
+                                  : col.id === "alternateNumber1"
+                                  ? row.alternateNo
+                                  : row.email;
+                              const cellVal = rawVal && rawVal !== "-" ? rawVal : "";
+
+                              return (
+                                <TableCell key={col.id} sx={{ p: "6px 8px" }}>
+                                  <TextField
+                                    size="small"
+                                    value={cellVal}
+                                    placeholder={`Enter ${col.label.replace(" *", "")}`}
+                                    onChange={(e) => handleCellChange(row.id, col.id, e.target.value)}
+                                    variant="outlined"
+                                    sx={{
+                                      width: col.id === "email" ? "190px" : col.id === "contactName" ? "160px" : "150px",
+                                      "& .MuiOutlinedInput-root": {
+                                        fontSize: "12.5px",
+                                        fontWeight: col.id === "contactName" || col.id === "primaryNumber" ? 600 : 400,
+                                        borderRadius: "8px",
+                                        backgroundColor: "#FFFFFF",
+                                        "& fieldset": {
+                                          borderColor: "#CBD5E1",
+                                        },
+                                        "&:hover fieldset": {
+                                          borderColor: "#94A3B8",
+                                        },
+                                        "&.Mui-focused fieldset": {
+                                          borderColor: "#84CC16",
+                                          borderWidth: "1.5px",
+                                        },
+                                        "& input": {
+                                          py: "5px",
+                                          px: "10px",
+                                        },
+                                      },
+                                    }}
+                                  />
+                                </TableCell>
+                              );
+                            })}
+
+                            <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
+                              <Tooltip title="Delete record from upload batch">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleDeleteRow(row.id)}
+                                  sx={{
+                                    color: "#EF4444",
+                                    p: 0.8,
+                                    borderRadius: "8px",
+                                    "&:hover": { backgroundColor: "#FEE2E2" },
+                                  }}
+                                >
+                                  <DeleteIcon sx={{ fontSize: 18 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+
+                      {previewRows.length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={displayColumns.length + 3}
+                            align="center"
+                            sx={{ py: 4, color: "#64748B", fontWeight: 500 }}
+                          >
+                            No lead records in preview table.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              );
+            })()}
+          </Box>
+        )}
+
+        {/* STEP 3: FIXED BOTTOM FOOTER ACTIONS */}
+        {step === "preview" && (
+          <Box
+            sx={{
+              flexShrink: 0,
+              pt: 2,
+              mt: "auto",
+              borderTop: "1px solid #F1F5F9",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackIcon sx={{ fontSize: 18 }} />}
+              onClick={() => setStep("campaign_select")}
+              sx={{
+                borderColor: "#84CC16",
+                color: "#84CC16",
+                textTransform: "none",
+                borderRadius: "10px",
+                fontWeight: 700,
+                fontSize: "14px",
+                height: "42px",
+                px: 3,
+                "&:hover": {
+                  backgroundColor: "#F7FEE7",
+                  borderColor: "#65A30D",
+                },
+              }}
+            >
+              Back to Mapping
+            </Button>
+
+            <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+              {/* Verify Button (Backend API call) */}
               <Button
                 variant="outlined"
-                onClick={() => setStep("select")}
+                onClick={handleBackendVerify}
+                disabled={verifying || previewRows.length === 0}
                 sx={{
-                  borderColor: "#CBD5E1",
-                  color: "#475569",
+                  borderColor: "#84CC16",
+                  color: "#84CC16",
                   textTransform: "none",
-                  borderRadius: "8px",
-                  fontWeight: 600,
-                  fontSize: "13px",
+                  borderRadius: "10px",
+                  fontWeight: 700,
+                  fontSize: "14px",
+                  height: "42px",
+                  px: 3,
+                  "&:hover": {
+                    backgroundColor: "#F7FEE7",
+                    borderColor: "#65A30D",
+                  },
                 }}
               >
-                Upload Different File
+                {verifying ? (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <CircularProgress size={16} sx={{ color: "#84CC16" }} />
+                    <span>Verifying...</span>
+                  </Box>
+                ) : (
+                  "Verify"
+                )}
               </Button>
 
+              {/* Submit Button (Enabled ONLY if all rows verified Valid) */}
               <Button
                 variant="contained"
                 onClick={handleConfirmUpload}
-                disabled={uploading || previewRows.length === 0 || invalidTotal > 0}
+                disabled={uploading || verifying || !isAllValid || previewRows.length === 0}
                 sx={{
-                  backgroundColor: invalidTotal > 0 ? "#94A3B8" : LIME_GREEN,
+                  backgroundColor: !isAllValid ? "#94A3B8" : LIME_GREEN,
                   color: "#FFF",
                   textTransform: "none",
-                  borderRadius: "8px",
-                  px: 3,
-                  fontWeight: 600,
-                  fontSize: "13px",
-                  "&:hover": { backgroundColor: invalidTotal > 0 ? "#94A3B8" : LIME_HOVER },
+                  borderRadius: "10px",
+                  height: "42px",
+                  px: 4,
+                  fontWeight: 700,
+                  fontSize: "14px",
+                  boxShadow: !isAllValid ? "none" : "0 4px 14px rgba(132, 204, 22, 0.35)",
+                  "&:hover": {
+                    backgroundColor: !isAllValid ? "#94A3B8" : LIME_HOVER,
+                    boxShadow: !isAllValid ? "none" : "0 6px 18px rgba(132, 204, 22, 0.45)",
+                  },
+                  "&.Mui-disabled": {
+                    backgroundColor: "#E2E8F0",
+                    color: "#94A3B8",
+                  },
                 }}
               >
                 {uploading ? (
                   <CircularProgress size={20} sx={{ color: "#FFF" }} />
-                ) : invalidTotal > 0 ? (
-                  `Remove ${invalidTotal} Invalid Row(s) to Submit`
+                ) : unverifiedCount > 0 ? (
+                  "Verify to Submit"
+                ) : invalidCount > 0 ? (
+                  `Remove Invalid Rows to Submit`
                 ) : (
-                  `Submit ${previewRows.length} Clean Leads`
+                  `Submit ${previewRows.length} Leads`
                 )}
               </Button>
-            </DialogActions>
-          </DialogContent>
+            </Box>
+          </Box>
         )}
-      </Container>
+      </Box>
     </Dialog>
   );
 };

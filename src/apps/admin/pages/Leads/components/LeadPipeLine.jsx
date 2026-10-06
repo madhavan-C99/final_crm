@@ -369,26 +369,7 @@ const LeadPipeLine = ({
       });
     }
 
-    // Default fallback columns if stagesList is empty
-    const defaultStages = [
-      { id: 1, title: "New Lead" },
-      { id: 2, title: "Follow up" },
-      { id: 3, title: "Pending Follow up" },
-      { id: 4, title: "Won" },
-      { id: 5, title: "Lost" },
-    ];
-
-    return defaultStages.map((stg) => {
-      const stageLeads = tableData.filter((item) => {
-        const itemStageId = Number(item.stage_id || item.status_id || item.lead_stage_id || 0);
-        return itemStageId === stg.id;
-      });
-      return {
-        id: stg.id,
-        title: stg.title,
-        leads: stageLeads,
-      };
-    });
+    return [];
   }, [apiPipelineData, stagesList, tableData]);
 
   return (

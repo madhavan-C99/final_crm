@@ -25,14 +25,14 @@ export const getLeadSelectOptions = async (optFilter = null) => {
     getSelectOptions("L_LEAD_SOURCES", optFilter),
     getSelectOptions("L_CAMPAIGN_NAMES", optFilter),
     getSelectOptions("L_COURSE_NAMES", optFilter),
-    hasCourseSelected ? getSelectOptions("L_COURSE_PLANS", optFilter) : Promise.resolve([]),
+    getSelectOptions("L_COURSE_PLANS", optFilter).catch(() => []),
     getSelectOptions("L_TELECALLERS", optFilter),
-    hasPlanSelected ? getSelectOptions("L_COURSE_TIMES", optFilter) : Promise.resolve([]),
+    getSelectOptions("L_COURSE_TIMES", optFilter).catch(() => []),
     getSelectOptions("L_CATEGORIES", optFilter),
   ]);
 
   let courseNames = courses.length > 0 ? courses : (hasCourseSelected ? await getSelectOptions("L_COURSES", optFilter).catch(() => []) : []);
-  let coursePlans = plans;
+  let coursePlans = plans.length > 0 ? plans : await getSelectOptions("L_COURSE_PLANS", optFilter).catch(() => []);
 
   return {
     data: {
@@ -62,6 +62,20 @@ export const uploadLeadsExcel = async (formData) => {
   });
 };
 
+// 4b. Verify lead records with backend (/adm/verify_lead_import)
+export const verifyLeadImport = async (payload) => {
+  return await api.post("/adm/verify_lead_import", payload);
+};
+
+// 4c. Submit & save imported leads (/adm/submit_lead_import)
+export const submitLeadImport = async (payload) => {
+  return await api.post("/adm/submit_lead_import", payload);
+};
+
+export const verifyUploadLeads = async (payload) => {
+  return await api.post("/adm/verify_lead_import", payload);
+};
+
 // 5. Fetch pipeline kanban board leads (/adm/fetch_pipeline_leads_admin)
 export const getPipelineLeads = async (payload) => {
   return await api.post("/adm/fetch_pipeline_leads_admin", payload);
@@ -74,7 +88,7 @@ export const updateLeadStage = async (payload) => {
 
 // 7. Export leads Excel report (Exact Endpoint: /adm/export_all_leads_admin)
 export const exportLeads = (payload) => {
-  return api.post("/adm/export_all_leads_admin", payload);
+  return api.post("/adm/export_data_api", payload);
 };
 
 // 8. Fetch single lead details & timeline history (/adm/fetch_lead_details_admin)
