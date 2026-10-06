@@ -3,7 +3,7 @@ from ..models.leads import Lead
 from ..models.paymentinfo import PaymentFollowUp,PaymentInfo,PaymentHistory 
 from rest_framework.exceptions import APIException
 from datetime import datetime, timedelta
-from ..services.query_services import exec_raw_sql
+from adm.services.query_services import exec_raw_sql
 from django.db import transaction
 
 def fetch_all_payment(user,**data):

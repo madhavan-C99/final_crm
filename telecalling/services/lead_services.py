@@ -5,7 +5,7 @@ from ..models.paymentinfo import PaymentInfo,PaymentFollowUp
 from rest_framework.exceptions import APIException
 from datetime import datetime, timedelta
 from django.utils import timezone
-from ..services.query_services import exec_raw_sql
+from adm.services.query_services import exec_raw_sql
 from ..tasks import *
 from django.utils.dateparse import parse_datetime
 from django.db.models import F, Q

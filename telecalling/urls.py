@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path
-from .views.user_views import * 
+# from .views.user_views import * 
 from .views.file_views import *
 from .views.dynamic_exprt_excel import *
 from .views.dynamic_pdf import *

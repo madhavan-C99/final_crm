@@ -7,7 +7,7 @@ from ..models.notification import Notification
 from rest_framework.exceptions import APIException
 from django.utils import timezone
 from datetime import datetime, timedelta
-from ..services.query_services import exec_raw_sql
+from adm.services.query_services import exec_raw_sql
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from ..models.follow_up import FollowUp

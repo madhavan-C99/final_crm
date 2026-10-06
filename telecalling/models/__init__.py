@@ -1,15 +1,12 @@
 from .call_details import CallDetails
-from .collection_query import CollectionQuery
-from .courses import Course,CoursePlan,CourseName,CourseTiming
+from adm.models import CollectionQuery, User
+from .courses import Course, CoursePlan, CourseName, CourseTiming
 from .disconnectdetails import DisconnectedDetails
 from .leads import *
-from .paymentinfo import PaymentInfo,PaymentFollowUp,PaymentHistory
-# from .perm import Perm
-# from .role import Role
-from adm.models import User
+from .paymentinfo import PaymentInfo, PaymentFollowUp, PaymentHistory
 from .follow_up import FollowUp
 from .user_settings import UserSettings
-from .notification import Notification,MissedFollowUpHistory
+from .notification import Notification, MissedFollowUpHistory
 from .lose_lead import LossLeadDetail
 from .loss_reason import LossReason
 from .api_log import ApiLog

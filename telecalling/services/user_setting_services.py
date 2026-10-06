@@ -1,7 +1,7 @@
 from rest_framework.exceptions import APIException
 from ..models import *
 from django.contrib.auth import get_user_model
-from ..services.query_services import exec_raw_sql
+from adm.services.query_services import exec_raw_sql
 from rest_framework.exceptions import APIException, NotFound
 from .notification_services import *
 from rest_framework.decorators import authentication_classes, permission_classes

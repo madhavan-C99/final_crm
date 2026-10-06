@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from .whatsapp_services import assign_telecaller
 from ..models.leads import Lead
 from rest_framework.exceptions import APIException
-from .query_services import exec_raw_sql
+from adm.services.query_services import exec_raw_sql
 # from ..views.dynamic_pdf import *
 from django.utils import timezone
 from datetime import datetime

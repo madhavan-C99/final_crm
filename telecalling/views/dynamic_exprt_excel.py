@@ -4,7 +4,7 @@ from django.http import HttpResponse
 from django.apps import apps
 from openpyxl.styles import Font, PatternFill, Alignment
 import openpyxl
-from ..services.query_services import *
+from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql, exec_paginated_raw_sql
 from rest_framework.views import APIView
 from rest_framework import serializers
 from rest_framework.response import Response
