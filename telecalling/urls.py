@@ -12,8 +12,11 @@ from .views.user_setting_views import *
 from .views.export_views import *
 
 
+from adm.views.settings_pipeline_views import FetchPipelineCategoriesView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('get_active_pipelines', FetchPipelineCategoriesView.as_view()),
     # path('get_select_option', GetSelectOption.as_view()), # 🔄 Replaced by /adm/get_select_options
     # path('collection_query', CollectionQueryApi.as_view()), # 🔄 Replaced by /adm/get_select_options
     path('lead_upload_excel', ExcelUpload.as_view()),
@@ -52,7 +55,7 @@ urlpatterns = [
     
     # path('dropdown_cate_create', CreateDropdownCate.as_view()),
     # path('create_dropdown', CreateDropdownSub.as_view()),
-    # path('get_selected_option', GetSelectedOption.as_view()), # 🔄 Replaced by /adm/get_select_options
+    path('get_selected_option', GetSelectedOption.as_view()),
     path('disconnect_select_tag', CallDisconnectSelectTag.as_view()),
     path('mark_notification_read', MarkNotificationRead.as_view()),
     # path('get_export_column', ExportColumnsView.as_view()), # 🔄 Replaced by /adm/export_data_api

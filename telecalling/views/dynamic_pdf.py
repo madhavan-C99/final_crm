@@ -232,7 +232,7 @@ class DynamicPdfGenrate(APIView):
 
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql, exec_paginated_raw_sql
+from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql
 #pip install reportlab
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -609,5 +609,4 @@ def download_crm_report(request,**data):
     )
 
     return response
-
 

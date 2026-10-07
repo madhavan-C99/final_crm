@@ -16,6 +16,7 @@ from .views.campaign_management_views import *
 from .views.add_new_lead_views import *
 from .views.generic_engine_views import *
 from .views.lead_import_views import *
+from .views.course_views import *
 
 urlpatterns = [
     
@@ -25,8 +26,23 @@ urlpatterns = [
     # path('action_lead_management', ActionLeadManagementApi.as_view()),
     path('get_select_options', GetSelectOptions.as_view()),
     path('create_lead_api', CreateLeadApi.as_view()),
-    # path('get_generic_list', GetGenericList.as_view()),
     path('get_roles_and_permissions', GetRolesAndPermissionsApi.as_view()),
+    
+    # 📌 Course Management APIs
+    path('fetch_courses_sidebar_admin', FetchCoursesSidebarApi.as_view()),
+    path('fetch_course_details_admin', FetchCourseDetailsApi.as_view()),
+    path('create_courses', CreateCourseApi.as_view()),
+    path('edit_courses', EditCourseApi.as_view()),
+    path('delete_course_admin', DeleteCourseAdminApi.as_view()),
+
+    path('create_course_plan_admin', CreateCoursePlanAdminApi.as_view()),
+    path('edit_plans', EditPlanApi.as_view()),
+    path('delete_course_plan_admin', DeleteCoursePlanAdminApi.as_view()),
+    
+    path('create_batches', CreateBatchApi.as_view()),
+    path('edit_batches', EditBatchApi.as_view()),
+    path('edit_course_batch_admin', EditCourseBatchAdminApi.as_view()),
+    path('delete_course_batch_admin', DeleteCourseBatchAdminApi.as_view()),
     
     # 📌 User Management Settings APIs
     path('fetch_users_admin', FetchAllUsersAdminApi.as_view()),

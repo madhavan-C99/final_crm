@@ -13,7 +13,7 @@ from asgiref.sync import async_to_sync
 from django.core.cache import cache
 from django.conf import settings
 from ..models import *
-from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql, exec_paginated_raw_sql
+from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql
 from rest_framework.exceptions import APIException, NotFound
 from datetime import datetime, timedelta
 import zoneinfo
@@ -517,7 +517,6 @@ def send_missed_followup_notification(follow_up_id, retry_count, is_first=False)
     except Exception as e:
         print(f"❌ Error in missed followup: {e}")
         raise
-
 
 
 

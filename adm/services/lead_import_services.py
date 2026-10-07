@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from rest_framework.exceptions import ValidationError as APIValidationError
 
 from telecalling.models import Lead, CampaignName, LeadSource, PipelineStage
@@ -32,7 +33,8 @@ def verify_lead_rows(rows, user):
 
         name = str(row.get("name") or "").strip()
         email = str(row.get("email") or "").strip().lower()
-        mobile = re.sub(r"\D", "", str(row.get("mobile") or ""))
+        raw_mobile = re.sub(r"\D", "", str(row.get("mobile") or ""))
+        mobile = raw_mobile[-10:] if len(raw_mobile) >= 10 else raw_mobile
         campaign_id = row.get("campaign_id")
         source_id = row.get("source_id")
         assigned_to_id = row.get("assigned_to_id")
@@ -56,12 +58,7 @@ def verify_lead_rows(rows, user):
                 "message": "Name is required."
             })
 
-        if not email:
-            errors.append({
-                "field": "email",
-                "message": "Email is required."
-            })
-        else:
+        if email:
             try:
                 validate_email(email)
             except ValidationError:
@@ -89,22 +86,30 @@ def verify_lead_rows(rows, user):
             })
 
     valid_mobiles = {
-        row["mobile"]
+        row["mobile"][-10:]
         for row in normalized_rows
-        if row.get("mobile") and re.fullmatch(r"[6-9]\d{9}", row["mobile"])
+        if row.get("mobile") and re.fullmatch(r"[6-9]\d{9}", row["mobile"][-10:])
     }
 
     existing_mobiles = set()
-    if org and valid_mobiles:
-        existing_mobiles = set(
-            Lead.objects.filter(
-                organization=org,
-                mobile_no__in=valid_mobiles,
-            ).values_list("mobile_no", flat=True)
-        )
+    if valid_mobiles:
+        mobile_q = Q()
+        for m in valid_mobiles:
+            mobile_q |= Q(mobile_no__endswith=m)
+
+        lead_qs = Lead.objects.filter(mobile_q)
+        if org:
+            org_id = getattr(org, "id", org)
+            lead_qs = lead_qs.filter(Q(organization_id=org_id) | Q(organization__isnull=True))
+
+        for db_mob in lead_qs.values_list("mobile_no", flat=True):
+            clean_db_mob = re.sub(r"\D", "", str(db_mob or ""))[-10:]
+            if clean_db_mob:
+                existing_mobiles.add(clean_db_mob)
 
     for index, row in enumerate(normalized_rows):
-        if row.get("mobile") in existing_mobiles:
+        row_mob = row.get("mobile", "")[-10:]
+        if row_mob in existing_mobiles:
             errors_by_row[index].append({
                 "field": "mobile",
                 "message": "A lead with this mobile number already exists."
@@ -181,10 +186,12 @@ def submit_lead_rows(rows, user, campaign_id=None, source_id=None, assigned_to_i
         else:
             tele_user = None
 
+        formatted_mobile = f"+91 {row['mobile']}" if row.get("mobile") else ""
+
         lead_item = Lead(
             full_name=row["name"],
             email=row["email"],
-            mobile_no=row["mobile"],
+            mobile_no=formatted_mobile,
             organization=org,
             campaign=camp,
             lead_source=src,

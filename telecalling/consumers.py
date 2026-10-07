@@ -2,7 +2,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
 from .models import * 
-from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql, exec_paginated_raw_sql
+from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql
 from django.conf import settings
 from django.db.models import Q
 from datetime import datetime, timedelta

@@ -1,4 +1,4 @@
-from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql, exec_paginated_raw_sql
+from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql
 from ..services.dashboard_services import *
 from ..services.lead_services import *
 from ..services.payment_services import *

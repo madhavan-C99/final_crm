@@ -1,6 +1,6 @@
 from adm.services.permission_services import authorize_request
 from rest_framework.views import APIView
-from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql, exec_paginated_raw_sql
+from adm.services.query_services import exec_raw_sql, delete_exec_raw_sql
 from rest_framework.views import APIView
 from rest_framework import serializers
 from rest_framework.response import Response
