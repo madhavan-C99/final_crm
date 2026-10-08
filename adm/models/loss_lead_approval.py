@@ -31,6 +31,8 @@ class AdminLossActionLog(models.Model):
         related_name='new_loss_reassignments'
     )
     remarks = models.TextField(null=True, blank=True)
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True)
+    pipeline = models.ForeignKey('adm.PipelineCategory', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     created_by = models.CharField(max_length=50, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
@@ -60,6 +62,8 @@ class AdminApprovedLossLead(models.Model):
     main_reason_id = models.IntegerField(null=True, blank=True)
     final_remarks = models.TextField(null=True, blank=True)
     can_retarget = models.BooleanField(default=True)
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True)
+    pipeline = models.ForeignKey('adm.PipelineCategory', on_delete=models.SET_NULL, null=True, blank=True)
     approved_at = models.DateTimeField(auto_now_add=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     created_by = models.CharField(max_length=50, null=True, blank=True)

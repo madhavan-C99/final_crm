@@ -6,6 +6,13 @@ from datetime import date, datetime   # ✅ add this import
 
 
 class SafeDeleteModel(models.Model):
+    organization = models.ForeignKey(
+        'adm.Organization',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
     class Meta:
         abstract = True
 

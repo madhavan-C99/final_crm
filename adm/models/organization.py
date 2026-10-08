@@ -2,6 +2,8 @@ from django.db import models
 from telecalling.models.delete_base_model import SafeDeleteModel
 
 class Organization(SafeDeleteModel):
+    organization = None
+    pipeline = None
     # ── Step 1: Basic Information ──────────────────────────────
     logo                = models.ImageField(upload_to='org_logos/', null=True, blank=True)
     organization_name   = models.CharField(max_length=255)

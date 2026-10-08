@@ -1662,13 +1662,13 @@ def edit_lead_admin(**data):
 
         plan_val = data.get("course_plan")
         if plan_val:
-            plan_obj = CoursePlan.objects.filter(Q(id=plan_val if str(plan_val).isdigit() else 0) | Q(courseplan__icontains=plan_val)).first()
+            plan_obj = CoursePlan.objects.filter(Q(id=plan_val if str(plan_val).isdigit() else 0) | Q(course_plan__icontains=plan_val)).first()
             if plan_obj:
                 lead.course_plan = plan_obj
 
         course_val = data.get("course")
         if course_val:
-            course_name_obj = CourseName.objects.filter(Q(id=course_val if str(course_val).isdigit() else 0) | Q(coursename__icontains=course_val)).first()
+            course_name_obj = CourseName.objects.filter(Q(id=course_val if str(course_val).isdigit() else 0) | Q(course_name__icontains=course_val)).first()
             if course_name_obj:
                 lead.course_name = course_name_obj
 

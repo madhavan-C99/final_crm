@@ -262,16 +262,16 @@ def update_lead_summary(lead_id, payload):
 
         if course_name_val and str(course_name_val).strip():
             cn_clean = str(course_name_val).strip()
-            cn_obj = CourseName.objects.filter(Q(coursename__iexact=cn_clean) | Q(coursename__icontains=cn_clean)).first()
+            cn_obj = CourseName.objects.filter(Q(course_name__iexact=cn_clean) | Q(course_name__icontains=cn_clean)).first()
             if not cn_obj:
-                cn_obj = CourseName.objects.create(coursename=cn_clean)
+                cn_obj = CourseName.objects.create(course_name=cn_clean)
             lead.course_name = cn_obj
 
         if plan_name_val and str(plan_name_val).strip():
             cp_clean = str(plan_name_val).strip()
-            cp_obj = CoursePlan.objects.filter(Q(courseplan__iexact=cp_clean) | Q(courseplan__icontains=cp_clean)).first()
+            cp_obj = CoursePlan.objects.filter(Q(course_plan__iexact=cp_clean) | Q(course_plan__icontains=cp_clean)).first()
             if not cp_obj:
-                cp_obj = CoursePlan.objects.create(courseplan=cp_clean)
+                cp_obj = CoursePlan.objects.create(course_plan=cp_clean)
             lead.course_plan = cp_obj
 
         if deal_amount_val is not None:
@@ -282,14 +282,14 @@ def update_lead_summary(lead_id, payload):
                     lead.course.course_fees = fees_int
                     lead.course.save()
                 else:
-                    existing_crs = Course.objects.filter(name=lead.course_name, plan=lead.course_plan).first()
+                    existing_crs = Course.objects.filter(course_name=lead.course_name, course_plan=lead.course_plan).first()
                     if existing_crs:
                         lead.course = existing_crs
                     else:
                         today = timezone.now().date()
                         crs_obj = Course.objects.create(
-                            name=lead.course_name,
-                            plan=lead.course_plan,
+                            course_name=lead.course_name,
+                            course_plan=lead.course_plan,
                             course_fees=fees_int,
                             starting_date=today,
                             closing_date=today + timedelta(days=90),

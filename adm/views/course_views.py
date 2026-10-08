@@ -84,8 +84,8 @@ class CreateCoursePlanAdminApi(APIView):
         course_id = serializers.IntegerField(required=True)
         name = serializers.CharField(required=True, max_length=100, allow_blank=False)
         price = serializers.CharField(required=True)
-        duration = serializers.CharField(required=False, default="6 months")
-        hours_per_day = serializers.CharField(required=False, default="2 hrs")
+        duration = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+        hours_per_day = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     def post(self, request):
         authorize_request('api_create_course_plan', request.user)

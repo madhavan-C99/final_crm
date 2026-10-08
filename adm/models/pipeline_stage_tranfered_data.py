@@ -3,14 +3,14 @@ from django.db import models
 
 class PipelineStageTranferedData(models.Model):
     original_stage_id = models.IntegerField()
-    pipeline_id = models.IntegerField(null=True, blank=True)
+    pipeline = models.ForeignKey('adm.PipelineCategory', on_delete=models.SET_NULL, null=True, blank=True)
     pipeline_name = models.CharField(max_length=150, null=True, blank=True)
     stage_name = models.CharField(max_length=150)
     stage_type = models.CharField(max_length=50, default="open")
     order_no = models.IntegerField(default=1)
 
     # Organization context
-    organization_id = models.IntegerField(null=True, blank=True)
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True)
     organization_name = models.CharField(max_length=150, null=True, blank=True)
 
     # Tags snapshot

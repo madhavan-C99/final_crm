@@ -12,6 +12,8 @@ class AdminLeadReassignHistory(models.Model):
     previous_call_history = models.JSONField(default=list, blank=True, null=True)
     
     reassigned_reason = models.TextField(null=True, blank=True)
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True)
+    pipeline = models.ForeignKey('adm.PipelineCategory', on_delete=models.SET_NULL, null=True, blank=True)
     reassigned_at = models.DateTimeField(auto_now_add=True)
     
     created_at = models.DateTimeField(auto_now_add=True, null=True)

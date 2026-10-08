@@ -79,16 +79,16 @@ def fetch_filter_options(user, **data):
 
         # 2. Courses
         try:
-            co1 = list(CourseName.objects.values_list('coursename', flat=True))
-            co2 = list(Lead.objects.values_list('course__name__coursename', flat=True))
+            co1 = list(CourseName.objects.values_list('course_name', flat=True))
+            co2 = list(Lead.objects.values_list('course__course_name__course_name', flat=True))
             courses = sorted(list(set([c for c in (co1 + co2) if c and str(c).strip()])))
         except Exception:
             courses = ["Full Stack Development", "Data Science"]
 
         # 3. Course Plans
         try:
-            p1 = list(CoursePlan.objects.values_list('courseplan', flat=True))
-            p2 = list(Lead.objects.values_list('course__plan__courseplan', flat=True))
+            p1 = list(CoursePlan.objects.values_list('course_plan', flat=True))
+            p2 = list(Lead.objects.values_list('course__course_plan__course_plan', flat=True))
             course_plans = sorted(list(set([p for p in (p1 + p2) if p and str(p).strip()])))
         except Exception:
             course_plans = ["Master Program", "Regular"]

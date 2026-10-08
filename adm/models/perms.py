@@ -13,6 +13,18 @@ class Perm(models.Model):
         blank=True, 
         related_name='permissions'
     )
+    organization = models.ForeignKey(
+        'adm.Organization', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
+    pipeline = models.ForeignKey(
+        'adm.PipelineCategory', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
     
     # Audit & Timestamp Fields
     created_by = models.CharField(max_length=100, null=True, blank=True)

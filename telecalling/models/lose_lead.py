@@ -1,14 +1,12 @@
 from django.conf import settings
 from .delete_base_model import SafeDeleteModel
 from django.db import models
-from ..models import *
-from django.contrib.auth.models import User
 
 
 
 class LossLeadDetail(SafeDeleteModel):
     lead = models.OneToOneField(
-        Lead,
+        'Lead',
         on_delete=models.CASCADE,
         related_name='loss_detail'
     )

@@ -41,12 +41,12 @@ from .delete_base_model import SafeDeleteModel
         
 class Course(SafeDeleteModel):
 
-    name = models.ForeignKey(
+    course_name = models.ForeignKey(
         'CourseName',
         on_delete=models.SET_NULL,
         null=True,
         related_name='courses')
-    plan = models.ForeignKey(
+    course_plan = models.ForeignKey(
         'CoursePlan',
         on_delete=models.SET_NULL,
         null=True,
@@ -54,17 +54,19 @@ class Course(SafeDeleteModel):
         related_name='courses'
     )
 
-    time = models.ForeignKey(
+    course_time = models.ForeignKey(
         'CourseTiming',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='courses'
     )
-    batch=models.CharField(max_length=50,null=True)
-    course_fees=models.FloatField(validators=[MinValueValidator(0)],default=16000)
-    starting_date = models.DateField()
-    closing_date = models.DateField()
+    batch = models.CharField(max_length=50, null=True, blank=True)
+    trainer = models.CharField(max_length=100, null=True, blank=True)
+    days = models.CharField(max_length=50, default="Mon–Fri", null=True, blank=True)
+    course_fees = models.FloatField(validators=[MinValueValidator(0)], default=16000)
+    starting_date = models.DateField(null=True, blank=True)
+    closing_date = models.DateField(null=True, blank=True)
     is_active=models.BooleanField(default=False)
     total_seats = models.IntegerField(default=0)
     admission_count = models.IntegerField(default=0)
@@ -88,7 +90,7 @@ class Course(SafeDeleteModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.name} ({self.plan})"
+        return f"{self.course_name} ({self.course_plan})"
     
     class Meta:
         db_table = 'telecalling_course'
@@ -96,7 +98,7 @@ class Course(SafeDeleteModel):
    
 
 class CourseName(SafeDeleteModel):
-    coursename= models.CharField(null=True)
+    course_name= models.CharField(null=True)
     is_active=models.BooleanField(default=True)
     created_at=models.DateTimeField(auto_now_add=True,null=True)
     created_by=models.CharField(max_length=50,null=True)
@@ -104,22 +106,26 @@ class CourseName(SafeDeleteModel):
     updated_by=models.CharField(max_length=50,null=True)
     
     def __str__(self):
-        return str(self.coursename)
+        return str(self.course_name)
     
     class Meta:
         db_table = 'telecalling_course_name'
 
         
 class CoursePlan(SafeDeleteModel):
-    courseplan= models.CharField(null=True)
-    is_active=models.BooleanField(default=True)
-    created_at=models.DateTimeField(auto_now_add=True,null=True)
-    created_by=models.CharField(max_length=50,null=True)
-    updated_at=models.DateTimeField(auto_now=True,null=True)
-    updated_by=models.CharField(max_length=50,null=True)
+    course_name = models.ForeignKey('CourseName', on_delete=models.SET_NULL, null=True, blank=True, related_name='plans')
+    course_plan = models.CharField(max_length=100, null=True, blank=True)
+    fee_amount = models.FloatField(default=0.0, null=True, blank=True)
+    duration = models.CharField(max_length=50, null=True, blank=True)
+    hours_per_day = models.CharField(max_length=50, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    created_by = models.CharField(max_length=50, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    updated_by = models.CharField(max_length=50, null=True)
     
     def __str__(self):
-        return str(self.courseplan)
+        return str(self.course_plan)
     
     class Meta:
         db_table = 'telecalling_course_plan'
@@ -127,7 +133,8 @@ class CoursePlan(SafeDeleteModel):
         
         
 class CourseTiming(SafeDeleteModel):
-    coursetime=models.CharField(null=True)
+    course_name = models.ForeignKey('CourseName', on_delete=models.SET_NULL, null=True, blank=True, related_name='timings')
+    course_time = models.CharField(max_length=100, null=True, blank=True)
     is_active=models.BooleanField(default=True)
     created_at=models.DateTimeField(auto_now_add=True,null=True)
     created_by=models.CharField(max_length=50,null=True)
@@ -135,7 +142,22 @@ class CourseTiming(SafeDeleteModel):
     updated_by=models.CharField(max_length=50,null=True)
     
     def __str__(self):
-        return str(self.coursetime)
+        return str(self.course_time)
     
     class Meta:
         db_table = 'telecalling_course_time'
+
+
+class CourseDuration(SafeDeleteModel):
+    duration = models.CharField(max_length=100, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    created_by = models.CharField(max_length=50, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    updated_by = models.CharField(max_length=50, null=True)
+
+    def __str__(self):
+        return str(self.duration)
+
+    class Meta:
+        db_table = 'telecalling_course_duration'

@@ -1,6 +1,6 @@
 from .call_details import CallDetails
 from adm.models import CollectionQuery, User
-from .courses import Course, CoursePlan, CourseName, CourseTiming
+from .courses import Course, CoursePlan, CourseName, CourseTiming, CourseDuration
 from .disconnectdetails import DisconnectedDetails
 from .leads import *
 from .paymentinfo import PaymentInfo, PaymentFollowUp, PaymentHistory

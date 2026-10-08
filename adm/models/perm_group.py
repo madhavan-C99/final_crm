@@ -4,6 +4,8 @@ class PermGroup(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=50, unique=True)
     display_value = models.CharField(max_length=100, null=True, blank=True)
+    organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True)
+    pipeline = models.ForeignKey('adm.PipelineCategory', on_delete=models.SET_NULL, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     created_by = models.CharField(max_length=100, null=True, blank=True)

@@ -368,11 +368,11 @@ def get_loss_lead_approval_filter_dropdowns_admin(user=None):
                 "assigned_leads_count": total_assigned
             })
 
-        courses_qs = CourseName.objects.all().order_by("coursename")
-        courses = [{"id": c.id, "name": getattr(c, 'coursename', getattr(c, 'name', str(c)))} for c in courses_qs]
+        courses_qs = CourseName.objects.all().order_by("course_name")
+        courses = [{"id": c.id, "name": getattr(c, 'course_name', getattr(c, 'name', str(c)))} for c in courses_qs]
 
-        course_plans_qs = CoursePlan.objects.all().order_by("courseplan")
-        course_plans = [{"id": cp.id, "name": getattr(cp, 'courseplan', getattr(cp, 'name', str(cp)))} for cp in course_plans_qs]
+        course_plans_qs = CoursePlan.objects.all().order_by("course_plan")
+        course_plans = [{"id": cp.id, "name": getattr(cp, 'course_plan', getattr(cp, 'name', str(cp)))} for cp in course_plans_qs]
 
         campaigns_qs = CampaignName.objects.all().order_by("name")
         campaigns = [{"id": c.id, "name": c.name} for c in campaigns_qs]

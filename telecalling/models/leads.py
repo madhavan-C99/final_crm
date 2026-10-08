@@ -1,7 +1,6 @@
 from django.conf import settings
 from .delete_base_model import SafeDeleteModel
 from django.db import models
-from django.contrib.auth.models import *
 from .courses import *
 
         
@@ -26,9 +25,9 @@ class Lead(SafeDeleteModel):
     enquiry_date = models.DateTimeField(auto_now_add=True)
     
     # --- Course Details (Initial stage-la null-a irukalam) ---
-    course_plan = models.ForeignKey(CoursePlan,on_delete=models.SET_NULL, null=True, related_name='course_plan')
-    course_name =models.ForeignKey(CourseName,on_delete=models.SET_NULL, null=True, related_name='course_name')
-    course_timing= models.ForeignKey(CourseTiming,on_delete=models.SET_NULL, null=True, related_name='course_timing')
+    course_plan = models.ForeignKey(CoursePlan, on_delete=models.SET_NULL, null=True, related_name='leads')
+    course_name = models.ForeignKey(CourseName, on_delete=models.SET_NULL, null=True, related_name='leads')
+    course_timing = models.ForeignKey(CourseTiming, on_delete=models.SET_NULL, null=True, related_name='leads')
     preferred_timing = models.ForeignKey('PreferredTime',on_delete=models.SET_NULL, null=True, related_name='preferred_timing')
 
     # --- Status & Pipeline ---

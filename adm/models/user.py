@@ -56,6 +56,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     team = models.ForeignKey('adm.Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='adm_members')
     organization = models.ForeignKey('adm.Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
+    is_all_pipelines_access = models.BooleanField(default=False)
+    pipeline_ids = models.JSONField(default=list, blank=True)
     employee_id = models.CharField(max_length=50, null=True, blank=True, unique=True)
     reporting_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates')
     disable_lead_assignment = models.BooleanField(default=False)
