@@ -1,0 +1,101 @@
+import api from "@/shared/services/axios";
+import { getSelectOptions } from "@/apps/admin/services/dropdownService";
+
+/**
+ * Fetch Main Reports List from Backend
+ * Endpoint: POST /adm/reports
+ * Body: {} or { search: "query" }
+ */
+export const fetchReportsAdmin = async (search = "") => {
+  const payload = search ? { search } : {};
+  const response = await api.post("/adm/reports", payload);
+  return response.data;
+};
+
+/**
+ * Fetch Download Logs History
+ * Endpoint: GET /adm/reports/download-logs
+ */
+export const fetchDownloadLogsAdmin = async () => {
+  const response = await api.get("/adm/reports/download-logs");
+  return response.data;
+};
+
+/**
+ * Fetch User Report Data Table
+ * Endpoint: POST /adm/fetch_user_report
+ */
+export const fetchUserReportAdmin = async (filters = {}) => {
+  const response = await api.post("/adm/fetch_user_report", filters);
+  return response.data;
+};
+
+/**
+ * Execute & Fetch Dynamic Report Data
+ * Endpoint: POST /adm/execute_reports
+ * Body: { report_key, date_filter, from_date, to_date, search, user_id, page, limit }
+ */
+export const executeReportAdmin = async (payload = {}) => {
+  const response = await api.post("/adm/execute_reports", payload);
+  return response.data;
+};
+
+/**
+ * Fetch Telecallers Dropdown List
+ * Endpoint: POST /adm/get_select_options
+ * Body: { field: "L_TELECALLERS" }
+ */
+export const fetchUsersDropdownAdmin = async () => {
+  return await getSelectOptions("L_TELECALLERS");
+};
+
+/**
+ * Fetch Reporting Managers Dropdown List
+ * Endpoint: POST /adm/get_select_options
+ * Body: { field: "L_REPORTING_MANAGERS" }
+ */
+export const fetchReportingManagersDropdownAdmin = async () => {
+  return await getSelectOptions("L_REPORTING_MANAGERS");
+};
+
+/**
+ * Fetch Pipelines / Categories Dropdown List
+ * Endpoint: POST /adm/get_select_options
+ * Body: { field: "L_CATEGORIES" }
+ */
+export const fetchPipelinesDropdownAdmin = async () => {
+  return await getSelectOptions("L_CATEGORIES");
+};
+
+/**
+ * Fetch Campaign Names Dropdown List
+ * Endpoint: POST /adm/get_select_options
+ * Body: { field: "L_CAMPAIGN_NAMES" }
+ */
+export const fetchCampaignsDropdownAdmin = async () => {
+  return await getSelectOptions("L_CAMPAIGN_NAMES");
+};
+
+/**
+ * Export Report Data to File (Excel / CSV / PDF)
+ * Endpoint: POST /adm/export_data_api
+ */
+export const exportReportAdmin = async (payload = {}) => {
+  const response = await api.post("/adm/export_data_api", payload);
+  return response.data;
+};
+
+/**
+ * Track Report View
+ * Endpoint: POST /adm/reports/track_view
+ * Body: { report_key: "user_report" }
+ */
+export const trackReportViewAdmin = async (reportKey) => {
+  try {
+    const response = await api.post("/adm/reports/track_view", { report_key: reportKey });
+    return response.data;
+  } catch (error) {
+    console.error("Error tracking report view:", error);
+  }
+};
+
