@@ -25,21 +25,24 @@ class PaymentInfo(SafeDeleteModel):
 
     def save(self, *args, **kwargs):
 
-        # ✅ course fee lookup safely
+        # ✅ course fee lookup safely from lead's course_plan or course
         total_fee = 0.0
-        if self.lead and self.lead.course and self.lead.course.course_fees:
+        if self.lead and getattr(self.lead, 'course_plan', None) and getattr(self.lead.course_plan, 'fee_amount', None):
+            total_fee = float(self.lead.course_plan.fee_amount)
+        elif self.lead and getattr(self.lead, 'course', None) and getattr(self.lead.course, 'course_fees', None):
             total_fee = float(self.lead.course.course_fees)
         elif self.lead and self.lead.course_name_id and self.lead.course_plan_id:
-            c_obj = Course.objects.filter(course_name_id=self.lead.course_name_id, course_plan_id=self.lead.course_plan_id).first()
-            if c_obj and c_obj.course_fees:
-                total_fee = float(c_obj.course_fees)
-        elif Course.objects.filter(course_fees__gt=0).first():
-            total_fee = float(Course.objects.filter(course_fees__gt=0).first().course_fees)
-        else:
-            total_fee = 16000.0
+            c_plan = CoursePlan.objects.filter(id=self.lead.course_plan_id).first()
+            if c_plan and c_plan.fee_amount:
+                total_fee = float(c_plan.fee_amount)
+            else:
+                c_obj = Course.objects.filter(course_name_id=self.lead.course_name_id, course_plan_id=self.lead.course_plan_id).first()
+                if c_obj and c_obj.course_fees:
+                    total_fee = float(c_obj.course_fees)
 
         if total_fee <= 0:
-            total_fee = 16000.0
+            from rest_framework.exceptions import APIException
+            raise APIException("Course fee is not configured for this lead. Please set the course/plan fee before saving payment.")
 
         # ✅ pending calculation
         self.pending_amount = max(0.0, total_fee - self.amount_paid)

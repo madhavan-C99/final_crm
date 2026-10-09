@@ -37,17 +37,4 @@ class CampaignCardsList(APIView):
         serializer.is_valid(raise_exception=True)
         cards = fetch_campaign_cards(user=request.user, **serializer.validated_data)
         return Response({"data": cards}, status=status.HTTP_200_OK)
-
-# 🌟 ALL-INCLUSIVE COMPLETE FILTER OPTIONS VIEW (STRICT CLEAN ARCHITECTURE)
-# @authentication_classes([])
-# @permission_classes([])
-class FilterOptionsView(APIView):
-    class InputSerializer(serializers.Serializer):
-        pass
-
-    def post(self, request):
-        authorize_request('api_filter_options_view_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        options = fetch_filter_options(user=request.user, **serializer.validated_data)
-        return Response({"data": options}, status=status.HTTP_200_OK)
+

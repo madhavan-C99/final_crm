@@ -92,40 +92,4 @@ class ActionLossLeadApprovalAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-class GetLossLeadApprovalFilterDropdownsAdmin(APIView):
-    
-    def get(self, request):
-        authorize_request('api_get_loss_lead_approval_filter_dropdowns_admin', request.user)
-        result = get_loss_lead_approval_filter_dropdowns_admin(user=request.user)
-        return Response(result, status=status.HTTP_200_OK)
 
-
-class ExportLossLeadApprovalRequestsAdmin(APIView):
- 
-    class InputSerializer(serializers.Serializer):
-        pipeline_id = serializers.IntegerField(required=False, allow_null=True)
-        search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        date_filter_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        sort_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        sort_by = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        loss_reason = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        loss_reason_id = serializers.IntegerField(required=False, allow_null=True)
-        telecaller = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        telecaller_id = serializers.IntegerField(required=False, allow_null=True)
-        assigned_to_id = serializers.IntegerField(required=False, allow_null=True)
-        course = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        course_id = serializers.IntegerField(required=False, allow_null=True)
-        course_name_id = serializers.IntegerField(required=False, allow_null=True)
-        lead_source = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        lead_source_id = serializers.IntegerField(required=False, allow_null=True)
-
-    def post(self, request):
-        authorize_request('api_export_loss_lead_approval_requests_admin', request.user)
-        serializer = self.InputSerializer(data=request.data or {})
-        serializer.is_valid(raise_exception=True)
-
-        result = export_loss_lead_approval_requests_admin(user=request.user, **serializer.validated_data)
-        return Response(result, status=status.HTTP_200_OK)

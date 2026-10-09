@@ -145,46 +145,7 @@ class UploadLeadExcelAdmin(APIView):
     
     
     
-# ------------------------------export_all_leads_admin-----------------------
 
-# @authentication_classes([])
-# @permission_classes([])
-class ExportAllLeadsAdmin(APIView):
-    """
-    Admin Leads Page -> Export Button API.
-    """
-    class InputSerializer(serializers.Serializer):
-        pipeline_id = serializers.IntegerField(required=False, allow_null=True)
-        lead_stage_id = serializers.IntegerField(required=False, allow_null=True)
-        pipeline_stage_id = serializers.IntegerField(required=False, allow_null=True)
-        source_id = serializers.IntegerField(required=False, allow_null=True)
-        lead_source_id = serializers.IntegerField(required=False, allow_null=True)
-        campaign_id = serializers.IntegerField(required=False, allow_null=True)
-        campaign_name_id = serializers.IntegerField(required=False, allow_null=True)
-        course_plan_id = serializers.IntegerField(required=False, allow_null=True)
-        assigned_to = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        date_filter_type = serializers.CharField(required=False, default="all")
-        from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        sort_order = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        page_size = serializers.CharField(required=False, default="all")
-        columns = serializers.ListField(child=serializers.CharField(), required=False, default=list)
-
-    def post(self, request):
-        authorize_request('api_export_all_leads_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        req_host = request.build_absolute_uri('/')[:-1]
-        result = export_all_leads_admin(user=request.user, request_host=req_host, **serializer.validated_data)
-
-        payload = {
-            "download_url": result.get("download_url"),
-            "file_name": result.get("file_name"),
-            "total_exported": result.get("total_exported", 0)
-        }
-        return Response({"status": True, "data": payload, **payload}, status=status.HTTP_200_OK)
     
     
     

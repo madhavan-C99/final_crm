@@ -70,88 +70,64 @@ def fetch_campaign_cards(user, **data):
 def fetch_filter_options(user, **data):
     try:
         # 1. Campaigns
-        try:
-            c1 = list(CampaignName.objects.values_list('name', flat=True))
-            c2 = list(Lead.objects.values_list('campaign__name', flat=True))
-            campaigns = sorted(list(set([c for c in (c1 + c2) if c and str(c).strip()])))
-        except Exception:
-            campaigns = ["Live Call Lead", "500 Enquiry Sheet", "Walk In Lead"]
+        c1 = list(CampaignName.objects.values_list('name', flat=True))
+        c2 = list(Lead.objects.values_list('campaign__name', flat=True))
+        campaigns = sorted(list(set([c for c in (c1 + c2) if c and str(c).strip()])))
 
         # 2. Courses
-        try:
-            co1 = list(CourseName.objects.values_list('course_name', flat=True))
-            co2 = list(Lead.objects.values_list('course__course_name__course_name', flat=True))
-            courses = sorted(list(set([c for c in (co1 + co2) if c and str(c).strip()])))
-        except Exception:
-            courses = ["Full Stack Development", "Data Science"]
+        co1 = list(CourseName.objects.values_list('course_name', flat=True))
+        co2 = list(Lead.objects.values_list('course__course_name__course_name', flat=True))
+        courses = sorted(list(set([c for c in (co1 + co2) if c and str(c).strip()])))
 
         # 3. Course Plans
-        try:
-            p1 = list(CoursePlan.objects.values_list('course_plan', flat=True))
-            p2 = list(Lead.objects.values_list('course__course_plan__course_plan', flat=True))
-            course_plans = sorted(list(set([p for p in (p1 + p2) if p and str(p).strip()])))
-        except Exception:
-            course_plans = ["Master Program", "Regular"]
+        p1 = list(CoursePlan.objects.values_list('course_plan', flat=True))
+        p2 = list(Lead.objects.values_list('course__course_plan__course_plan', flat=True))
+        course_plans = sorted(list(set([p for p in (p1 + p2) if p and str(p).strip()])))
 
         # 4. Lead Sources
-        try:
-            s1 = list(LeadSource.objects.values_list('name', flat=True))
-            s2 = list(Lead.objects.values_list('lead_source__name', flat=True))
-            lead_sources = sorted(list(set([s for s in (s1 + s2) if s and str(s).strip()])))
-        except Exception:
-            lead_sources = ["Direct Live Call", "Direct Walk In", "Facebook", "Instagram", "Reference", "Whatsapp"]
+        s1 = list(LeadSource.objects.values_list('name', flat=True))
+        s2 = list(Lead.objects.values_list('lead_source__name', flat=True))
+        lead_sources = sorted(list(set([s for s in (s1 + s2) if s and str(s).strip()])))
 
         # 5. Priorities
-        try:
-            pr1 = list(Priority.objects.values_list('name', flat=True))
-            pr2 = list(Lead.objects.values_list('priority__name', flat=True))
-            priorities = sorted(list(set([p for p in (pr1 + pr2) if p and str(p).strip()])))
-        except Exception:
-            priorities = ["High", "Medium", "Low"]
+        pr1 = list(Priority.objects.values_list('name', flat=True))
+        pr2 = list(Lead.objects.values_list('priority__name', flat=True))
+        priorities = sorted(list(set([p for p in (pr1 + pr2) if p and str(p).strip()])))
 
         # 6. Telecallers / Users
-        try:
-            telecallers = []
-            users_qs = User.objects.all()
-            leads_qs = Lead.objects.all()
-            if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-                users_qs = users_qs.filter(organization=user.organization)
-                leads_qs = leads_qs.filter(organization=user.organization)
-            elif user and getattr(user, 'is_authenticated', False):
-                users_qs = users_qs.none()
-                leads_qs = leads_qs.none()
+        telecallers = []
+        users_qs = User.objects.all()
+        leads_qs = Lead.objects.all()
+        if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
+            users_qs = users_qs.filter(organization=user.organization)
+            leads_qs = leads_qs.filter(organization=user.organization)
+        elif user and getattr(user, 'is_authenticated', False):
+            users_qs = users_qs.none()
+            leads_qs = leads_qs.none()
 
-            for u in users_qs:
-                full_name = f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username
-                if full_name and full_name not in telecallers:
-                    telecallers.append(full_name)
+        for u in users_qs:
+            full_name = f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username
+            if full_name and full_name not in telecallers:
+                telecallers.append(full_name)
 
-            lead_assigned = leads_qs.exclude(assigned_to__isnull=True).select_related('assigned_to')
-            for l in lead_assigned:
-                if l.assigned_to:
-                    name = f"{l.assigned_to.first_name or ''} {l.assigned_to.last_name or ''}".strip() or l.assigned_to.username
-                    if name and name not in telecallers:
-                        telecallers.append(name)
-            telecallers = sorted(telecallers)
-        except Exception:
-            telecallers = []
-
-        if not telecallers:
-            telecallers = ["telecaller", "poomani", "Bharath", "Prakash"]
+        lead_assigned = leads_qs.exclude(assigned_to__isnull=True).select_related('assigned_to')
+        for l in lead_assigned:
+            if l.assigned_to:
+                name = f"{l.assigned_to.first_name or ''} {l.assigned_to.last_name or ''}".strip() or l.assigned_to.username
+                if name and name not in telecallers:
+                    telecallers.append(name)
+        telecallers = sorted(telecallers)
 
         # 7. Pipeline Stages
         stage_tags_map = {}
-        try:
-            ps1 = list(PipelineStage.objects.values_list('name', flat=True))
-            ps2 = list(Lead.objects.exclude(pipeline_stage__name__isnull=True).values_list('pipeline_stage__name', flat=True).distinct())
-            stages = sorted(list(set([st for st in (ps1 + ps2) if st and str(st).strip()])))
+        ps1 = list(PipelineStage.objects.values_list('name', flat=True))
+        ps2 = list(Lead.objects.exclude(pipeline_stage__name__isnull=True).values_list('pipeline_stage__name', flat=True).distinct())
+        stages = sorted(list(set([st for st in (ps1 + ps2) if st and str(st).strip()])))
 
-            for ps in PipelineStage.objects.all():
-                tags = list(Priority.objects.filter(pipeline_stage_id=ps.id).values_list('name', flat=True))
-                if tags:
-                    stage_tags_map[ps.name.lower()] = tags
-        except Exception:
-            stages = ["new lead", "follow up", "won", "loss", "unreached", "pending", "contact_attempt", "future"]
+        for ps in PipelineStage.objects.all():
+            tags = list(Priority.objects.filter(pipeline_stage_id=ps.id).values_list('name', flat=True))
+            if tags:
+                stage_tags_map[ps.name.lower()] = tags
 
         return {
             "campaigns": ["All"] + campaigns,

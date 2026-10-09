@@ -15,6 +15,7 @@ from .organization import Organization
 from .payment_mode import PaymentMode
 
 from .pipeline_stage_tranfered_data import PipelineStageTranferedData, PipelineStageDeletedLog
+from .reports import ReportCatalog
 
 __all__ = [
     'AdminLossActionLog',
@@ -35,4 +36,5 @@ __all__ = [
     'PaymentMode',
     'PipelineStageTranferedData',
     'PipelineStageDeletedLog',
+    'ReportCatalog',
 ]

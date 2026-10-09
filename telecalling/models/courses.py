@@ -64,7 +64,7 @@ class Course(SafeDeleteModel):
     batch = models.CharField(max_length=50, null=True, blank=True)
     trainer = models.CharField(max_length=100, null=True, blank=True)
     days = models.CharField(max_length=50, default="Mon–Fri", null=True, blank=True)
-    course_fees = models.FloatField(validators=[MinValueValidator(0)], default=16000)
+    course_fees = models.FloatField(validators=[MinValueValidator(0)], default=0.0)
     starting_date = models.DateField(null=True, blank=True)
     closing_date = models.DateField(null=True, blank=True)
     is_active=models.BooleanField(default=False)

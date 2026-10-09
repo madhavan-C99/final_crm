@@ -280,11 +280,7 @@ class CreateRoleView(APIView):
         return Response({'data': {'role_code': role_code}}, status=status.HTTP_201_CREATED)
 
 
-class FetchUserDropdownsAdminApi(APIView):
-    def post(self, request):
-        authorize_request('api_fetch_user_dropdowns_admin', request.user)
-        res = fetch_user_dropdowns_admin(user=request.user)
-        return Response({"data": res}, status=status.HTTP_200_OK)
+
 
 
 class FetchUserCampaignsAdminApi(APIView):

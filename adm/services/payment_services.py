@@ -111,7 +111,7 @@ def fetch_all_pending_payments_admin(
             "lead__course_plan",
             "lead__course_name",
             "lead__course",
-            "lead__course__name",
+            "lead__course__course_name",
             "lead__course_timing",
         ).filter(
             pending_amount__gt=0,
@@ -167,12 +167,12 @@ def fetch_all_pending_payments_admin(
             if course_name_value.isdigit():
                 payments_qs = payments_qs.filter(
                     Q(lead__course_name_id=int(course_name_value))
-                    | Q(lead__course__name_id=int(course_name_value))
+                    | Q(lead__course__course_name_id=int(course_name_value))
                 )
             else:
                 payments_qs = payments_qs.filter(
-                    Q(lead__course_name__coursename__icontains=course_name_value)
-                    | Q(lead__course__name__coursename__icontains=course_name_value)
+                    Q(lead__course_name__course_name__icontains=course_name_value)
+                    | Q(lead__course__course_name__course_name__icontains=course_name_value)
                 )
 
         if course_plan:
@@ -180,12 +180,12 @@ def fetch_all_pending_payments_admin(
             if course_plan_value.isdigit():
                 payments_qs = payments_qs.filter(
                     Q(lead__course_plan_id=int(course_plan_value))
-                    | Q(lead__course__plan_id=int(course_plan_value))
+                    | Q(lead__course__course_plan_id=int(course_plan_value))
                 )
             else:
                 payments_qs = payments_qs.filter(
-                    Q(lead__course_plan__courseplan__icontains=course_plan_value)
-                    | Q(lead__course__plan__courseplan__icontains=course_plan_value)
+                    Q(lead__course_plan__course_plan__icontains=course_plan_value)
+                    | Q(lead__course__course_plan__course_plan__icontains=course_plan_value)
                 )
 
         if course_time:
@@ -193,12 +193,12 @@ def fetch_all_pending_payments_admin(
             if course_time_value.isdigit():
                 payments_qs = payments_qs.filter(
                     Q(lead__course_timing_id=int(course_time_value))
-                    | Q(lead__course__time_id=int(course_time_value))
+                    | Q(lead__course__course_time_id=int(course_time_value))
                 )
             else:
                 payments_qs = payments_qs.filter(
-                    Q(lead__course_timing__coursetime__icontains=course_time_value)
-                    | Q(lead__course__time__coursetime__icontains=course_time_value)
+                    Q(lead__course_timing__course_time__icontains=course_time_value)
+                    | Q(lead__course__course_time__course_time__icontains=course_time_value)
                 )
 
         amount_filter = str(pending_amount or "").lower().strip()

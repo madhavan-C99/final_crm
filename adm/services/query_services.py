@@ -12,21 +12,23 @@ def exec_raw_sql(qry_key, qry_vars=dict(), opt_filter=dict()):
             if qry_vars.get('campaign_id') in (None, ''):
                 qry_vars['campaign_id'] = 0
 
-        coll_qry = CollectionQuery.objects.filter(key=qry_key).first()
-        if coll_qry is not None:
-            replaced_query = replace_query(coll_qry.query, qry_vars)
-            cursor = connection.cursor()
-            cursor.execute(replaced_query)
-            res_vals = dict_fetch_all(cursor)
-            cursor.close()
-            return make_serializable(res_vals)
-        else:
-            try:
-                from telecalling.services.lead_services import get_selected_option
+        try:
+            coll_qry = CollectionQuery.objects.get(key=qry_key)
+        except CollectionQuery.DoesNotExist:
+            from telecalling.services.lead_services import DROPDOWN_MODEL_MAP, get_selected_option
+            if qry_key in DROPDOWN_MODEL_MAP:
                 return get_selected_option(dropdown_category=qry_key, **qry_vars)
-            except Exception:
-                return []
+            raise APIException(f"Query key '{qry_key}' not found in CollectionQuery registry.")
 
+        replaced_query = replace_query(coll_qry.query, qry_vars)
+        cursor = connection.cursor()
+        cursor.execute(replaced_query)
+        res_vals = dict_fetch_all(cursor)
+        cursor.close()
+        return make_serializable(res_vals)
+
+    except APIException:
+        raise
     except Exception as e:
         raise APIException(e)
 

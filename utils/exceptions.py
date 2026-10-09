@@ -1,83 +1,65 @@
-from rest_framework.views import exception_handler
-from django.db import IntegrityError
 import logging
+from rest_framework.views import exception_handler
+from rest_framework.response import Response
+from rest_framework import status
+from django.core.exceptions import ObjectDoesNotExist, ValidationError as DjangoValidationError
+from django.db import IntegrityError
 
-# This retrieves a Python logging instance (or creates it)
 logger = logging.getLogger('django')
 
 
 def api_exception_handler(exception, context):
-    handlers={
-        "ValidationError": _handle_generic_error,
-        # "ValidationError": _handle_validation_error,
-        "Http404": _handle_generic_error,
-        "PermissionDenied": _handle_generic_error,
-        "NotAuthenticated": _handle_authentication_error,
-        "TypeError": _handle_generic_error
-    }
-
+    """
+    Global Custom Exception Handler for Django REST Framework.
+    Catches unhandled exceptions, Django DoesNotExist, DB IntegrityError, and returns safe, clean JSON responses.
+    """
+    # 1. Call DRF's default exception handler first to handle DRF's native exceptions
     response = exception_handler(exception, context)
-    print("Exception to come here....")
-    logger.error("Exceptions|api_exception_handler|" + str(context['view']) + "|" + str(exception))
 
+    view_name = context['view'].__class__.__name__ if 'view' in context and hasattr(context['view'], '__class__') else 'UnknownView'
+
+    # 2. Handle Django's ObjectDoesNotExist ➔ Return 404 NOT FOUND
+    if isinstance(exception, ObjectDoesNotExist):
+        logger.warning(f"ObjectDoesNotExist in {view_name}: {exception}")
+        return Response({
+            "status": "error",
+            "message": str(exception) or "The requested record does not exist.",
+            "code": status.HTTP_404_NOT_FOUND
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 3. Handle Django's DB IntegrityError (e.g. Duplicate Key / Foreign Key failure) ➔ Return 400 BAD REQUEST
+    if isinstance(exception, IntegrityError):
+        logger.error(f"IntegrityError in {view_name}: {exception}")
+        return Response({
+            "status": "error",
+            "message": "Database integrity error (e.g. duplicate record or invalid reference).",
+            "code": status.HTTP_400_BAD_REQUEST
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 4. Handle Django's native ValidationError
+    if isinstance(exception, DjangoValidationError):
+        logger.warning(f"ValidationError in {view_name}: {exception}")
+        msg = exception.message_dict if hasattr(exception, 'message_dict') else (exception.messages if hasattr(exception, 'messages') else str(exception))
+        return Response({
+            "status": "error",
+            "message": msg,
+            "code": status.HTTP_400_BAD_REQUEST
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 5. Handle Standard DRF Exceptions
     if response is not None:
-        # A helper example to show how response data can be modified for specific urls and status codes.
-        # if AuthUserAPIView in str(context["view"]) and exception.status_code == 401:
-        #     response.status_code = 200
-        #     response.data = {"is_logged_in": False}
-        #     return response
-        response.data['status_code'] = response.status_code
+        msg = response.data.get("detail") if isinstance(response.data, dict) and "detail" in response.data else response.data
+        response.data = {
+            "status": "error",
+            "message": msg,
+            "code": response.status_code
+        }
+        return response
 
-    exception_class_name = exception.__class__.__name__
-    if exception_class_name in handlers:
-        return handlers[exception_class_name](exception, context, response)
-    return response
-
-
-def _handle_authentication_error(exception, context, response):
-    response.data={
-        "error": "Please login to proceed",
-        "status_code": response.status_code
-    }
-    return response
-
-
-# def _handle_validation_error(exception, context, response):
-#     dtl_msg = ""
-#
-#     logger.error("Exceptions|api_exception_handler|_handle_validation_error|response:" + str(response))
-#     logger.error("Exceptions|api_exception_handler|_handle_validation_error|exception:" + str(exception))
-#     if isinstance(exception, dict):
-#         logger.error("Exceptions|api_exception_handler|_handle_validation_error|inside dict")
-#         for key in exception.keys():
-#             if key != 'status_code':
-#                 # dtl_msg = key + ": " + ", ".join(response.data[key])
-#                 dtl_msg = ", ".join(response.data[key])
-#
-#     else:
-#         dtl_msg = exception
-#     # elif isinstance(exception, list):
-#     #     logger.error("Exceptions|api_exception_handler|_handle_validation_error|inside list")
-#     #     for dt in exception:
-#     #         dtl_msg = dtl_msg + " " + str(dt)
-#     #
-#     # elif isinstance(exception, str):
-#     #     logger.error("Exceptions|api_exception_handler|_handle_validation_error|inside str")
-#     #     dtl_msg = str(exception)
-#
-#
-#     logger.error("Exceptions|api_exception_handler|_handle_validation_error|dtl_msg:" + str(dtl_msg))
-#     status_code = 400
-#     if response is not None:
-#         if response.status_code is not None:
-#             status_code = response.status_code
-#
-#     response.data={
-#         "error": dtl_msg,
-#         "status_code": status_code
-#     }
-#     return response
-
-
-def _handle_generic_error(exception, context, response):
-    return response
+    # 6. Unhandled Server Exceptions (e.g. KeyError, AttributeError, System crashes) ➔ Log & Return Safe 500
+    logger.error(f"Unhandled Exception in {view_name}: {exception}", exc_info=True)
+    return Response({
+        "status": "error",
+        "message": "An unexpected internal server error occurred. Please try again later.",
+        "code": status.HTTP_500_INTERNAL_SERVER_ERROR
+    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

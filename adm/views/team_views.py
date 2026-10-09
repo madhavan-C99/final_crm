@@ -74,16 +74,4 @@ class DeleteTeamAdminApi(APIView):
         return Response({"data": res}, status=status.HTTP_200_OK)
 
 
-class FetchTeamDropdownsAdminApi(APIView):
-    class InputSerializer(serializers.Serializer):
-        team_id = serializers.IntegerField(required=False, allow_null=True)
 
-    def post(self, request):
-        authorize_request('api_fetch_team_dropdowns_admin', request.user)
-        serializer = self.InputSerializer(data=request.data or {})
-        serializer.is_valid(raise_exception=True)
-        res = fetch_team_dropdowns_admin(
-            user=request.user,
-            data=serializer.validated_data
-        )
-        return Response({"data": res}, status=status.HTTP_200_OK)

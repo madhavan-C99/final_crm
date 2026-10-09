@@ -266,11 +266,10 @@ def add_course_details(user,**data):
     try:
 
         
-        c_name=CourseName.objects.filter(id=data.get("course_name_id")).first()
-        
-        c_paln=CoursePlan.objects.filter(id=data.get("course_plan_id")).first()
-        course_plan=c_paln.courseplan
-        course_name = c_name.coursename  # ✅ Fixed here
+        c_name = CourseName.objects.filter(id=data.get("course_name_id")).first()
+        c_paln = CoursePlan.objects.filter(id=data.get("course_plan_id")).first()
+        course_plan = str(c_paln.course_plan) if (c_paln and c_paln.course_plan) else ""
+        course_name = str(c_name.course_name) if (c_name and c_name.course_name) else ""
 
         initialname = ''.join(
             word[0].upper()
@@ -296,7 +295,7 @@ def add_course_details(user,**data):
             course_fees=data.get("fees"),
             batch=batch_code,
             starting_date=data.get("start_date"),
-            closing_date=data.get("start_date"),
+            closing_date=data.get("closing_date"),
             total_seats=data.get("total_seat"),
             created_by="admin"
         )

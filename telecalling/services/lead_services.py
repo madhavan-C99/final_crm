@@ -605,8 +605,11 @@ def call_connect_api(user,**data):
                 if dt is None:
                     try:
                         dt = datetime.strptime(followup_datetime[:19], "%Y-%m-%dT%H:%M:%S")
-                    except Exception:
-                        dt = datetime.strptime(followup_datetime[:10], "%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        try:
+                            dt = datetime.strptime(followup_datetime[:10], "%Y-%m-%d")
+                        except (ValueError, TypeError):
+                            dt = None
                 followup_datetime = dt
 
             if not followup_datetime:
@@ -794,8 +797,11 @@ def call_disconnect_api(user, **data):
                 if dt is None:
                     try:
                         dt = datetime.strptime(followup_datetime[:19], "%Y-%m-%dT%H:%M:%S")
-                    except Exception:
-                        dt = datetime.strptime(followup_datetime[:10], "%Y-%m-%d")
+                    except (ValueError, TypeError):
+                        try:
+                            dt = datetime.strptime(followup_datetime[:10], "%Y-%m-%d")
+                        except (ValueError, TypeError):
+                            dt = None
                 followup_datetime = dt
 
             if not followup_datetime:
@@ -1116,19 +1122,14 @@ def won_detail_update(user, **data):
 
         paid_amount = float(data.get("paid_amount", 0))
         total_fee = 0.0
-        if lead.course and lead.course.course_fees:
+        if lead.course and lead.course.course_fees and lead.course.course_fees > 0:
             total_fee = float(lead.course.course_fees)
+        elif lead.course_plan and lead.course_plan.fee_amount and lead.course_plan.fee_amount > 0:
+            total_fee = float(lead.course_plan.fee_amount)
         elif lead.course_name_id and lead.course_plan_id:
-            c_obj = Course.objects.filter(course_name_id=lead.course_name_id, course_plan_id=lead.course_plan_id).first()
+            c_obj = Course.objects.filter(course_name_id=lead.course_name_id, course_plan_id=lead.course_plan_id, course_fees__gt=0).first()
             if c_obj and c_obj.course_fees:
                 total_fee = float(c_obj.course_fees)
-        elif Course.objects.filter(course_fees__gt=0).first():
-            total_fee = float(Course.objects.filter(course_fees__gt=0).first().course_fees)
-        else:
-            total_fee = 16000.0
-
-        if total_fee <= 0:
-            total_fee = 16000.0
 
         # ==========================================
         # CHECK EXISTING PAYMENT INFO

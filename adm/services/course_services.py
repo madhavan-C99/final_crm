@@ -13,6 +13,25 @@ def parse_hours(val):
     return float(m.group(1)) if m else None
 
 
+def format_duration_display(val):
+    if not val:
+        return None
+    s = str(val).strip()
+    if s.isdigit():
+        n = int(s)
+        return f"{n} Months" if n > 1 else f"{n} Month"
+    return s
+
+
+def format_hours_display(val):
+    if not val:
+        return None
+    s = str(val).strip()
+    if re.match(r'^\d+(?:\.\d+)?$', s):
+        return f"{s} Hrs"
+    return s
+
+
 def parse_time_slot_duration(time_str):
     if not time_str:
         return None
@@ -68,21 +87,29 @@ def fetch_courses_sidebar_service(search=None):
     if search:
         queryset = queryset.filter(course_name__icontains=search)
 
-    result = []
-    for course_obj in queryset:
-        courses = Course.objects.filter(course_name=course_obj)
-        enrolled_count = sum(c.admission_count or 0 for c in courses)
-        active_batches = courses.filter(is_active=True).count() if courses.filter(is_active=True).exists() else courses.count()
+    queryset = queryset.annotate(
+        plans_count_annotated=models.Count('plans', distinct=True),
+        active_batches_annotated=models.Count(
+            'courses',
+            filter=models.Q(courses__is_active=True) & (
+                (models.Q(courses__batch__isnull=False) & ~models.Q(courses__batch='')) |
+                models.Q(courses__course_time__isnull=False)
+            ),
+            distinct=True
+        )
+    )
 
-        result.append({
-            "id": course_obj.id,
-            "name": course_obj.course_name or "",
-            "status": "Active" if course_obj.is_active else "Draft",
-            "avatar_text": generate_avatar_text(course_obj.course_name or ""),
-            "enrolled_count": enrolled_count,
-            "active_batches": active_batches
-        })
-    return result
+    return [
+        {
+            "id": c.id,
+            "name": c.course_name or "",
+            "status": "Active" if c.is_active else "Draft",
+            "avatar_text": generate_avatar_text(c.course_name or ""),
+            "plan_count": c.plans_count_annotated,
+            "active_batches": c.active_batches_annotated
+        }
+        for c in queryset
+    ]
 
 
 def fetch_course_details_service(course_id):
@@ -94,15 +121,33 @@ def fetch_course_details_service(course_id):
     plans_list = exec_raw_sql('L_COURSE_PLANS_BY_COURSE', {'course_id': course_id})
     batches_list = exec_raw_sql('D_COURSE_BATCHES_BY_COURSE', {'course_id': course_id})
 
-    default_stats = {"plans": 0, "batches": 0, "enrolled": 0, "seats_left": 0}
+    default_stats = {"plans": 0, "batches": 0}
+    stats = stats_list[0] if (stats_list and isinstance(stats_list, list) and len(stats_list) > 0) else default_stats
+    stats.pop("enrolled", None)
+    stats.pop("seats_left", None)
+
+    cleaned_plans = []
+    if plans_list and isinstance(plans_list, list):
+        for p in plans_list:
+            if isinstance(p, dict):
+                p.pop("after_offer", None)
+                p.pop("students_count", None)
+                p.pop("is_highlighted", None)
+                if p.get("duration"):
+                    p["duration"] = format_duration_display(p["duration"])
+                if p.get("hours_per_day"):
+                    p["hours_per_day"] = format_hours_display(p["hours_per_day"])
+                cleaned_plans.append(p)
+            else:
+                cleaned_plans.append(p)
 
     return {
         "id": course_obj.id,
         "name": course_obj.course_name or "",
         "status": "Active" if course_obj.is_active else "Draft",
         "avatar_text": generate_avatar_text(course_obj.course_name or ""),
-        "stats": stats_list[0] if (stats_list and isinstance(stats_list, list) and len(stats_list) > 0) else default_stats,
-        "plans": plans_list or [],
+        "stats": stats,
+        "plans": cleaned_plans,
         "batches": batches_list or []
     }
 
@@ -266,13 +311,18 @@ def delete_course_plan_service(plan_id, course_id=None, **kwargs):
     if not plan_obj:
         raise APIException("Plan not found.")
 
-    using_batches_count = Course.objects.filter(course_plan=plan_obj).exclude(batch__isnull=True).exclude(batch='').count()
-    if using_batches_count > 0:
-        raise APIException(f"This plan is used by {using_batches_count} batch(es). Delete or change those batches first.")
+    batch_count = Course.objects.filter(
+        course_plan_id=plan_id
+    ).filter(
+        (models.Q(batch__isnull=False) & ~models.Q(batch='')) | models.Q(course_time__isnull=False)
+    ).count()
 
-    Course.objects.filter(course_plan=plan_obj).delete()
+    if batch_count > 0:
+        raise APIException(f"Cannot delete plan. {batch_count} batches exist under this plan. Please delete all batches first.")
+
+    Course.objects.filter(course_plan_id=plan_id).delete()
     CoursePlan.objects.filter(id=plan_id).delete()
-    return True
+    return {"status": "success", "message": "Plan deleted successfully."}
 
 
 def edit_course_batch_service(user, data):
@@ -338,21 +388,29 @@ def edit_course_batch_service(user, data):
 
 
 def delete_course_batch_service(batch_id):
-    batch_qs = Course.objects.filter(id=batch_id)
-    if not batch_qs.exists():
+    batch_obj = Course.objects.filter(id=batch_id).first()
+    if not batch_obj:
         raise APIException("Batch not found.")
 
-    batch_qs.delete()
-    return True
+    Course.objects.filter(id=batch_id).delete()
+    return {"status": "success", "message": "Batch deleted successfully."}
 
 
 def delete_course_service(course_id):
-    course_qs = CourseName.objects.filter(id=course_id)
-    if not course_qs.exists():
-        return False
+    course_name_obj = CourseName.objects.filter(id=course_id).first()
+    if not course_name_obj:
+        raise APIException("Course not found.")
 
-    course_qs.delete()
-    return True
+    plan_count = CoursePlan.objects.filter(
+        models.Q(course_name_id=course_id) | models.Q(courses__course_name_id=course_id)
+    ).distinct().count()
+
+    if plan_count > 0:
+        raise APIException(f"Cannot delete course. {plan_count} plans exist under this course. Please delete all plans first.")
+
+    Course.objects.filter(course_name_id=course_id).delete()
+    CourseName.objects.filter(id=course_id).delete()
+    return {"status": "success", "message": "Course deleted successfully."}
 
 
 def create_batch_service(user, data):

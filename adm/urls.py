@@ -17,16 +17,22 @@ from .views.add_new_lead_views import *
 from .views.generic_engine_views import *
 from .views.lead_import_views import *
 from .views.course_views import *
+from .views.report_views import *
+
 
 urlpatterns = [
     
-    # 🚀 Generic Engines (get_select_options enabled for testing)
-    # path('fetch_leads_api', FetchLeadsApi.as_view()),
+    # 🚀 Generic Engines
     path('export_data_api', ExportDataApi.as_view()),
-    # path('action_lead_management', ActionLeadManagementApi.as_view()),
     path('get_select_options', GetSelectOptions.as_view()),
     path('create_lead_api', CreateLeadApi.as_view()),
     path('get_roles_and_permissions', GetRolesAndPermissionsApi.as_view()),
+
+
+    # 📌 Report Management APIs
+    path('fetch_reports', FetchReportsApi.as_view()),
+    path('execute_reports', ExecuteReportApi.as_view()),
+  
     
     # 📌 Course Management APIs
     path('fetch_courses_sidebar_admin', FetchCoursesSidebarApi.as_view()),
@@ -43,6 +49,7 @@ urlpatterns = [
     path('edit_batches', EditBatchApi.as_view()),
     path('edit_course_batch_admin', EditCourseBatchAdminApi.as_view()),
     path('delete_course_batch_admin', DeleteCourseBatchAdminApi.as_view()),
+  
     
     # 📌 User Management Settings APIs
     path('fetch_users_admin', FetchAllUsersAdminApi.as_view()),
@@ -53,7 +60,6 @@ urlpatterns = [
     path('enable_disable_lead_assignment_admin', EnableDisableLeadAssignmentAdminApi.as_view()),
     path('transfer_leads_admin', TransferLeadsAdminApi.as_view()),
     path('delete_user_admin', DeleteUserAdminApi.as_view()),
-    # path('fetch_user_dropdowns_admin', FetchUserDropdownsAdminApi.as_view()), # 🔄 Replaced by get_select_options
     path('fetch_user_campaigns_admin', FetchUserCampaignsAdminApi.as_view()),
     path('get_user_transfer_campaigns_admin', FetchUserTransferCampaignsAdminApi.as_view()),
     path('fetch_transfer_telecallers_admin', FetchTransferTelecallersAdminApi.as_view()),
@@ -61,13 +67,12 @@ urlpatterns = [
     path('transfer_all_campaigns_leads_admin', TransferAllCampaignsLeadsAdminApi.as_view()),
     path('fetch_user_delete_summary_admin', FetchUserDeleteSummaryAdminApi.as_view()),
 
+
     # 📌 Lead Management APIs
     path('fetch_all_leads_admin', FetchAllLeadsAdmin.as_view()),
     path('add_new_lead_admin', AddNewLeadAdmin.as_view()),
     path('upload_lead_excel_admin', UploadLeadExcelAdmin.as_view()),
     path('upload_leads_excel_admin', UploadLeadExcelAdmin.as_view()),
-    # path('export_all_leads_admin', ExportAllLeadsAdmin.as_view()), # 🔄 Replaced by /adm/export_data_api
-    # path('get_filter_dropdowns_admin', GetFilterDropdownsAdmin.as_view()), # 🔄 Replaced by get_select_options
     path('fetch_pipeline_leads_admin', FetchPipelineLeadsAdmin.as_view()),
     path('fetch_lead_details_admin', FetchLeadDetailsAdmin.as_view()),
     path('get_mark_as_won_info_admin', GetMarkAsWonInfoAdmin.as_view()),
@@ -79,17 +84,16 @@ urlpatterns = [
     path('reassign_lead_admin', ReassignLeadAdmin.as_view()),
     path('verify_lead_import', VerifyLeadImportView.as_view()),
     path('submit_lead_import', SubmitLeadImportView.as_view()),
+  
     
     # 📌 Pending Payments APIs
     path('fetch_all_pending_payments_admin', FetchAllPendingPaymentsAdmin.as_view()),
-    # path('export_pending_payments_admin', ExportPendingPaymentsAdmin.as_view()), # 🔄 Replaced by /adm/export_data_api
-    # path('get_pending_payment_filter_dropdowns_admin', GetPendingPaymentFilterDropdownsAdmin.as_view()), # 🔄 Replaced by get_select_options
+
 
     # 📌 Loss Lead Approval Request APIs
     path('fetch_loss_lead_approval_requests_admin', FetchLossLeadApprovalRequestsAdmin.as_view()),
-    # path('get_loss_lead_approval_filter_dropdowns_admin', GetLossLeadApprovalFilterDropdownsAdmin.as_view()), # 🔄 Replaced by get_select_options
-    # path('export_loss_lead_approval_requests_admin', ExportLossLeadApprovalRequestsAdmin.as_view()), # 🔄 Replaced by /adm/export_data_api
     path('action_loss_lead_approval_admin', ActionLossLeadApprovalAdmin.as_view()),
+
 
     # 📌 Performance Overview APIs
     path('fetch_performance_overview_admin', FetchPerformanceOverviewAdmin.as_view()),
@@ -98,14 +102,15 @@ urlpatterns = [
     path('set_monthly_target_admin', SetMonthlyTargetAdmin.as_view()),
     path('assign_users_to_team_admin', AssignUsersToTeamAdmin.as_view()),
     path('update_telecaller_target_admin', UpdateTelecallerTargetAdmin.as_view()),
-    # path('get_performance_filter_dropdowns_admin', GetPerformanceFilterDropdownsAdmin.as_view()), # 🔄 Replaced by get_select_options
-    # path('export_performance_overview_admin', ExportPerformanceOverviewAdmin.as_view()), # 🔄 Replaced by /adm/export_data_api
+  
     
     # 📌 Role & Permission Management APIs
     path('perm_add', AddPermAPIView.as_view()),
     path('perm_list', FetchPermsListAPIView.as_view()),
     path('role_list', FetchRolesListAPIView.as_view()),
     path('role_assign_perm', AssignRolePermAPIView.as_view()),
+    path('update_role_permission', UpdateRolePermissionApi.as_view()),
+    
     
     # 📌 User Authentication APIs
     path('create_token', CreateToken.as_view()),
@@ -113,11 +118,11 @@ urlpatterns = [
     path('api_user_permissions', FetchUserPermissionsView.as_view()),
     path('create_user', CreateUserView.as_view()),
     
+    
     # 📌 Campaign Analytics & Enquiry Sheet
     path('campaign_stats_tile', EducationPipelineStats.as_view()),
     path('campaign_cards_tile', CampaignCardsList.as_view()),
     path('campaign_enquiry_sheet', CampaignEnquirySheetView.as_view()),
-    # path('filter_options', FilterOptionsView.as_view()), # 🔄 Replaced by get_select_options
     path('lead_summary_report', LeadSummaryReportView.as_view()),
     path('update_lead_summary', UpdateLeadSummaryView.as_view()),
     path('delete_lead_summary', DeleteLeadSummaryView.as_view()),
@@ -126,30 +131,24 @@ urlpatterns = [
     path('change_lead_status', ChangeLeadStatusView.as_view()),
     path('call_log_report', CallLogReportView.as_view()),
     path('disposition_log_report', DispositionLogView.as_view()),
-    # path('get_pipeline_categories', PipelineCategoriesView.as_view()), # 🔄 Replaced by get_select_options
-    # path('get_campaign_managers', CampaignManagersView.as_view()), # 🔄 Replaced by get_select_options
-    # path('get_campaign_agents', CampaignAgentsView.as_view()), # 🔄 Replaced by get_select_options
     path('create_campaign', CreateCampaignView.as_view()),
     path('toggle_campaign_status', ToggleCampaignStatusView.as_view()),
     path('get_campaign_detail', FetchCampaignDetailView.as_view()),
     path('update_campaign_detail', UpdateCampaignDetailView.as_view()),
-    # path('get_add_lead_options', AddLeadDropdownsView.as_view()), # 🔄 Replaced by get_select_options
-    # path('add_new_lead', AddNewLeadView.as_view()), # 🔄 Replaced by /adm/create_lead_api
+
 
     # 📌 Team Management APIs
     path('fetch_all_teams_admin', FetchAllTeamsAdminApi.as_view()),
     path('create_team_admin', CreateTeamAdminApi.as_view()),
     path('edit_team_admin', EditTeamAdminApi.as_view()),
     path('delete_team_admin', DeleteTeamAdminApi.as_view()),
-    # path('fetch_team_dropdowns_admin', FetchTeamDropdownsAdminApi.as_view()), # 🔄 Replaced by get_select_options
+
 
     # 📌 Organization APIs
     path('create_organization_profile_admin', CreateOrganizationProfileAdminApi.as_view()),
     path('get_organization_profile_admin', GetOrganizationProfileAdminApi.as_view()),
     path('edit_organization_profile_admin', EditOrganizationProfileAdminApi.as_view()),
 
-    # 📌 Roles & Permissions Matrix APIs
-    path('update_role_permission', UpdateRolePermissionApi.as_view()),
 
     # 📌 Loss Reasons Management APIs
     path('fetch_loss_reasons_admin', FetchLossReasonsAdminApi.as_view()),
@@ -158,6 +157,7 @@ urlpatterns = [
     path('get_loss_reasons_admin', GetLossReasonsAdminApi.as_view()),
     path('add_loss_reason_admin', AddLossReasonAdminApi.as_view()),
     path('delete_loss_reason_admin', DeleteLossReasonAdminApi.as_view()),
+    
 
     # 📌 Dedicated Settings Pipeline APIs
     path('settings_pipeline_categories', FetchPipelineCategoriesView.as_view()),

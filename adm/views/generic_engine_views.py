@@ -16,8 +16,6 @@ EXPORT_PERMISSION_BY_ENTITY = {
 
 
 class FetchLeadsApi(APIView):
-    print()
-    
     class InputSerializer(serializers.Serializer):
         action = serializers.ChoiceField(
             choices=['FETCH_ALL', 'PIPELINE', 'FETCH_ONE', 'WON_LIST', 'LOST_LIST', 'FETCH_HISTORY'],

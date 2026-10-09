@@ -23,6 +23,26 @@ def is_text_match(a, b):
     return normalize_str(a) == normalize_str(b)
 
 
+def calculate_closing_date(starting_date, course_plan):
+    if not starting_date or not course_plan:
+        return None
+
+    import re
+    duration_str = str(getattr(course_plan, 'duration', '') or getattr(course_plan, 'course_plan', '') or '').lower()
+
+    month_match = re.search(r'(\d+)\s*month', duration_str)
+    if month_match:
+        months = int(month_match.group(1))
+        return starting_date + timedelta(days=months * 30)
+
+    day_match = re.search(r'(\d+)\s*day', duration_str)
+    if day_match:
+        days = int(day_match.group(1))
+        return starting_date + timedelta(days=days)
+
+    return None
+
+
 def resolve_campaign_info(campaign_id=None, campaign_name=None):
     c_id = 0
     c_name = ""
@@ -287,12 +307,13 @@ def update_lead_summary(lead_id, payload):
                         lead.course = existing_crs
                     else:
                         today = timezone.now().date()
+                        closing_dt = calculate_closing_date(today, lead.course_plan)
                         crs_obj = Course.objects.create(
                             course_name=lead.course_name,
                             course_plan=lead.course_plan,
                             course_fees=fees_int,
                             starting_date=today,
-                            closing_date=today + timedelta(days=90),
+                            closing_date=closing_dt,
                             total_seats=0,
                             admission_count=0,
                             seats_left=0,
@@ -347,8 +368,7 @@ def delete_lead_summary(lead_id, user=None):
         # Calling save_delete() creates a DeletedDataLog entry and calls super().delete() to physically remove from DB.
         try:
             lead.save_delete(user_id=user_id)
-        except Exception as err:
-            print("save_delete exception, falling back to super delete:", err)
+        except Exception:
             super(SafeDeleteModel, lead).delete()
 
         return {"status": "success", "message": "Lead deleted successfully", "lead_id": lead_id}

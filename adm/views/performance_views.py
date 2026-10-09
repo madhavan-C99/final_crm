@@ -55,26 +55,7 @@ class UpdateTelecallerTargetAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-class GetPerformanceFilterDropdownsAdmin(APIView):
-   
-    def get(self, request):
-        authorize_request('api_get_performance_filter_dropdowns_admin', request.user)
-        result = get_performance_filter_dropdowns_admin(user=request.user)
-        return Response(result, status=status.HTTP_200_OK)
 
-
-class ExportPerformanceOverviewAdmin(APIView):
-   
-    class InputSerializer(serializers.Serializer):
-        month = serializers.IntegerField(required=False, allow_null=True)
-        year = serializers.IntegerField(required=False, allow_null=True)
-        team_id = serializers.IntegerField(required=False, allow_null=True)
-
-    def post(self, request):
-        authorize_request('api_export_performance_overview_admin', request.user)
-        serializer = self.InputSerializer(data=request.data or {})
-        serializer.is_valid(raise_exception=True)
-        return export_performance_overview_admin(serializer.validated_data, user=request.user)
 
 
 class FetchMonthlyTargetAdmin(APIView):

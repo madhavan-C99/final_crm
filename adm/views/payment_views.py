@@ -12,16 +12,7 @@ from ..services.payment_services import (
 from telecalling.tasks.api_log_task import api_history_log
 
 
-class GetPendingPaymentFilterDropdownsAdmin(APIView):
-    """
-    GET /adm/get_pending_payment_filter_dropdowns_admin
-    Pending Payments Page -> Filter Modal Dropdowns API.
-    Fast Dropdowns using Collection Queries (exec_raw_sql).
-    """
-    def get(self, request):
-        authorize_request('api_get_pending_payment_filter_dropdowns_admin', request.user)
-        result = get_pending_payment_filter_dropdowns_admin(user=request.user)
-        return Response(result, status=status.HTTP_200_OK)
+
 
 
 class FetchAllPendingPaymentsAdmin(APIView):
@@ -89,36 +80,4 @@ class FetchAllPendingPaymentsAdmin(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
 
-class ExportPendingPaymentsAdmin(APIView):
-    """
-    POST /adm/export_pending_payments_admin
-    Export pending payments list.
-    """
-    class InputSerializer(serializers.Serializer):
-        search = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        date_filter = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        date_filter_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        from_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        to_date = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        sort_by = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        sort_type = serializers.ChoiceField(
-            choices=("newest", "oldest"), required=False, default="newest"
-        )
-        pipeline_id = serializers.IntegerField(required=False, allow_null=True)
-        course_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        course_plan = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        course_time = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        payment_stage = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        pending_amount = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-        course_name_id = serializers.IntegerField(required=False, allow_null=True)
-        course_plan_id = serializers.IntegerField(required=False, allow_null=True)
-        course_timing_id = serializers.IntegerField(required=False, allow_null=True)
-        payment_stage_id = serializers.IntegerField(required=False, allow_null=True)
-        pending_amount_range = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
-    def post(self, request):
-        authorize_request('api_export_pending_payments_admin', request.user)
-        serializer = self.InputSerializer(data=request.data or {})
-        serializer.is_valid(raise_exception=True)
-
-        return export_pending_payments_admin(user=request.user, **serializer.validated_data)

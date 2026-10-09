@@ -6,25 +6,7 @@ from rest_framework.response import Response
 from ..services.campaign_management_services import *
 
 
-class PipelineCategoriesView(APIView):
-    def post(self, request):
-        authorize_request('api_pipeline_categories_admin', request.user)
-        data = fetch_pipeline_categories(user=request.user)
-        return Response({"status": True, "message": "Pipeline categories fetched successfully", "data": data}, status=status.HTTP_200_OK)
 
-
-class CampaignManagersView(APIView):
-    def post(self, request):
-        authorize_request('api_campaign_managers_admin', request.user)
-        data = fetch_campaign_managers(user=request.user)
-        return Response({"status": True, "message": "Campaign managers fetched successfully", "data": data}, status=status.HTTP_200_OK)
-
-
-class CampaignAgentsView(APIView):
-    def post(self, request):
-        authorize_request('api_campaign_agents_admin', request.user)
-        data = fetch_campaign_agents(user=request.user)
-        return Response({"status": True, "message": "Campaign agents fetched successfully", "data": data}, status=status.HTTP_200_OK)
 
 
 class CreateCampaignView(APIView):

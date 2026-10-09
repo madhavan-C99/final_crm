@@ -43,7 +43,9 @@ def fetch_all_leads_admin(user=None, **data):
         base_qs = Lead.objects.select_related(
             "assigned_to",
             "pipeline_stage",
+            "pipeline_stage__pipeline_category",
             "campaign",
+            "campaign__pipeline_category",
             "lead_source",
             "course_plan",
             "course_name",
@@ -304,30 +306,41 @@ def fetch_all_leads_admin(user=None, **data):
             if lead.course_name:
                 c_name = getattr(lead.course_name, 'coursename', None) or getattr(lead.course_name, 'name', None)
 
+            p_id = None
+            p_name = None
+            if lead.pipeline_stage and lead.pipeline_stage.pipeline_category:
+                p_id = lead.pipeline_stage.pipeline_category.id
+                p_name = lead.pipeline_stage.pipeline_category.category_name or lead.pipeline_stage.pipeline_category.display_name
+            elif lead.campaign and lead.campaign.pipeline_category:
+                p_id = lead.campaign.pipeline_category.id
+                p_name = lead.campaign.pipeline_category.category_name or lead.campaign.pipeline_category.display_name
+
             leads.append({
-                # "s_no": idx,
                 "id": lead.id,
                 "full_name": lead.full_name or "",
                 "mobile_no": lead.mobile_no or "",
+                "pipeline_id": p_id,
+                "pipeline_name": p_name,
+                "pipeline_stage_id": lead.pipeline_stage_id,
+                "pipeline_stage_name": lead.pipeline_stage.name if lead.pipeline_stage else "New",
                 "assigned_to_id": lead.assigned_to_id,
                 "assigned_to": get_user_display_name(lead.assigned_to),
-                "stage_id": lead.pipeline_stage_id,
-                "pipeline_stage_id": lead.pipeline_stage_id,
-                "stage": lead.pipeline_stage.name if lead.pipeline_stage else "New",
-                "tag": tag_name,
-                "tag_id": tag_id_val,
-                "campaign": lead.campaign.name if lead.campaign else None,
-                "source": lead.lead_source.name if lead.lead_source else None,
-                "course_plan": c_plan_name,
-                "course": c_name,
                 "priority_id": lead.priority_id,
+                "priority_name": tag_name,
+                "campaign_id": lead.campaign_id,
+                "campaign_name": lead.campaign.name if lead.campaign else None,
+                "source_id": lead.lead_source_id,
+                "source_name": lead.lead_source.name if lead.lead_source else None,
+                "course_name_id": lead.course_name_id,
+                "course_name": c_name,
+                "course_plan_id": lead.course_plan_id,
+                "course_plan_name": c_plan_name,
                 "next_followup": latest_followup.scheduled_at if latest_followup else None,
                 "amount": course_fee,
                 "pending_amount": pending_amt,
                 "last_contacted": latest_call.called_at if latest_call else None,
                 "last_conversation_outcome": latest_call.conversation_summary if latest_call else None,
-                "created": lead.created_at or lead.enquiry_date,
-                "enquiry_date": lead.enquiry_date,
+                "enquiry_date": lead.enquiry_date or lead.created_at,
             })
 
         import math
@@ -713,10 +726,7 @@ def upload_lead_excel_admin(file_obj, user=None):
     except Exception as e:
         raise APIException(str(e))
     
-    
-    
-    
-# --------------------------------export leads to excel service------------------------------------------
+
 
 # --------------------------------export leads to excel service------------------------------------------
 
@@ -1032,16 +1042,13 @@ def fetch_pipeline_leads_admin(**data):
             return {
                 "id": lead.id,
                 "full_name": lead.full_name or "",
-                "name": lead.full_name or "",
                 "mobile_no": lead.mobile_no or "",
-                "mobile": lead.mobile_no or "",
-                "assigned_to": get_user_display_name(lead.assigned_to) or "Unassigned",
-                "assigned_to_id": lead.assigned_to_id,
-                "stage_id": stg_id,
                 "pipeline_stage_id": stg_id,
-                "stage": lead.pipeline_stage.name if lead.pipeline_stage else "",
-                "source": lead.lead_source.name if lead.lead_source else "direct walk in",
-                "campaign": lead.campaign.name if lead.campaign else None,
+                "pipeline_stage_name": lead.pipeline_stage.name if lead.pipeline_stage else "",
+                "assigned_to_id": lead.assigned_to_id,
+                "assigned_to": get_user_display_name(lead.assigned_to) or "Unassigned",
+                "source_name": lead.lead_source.name if lead.lead_source else "direct walk in",
+                "campaign_name": lead.campaign.name if lead.campaign else None,
                 "created_at": formatted_date
             }
 
@@ -1074,14 +1081,10 @@ def fetch_pipeline_leads_admin(**data):
             stg_name = stg.display_value or stg.name
             cards_for_stg = data_by_stage.get(stg_name, [])
             stage_list.append({
-                "id": stg.id,
-                "stage_id": stg.id,
-                "name": stg_name,
-                "stage_name": stg_name,
-                "title": stg_name,
+                "pipeline_stage_id": stg.id,
+                "pipeline_stage_name": stg_name,
                 "stage_type": stg.stage_type,
                 "order_no": stg.order_no,
-                "count": len(cards_for_stg),
                 "total_count": len(cards_for_stg),
                 "leads": cards_for_stg
             })
