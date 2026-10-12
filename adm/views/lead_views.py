@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import authentication_classes, permission_classes
 from rest_framework import serializers, status
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from ..services.lead_services import *
 # from telecalling.tasks.api_log_task import api_history_log
@@ -124,40 +124,56 @@ class AddNewLeadAdmin(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class UploadLeadExcelAdmin(APIView):
-   
-    parser_classes = (MultiPartParser, FormParser)
-    class InputSerializer(serializers.Serializer):
-        file = serializers.FileField(required=True)
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+    
     def post(self, request):
         authorize_request('api_upload_lead_excel_admin', request.user)
-        serializer = self.InputSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        uploaded_file = serializer.validated_data['file']
+        
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            candidate = request.data.get('file')
+            if hasattr(candidate, 'read') and hasattr(candidate, 'size'):
+                uploaded_file = candidate
+            else:
+                uploaded_file = None
+
+        leads_data = request.data.get('leads') or request.data.get('data') or request.data.get('rows') or request.data.get('leads_data')
+        
+        if not uploaded_file and not leads_data and isinstance(request.data, list):
+            leads_data = request.data
+
+        if not uploaded_file and not leads_data:
+            return Response({
+                "status": "failed",
+                "message": "Please select a valid Excel or CSV file or provide leads data to upload."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            result = upload_lead_excel_admin(file_obj=uploaded_file, user=request.user)
+            result = upload_lead_excel_admin(file_obj=uploaded_file, leads_data=leads_data, user=request.user)
             if isinstance(result, dict) and result.get("status") in ["failed", False]:
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
             return Response({"status": True, "data": result, **(result if isinstance(result, dict) else {})}, status=status.HTTP_200_OK)
-        except APIException as e:
-            msg = str(e.detail if hasattr(e, 'detail') else e)
+        except Exception as e:
+            detail = getattr(e, 'detail', str(e))
+            if isinstance(detail, dict):
+                parts = []
+                for k, v in detail.items():
+                    val_str = ", ".join(v) if isinstance(v, list) else str(v)
+                    parts.append(f"{k}: {val_str}")
+                msg = " | ".join(parts)
+            elif isinstance(detail, list):
+                msg = ", ".join(str(item) for item in detail)
+            else:
+                msg = str(detail)
             return Response({"status": "failed", "message": msg}, status=status.HTTP_400_BAD_REQUEST)
-    
-    
-    
-    
-
-    
-    
-    
+     
 
 # --------------------------------------fetch_pipeline_leads_admin----------------------------------
 
 # @authentication_classes([])
 # @permission_classes([])
 class FetchPipelineLeadsAdmin(APIView):
-    """
-    Admin Pipeline View (Kanban Cards API).
-    """
+    
     class InputSerializer(serializers.Serializer):
         pipeline_id = serializers.IntegerField(required=False, allow_null=True, default=1)
         lead_stage_id = serializers.IntegerField(required=False, allow_null=True)
@@ -191,9 +207,7 @@ class FetchPipelineLeadsAdmin(APIView):
 # @authentication_classes([])
 # @permission_classes([])
 class FetchLeadDetailsAdmin(APIView):
-    """
-    Admin Lead Details & Activity Timeline Modal API.
-    """
+   
     class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)
 
@@ -204,30 +218,16 @@ class FetchLeadDetailsAdmin(APIView):
 
         result = fetch_lead_details_admin(**serializer.validated_data)
 
-        # log_data = {
-        #     'user_id': request.user.id if request.user.id else None,
-        #     'api_name': request.path,
-        #     'method': request.method,
-        #     'request_payload': serializer.validated_data,
-        #     'response_payload': {"status": result.get("status")},
-        #     'status_code': 200
-        # }
-        # api_history_log(log_data)
 
         return Response(result, status=status.HTTP_200_OK)
 
-    
-    
-    
-    
+      
 # ---------------------------get_mark_as_won_info_admin-----------------------------
 
 # @authentication_classes([])
 # @permission_classes([])
 class GetMarkAsWonInfoAdmin(APIView):
-    """
-    Get Mark as Won Modal Details API (POST with Serializer Validation).
-    """
+    
     class InputSerializer(serializers.Serializer):
         lead_id = serializers.IntegerField(required=True)
 

@@ -36,6 +36,7 @@ class DashboardTopTile(APIView):
 class FetchPipelineFunnel(APIView):
     class InputSerilaizers(serializers.Serializer):
         # tele_id=serializers.IntegerField(required=True)
+        pipeline_id = serializers.IntegerField(required=True)
         from_date = serializers.DateField(required=False)
         to_date = serializers.DateField(required=False)
         filter_type = serializers.CharField(required=False, default="year") 

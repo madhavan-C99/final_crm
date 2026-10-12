@@ -55,7 +55,7 @@ def delete_exec_raw_sql(qry_key, qry_vars=dict()):
 
 def replace_query(qry, qry_vars):
     replquery = qry
-    for key, raw_val in qry_vars.items():
+    for key, raw_val in sorted(qry_vars.items(), key=lambda x: len(x[0]), reverse=True):
         if raw_val is None:
             val = ""
         elif isinstance(raw_val, (int, float)):

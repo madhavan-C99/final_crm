@@ -148,6 +148,34 @@ def fetch_all_pending_payments_admin(
         elif user and getattr(user, "is_authenticated", False):
             payments_qs = payments_qs.none()
 
+        assigned_to = kwargs.get("assigned_to") or kwargs.get("telecaller_id") or kwargs.get("tele_id") or kwargs.get("assigned_to_id")
+        assigned_to_ids = kwargs.get("assigned_to_ids") or kwargs.get("telecaller_ids")
+
+        if assigned_to:
+            if str(assigned_to).isdigit():
+                payments_qs = payments_qs.filter(lead__assigned_to_id=int(assigned_to))
+            else:
+                payments_qs = payments_qs.filter(
+                    Q(lead__assigned_to__username__iexact=str(assigned_to))
+                    | Q(lead__assigned_to__first_name__icontains=str(assigned_to))
+                )
+        elif assigned_to_ids and isinstance(assigned_to_ids, (list, set, tuple)):
+            payments_qs = payments_qs.filter(lead__assigned_to_id__in=list(assigned_to_ids))
+        elif user and getattr(user, "is_authenticated", False):
+            from .generic_export_services import (
+                get_user_role_code,
+                FULL_ADMIN_ROLE_CODES,
+                TEAM_LEAD_ROLE_CODES,
+                get_team_user_ids,
+            )
+            role_code = get_user_role_code(user)
+            if role_code not in FULL_ADMIN_ROLE_CODES:
+                if role_code in TEAM_LEAD_ROLE_CODES:
+                    team_ids = get_team_user_ids(user)
+                    payments_qs = payments_qs.filter(lead__assigned_to_id__in=team_ids)
+                else:
+                    payments_qs = payments_qs.filter(lead__assigned_to=user)
+
         if search and str(search).strip():
             search = str(search).strip()
             payments_qs = payments_qs.filter(

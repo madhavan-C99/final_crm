@@ -32,6 +32,8 @@ urlpatterns = [
     # 📌 Report Management APIs
     path('fetch_reports', FetchReportsApi.as_view()),
     path('execute_reports', ExecuteReportApi.as_view()),
+    path('reports_track_view', TrackReportViewApi.as_view()),
+    path('reports_recently_viewed', FetchRecentlyViewedReportsApi.as_view()),
   
     
     # 📌 Course Management APIs
@@ -72,7 +74,6 @@ urlpatterns = [
     path('fetch_all_leads_admin', FetchAllLeadsAdmin.as_view()),
     path('add_new_lead_admin', AddNewLeadAdmin.as_view()),
     path('upload_lead_excel_admin', UploadLeadExcelAdmin.as_view()),
-    path('upload_leads_excel_admin', UploadLeadExcelAdmin.as_view()),
     path('fetch_pipeline_leads_admin', FetchPipelineLeadsAdmin.as_view()),
     path('fetch_lead_details_admin', FetchLeadDetailsAdmin.as_view()),
     path('get_mark_as_won_info_admin', GetMarkAsWonInfoAdmin.as_view()),

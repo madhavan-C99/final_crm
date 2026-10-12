@@ -135,24 +135,20 @@ def verify_lead_rows(rows, user):
 
 def submit_lead_rows(rows, user, campaign_id=None, source_id=None, assigned_to_id=None, pipeline_stage_id=None):
     result = verify_lead_rows(rows, user)
-
-    if result["error_count"] > 0:
-        raise APIValidationError({
-            "message": "Please fix all validation errors before submitting.",
-            "data": {
-                key: value
-                for key, value in result.items()
-                if key != "normalized_rows"
-            },
-        })
+    rows_validation_info = result.get("rows", [])
+    normalized_rows = result.get("normalized_rows", [])
 
     org = getattr(user, "organization", None)
 
     default_campaign = CampaignName.objects.filter(id=campaign_id).first() if campaign_id else None
     default_source = LeadSource.objects.filter(id=source_id).first() if source_id else None
 
-    dist_type = getattr(default_campaign, "lead_distribution_type", "on_demand") if default_campaign else "on_demand"
-    telecallers = list(default_campaign.assigned_agents.filter(is_active=True)) if default_campaign else []
+    # 🎯 1. Fetch active telecallers assigned to the SELECTED campaign ONLY
+    campaign_telecallers = list(default_campaign.assigned_agents.filter(is_active=True)) if default_campaign else []
+
+    # 🛑 2. Strict Check: If campaign selected has no active telecallers, THROW ERROR!
+    if default_campaign and not campaign_telecallers:
+        raise APIValidationError(f"No active telecaller in campaign '{default_campaign.name}'. Please assign active telecallers to this campaign.")
 
     default_stage = None
     if pipeline_stage_id:
@@ -165,33 +161,57 @@ def submit_lead_rows(rows, user, campaign_id=None, source_id=None, assigned_to_i
     if not default_stage:
         default_stage = PipelineStage.objects.first()
 
+    rr_index = 0
     leads = []
-    for idx, row in enumerate(result["normalized_rows"]):
+    duplicate_count = 0
+    duplicate_mobiles = []
+
+    for idx, row in enumerate(normalized_rows):
+        row_errors = rows_validation_info[idx].get("errors", []) if idx < len(rows_validation_info) else []
+        
+        # Check if row has duplicate or mobile error
+        is_duplicate_or_invalid = any(
+            "duplicate" in str(err.get("message", "")).lower() or "already exists" in str(err.get("message", "")).lower()
+            for err in row_errors
+        )
+        if is_duplicate_or_invalid:
+            duplicate_count += 1
+            if row.get("mobile"):
+                duplicate_mobiles.append(row["mobile"])
+            continue
+
         row_camp_id = row.get("campaign_id") or campaign_id
         row_src_id = row.get("source_id") or source_id
-        row_tele_id = row.get("assigned_to_id")
+        row_tele_id = row.get("assigned_to_id") or assigned_to_id
         row_stage_id = row.get("pipeline_stage_id")
 
         camp = CampaignName.objects.filter(id=row_camp_id).first() if row_camp_id else default_campaign
         src = LeadSource.objects.filter(id=row_src_id).first() if row_src_id else default_source
         stage = PipelineStage.objects.filter(id=row_stage_id).first() if row_stage_id else default_stage
 
-        if dist_type == "equal":
-            if row_tele_id:
-                tele_user = User.objects.filter(id=row_tele_id).first() or (telecallers[idx % len(telecallers)] if telecallers else user)
-            elif telecallers:
-                tele_user = telecallers[idx % len(telecallers)]
+        # Get row-specific campaign agents
+        row_campaign_agents = list(camp.assigned_agents.filter(is_active=True)) if (camp and camp != default_campaign) else campaign_telecallers
+        if camp and not row_campaign_agents:
+            raise APIValidationError(f"No active telecaller in campaign '{camp.name}'.")
+
+        # Assign Telecaller: Specific ID or Round Robin among active telecallers of THIS campaign only
+        tele_user = None
+        if row_tele_id:
+            tele_user = User.objects.filter(id=row_tele_id, is_active=True).first()
+
+        if not tele_user:
+            if row_campaign_agents:
+                tele_user = row_campaign_agents[rr_index % len(row_campaign_agents)]
+                rr_index += 1
             else:
                 tele_user = user
-        else:
-            tele_user = None
 
         formatted_mobile = f"+91 {row['mobile']}" if row.get("mobile") else ""
 
         lead_item = Lead(
-            full_name=row["name"],
-            email=row["email"],
-            mobile_no=formatted_mobile,
+            full_name=row.get("name") or "New Enquiry",
+            email=row.get("email"),
+            mobile_no=formatted_mobile or row.get("mobile", ""),
             organization=org,
             campaign=camp,
             lead_source=src,
@@ -201,17 +221,26 @@ def submit_lead_rows(rows, user, campaign_id=None, source_id=None, assigned_to_i
         )
         leads.append(lead_item)
 
-    with transaction.atomic():
-        Lead.objects.bulk_create(leads)
+    if leads:
+        with transaction.atomic():
+            Lead.objects.bulk_create(leads)
 
-    msg_detail = (
-        f"{len(leads)} leads created in Unassigned Pool for {default_campaign.name if default_campaign else 'Campaign'}. Telecallers can self-assign on demand."
-        if dist_type == "on_demand"
-        else f"{len(leads)} leads created and equally distributed among campaign telecallers via Round-Robin."
-    )
+    if len(leads) == 0 and duplicate_count > 0:
+        return {
+            "status": "success",
+            "created_count": 0,
+            "duplicate_count": duplicate_count,
+            "message": f"0 new leads added. All {duplicate_count} lead(s) already exist in database and were skipped.",
+            "skipped_duplicates": duplicate_mobiles
+        }
+
+    msg_detail = f"{len(leads)} leads created and assigned to active telecallers in campaign '{default_campaign.name if default_campaign else 'Campaign'}' via Round-Robin! {duplicate_count} duplicate mobile numbers skipped."
 
     return {
+        "status": "success",
         "created_count": len(leads),
-        "distribution_type": dist_type,
+        "duplicate_count": duplicate_count,
         "message": msg_detail,
+        "skipped_duplicates": duplicate_mobiles
     }
+

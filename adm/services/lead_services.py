@@ -544,119 +544,127 @@ def add_new_lead_admin(user, **data):
     
 # -----------------------------upload lead excel file service------------------------------------------   
     
-def upload_lead_excel_admin(file_obj, user=None):
+def upload_lead_excel_admin(file_obj=None, leads_data=None, user=None):
     """
-    Bulk Excel/CSV Upload Service matching Figma Modal specs:
-    - Supported formats: .csv, .xls, .xlsx
+    Bulk Excel/CSV or JSON List Upload Service matching Figma Modal specs:
+    - Supports file upload (.csv, .xls, .xlsx) AND JSON array payload from UI modal review
     - File size limit: 3MB
     - Max rows: 25,000
     - Auto maps columns (name, mobile, email, campaign, source)
-    - Skips duplicate mobile numbers
+    - Skips duplicate mobile numbers (Smart 10-digit matching)
     """
     try:
-        if not file_obj:
-            raise APIException("Please select an Excel or CSV file to upload.")
-        
-        # 1. File Size Validation (Max 3MB = 3 * 1024 * 1024 bytes)
-        if file_obj.size > 3 * 1024 * 1024:
-            raise APIException("File size exceeds the 3MB limit. Please upload a file smaller than 3MB.")
-        
-        # 2. File Extension Validation
-        filename = file_obj.name.lower()
-        if not (filename.endswith('.csv') or filename.endswith('.xlsx') or filename.endswith('.xls')):
-            raise APIException("Unsupported file format! Please upload a .csv, .xls, or .xlsx file.")
-        rows_data = []
+        data_rows = []
+        name_idx = 0
+        mobile_idx = 1
+        email_idx = 2
+        campaign_idx = 3
+        source_idx = 4
+        is_dict_list = False
 
-        # 3. Reading File Data (.csv vs .xlsx vs .xls/text)
-        content_bytes = file_obj.read()
-        file_obj.seek(0)
-        
-        rows_data = []
+        if file_obj:
+            # 1. Validate File Object
+            if isinstance(file_obj, str) or not hasattr(file_obj, 'size') or not hasattr(file_obj, 'read') or not hasattr(file_obj, 'name'):
+                raise APIException("Invalid file upload. Please select a valid Excel (.xlsx, .xls) or CSV file.")
 
-        if filename.endswith('.csv'):
-            try:
-                decoded_file = content_bytes.decode('utf-8-sig').splitlines()
-            except Exception:
-                decoded_file = content_bytes.decode('latin-1').splitlines()
-            reader = csv.reader(decoded_file)
-            for row in reader:
-                if any(row):
-                    rows_data.append(row)
-        else:  # .xlsx or .xls
-            is_parsed = False
-            # First, try openpyxl for true .xlsx OpenXML zip files
-            try:
-                import io
-                wb = openpyxl.load_workbook(io.BytesIO(content_bytes), data_only=True)
-                sheet = wb.active
-                for row in sheet.iter_rows(values_only=True):
-                    if row and any(row):
-                        rows_data.append([str(cell) if cell is not None else "" for cell in row])
-                is_parsed = True
-            except Exception:
-                # Fallback: Many .xls or exported files are actually plain text / CSV files in disguise!
+            # 2. File Size Validation (Max 3MB = 3 * 1024 * 1024 bytes)
+            if file_obj.size > 3 * 1024 * 1024:
+                raise APIException("File size exceeds the 3MB limit. Please upload a file smaller than 3MB.")
+            
+            # 3. File Extension Validation
+            filename = str(file_obj.name).lower()
+            if not (filename.endswith('.csv') or filename.endswith('.xlsx') or filename.endswith('.xls')):
+                raise APIException("Unsupported file format! Please upload a .csv, .xls, or .xlsx file.")
+            
+            content_bytes = file_obj.read()
+            file_obj.seek(0)
+            rows_data = []
+
+            if filename.endswith('.csv'):
                 try:
-                    try:
-                        text_lines = content_bytes.decode('utf-8-sig').splitlines()
-                    except Exception:
-                        text_lines = content_bytes.decode('latin-1').splitlines()
-                    reader = csv.reader(text_lines)
-                    temp_rows = []
-                    for row in reader:
-                        if any(row):
-                            temp_rows.append(row)
-                    if len(temp_rows) >= 2:
-                        rows_data = temp_rows
-                        is_parsed = True
+                    decoded_file = content_bytes.decode('utf-8-sig').splitlines()
                 except Exception:
-                    pass
+                    decoded_file = content_bytes.decode('latin-1').splitlines()
+                reader = csv.reader(decoded_file)
+                for row in reader:
+                    if any(row):
+                        rows_data.append(row)
+            else:  # .xlsx or .xls
+                is_parsed = False
+                try:
+                    import io
+                    wb = openpyxl.load_workbook(io.BytesIO(content_bytes), data_only=True)
+                    sheet = wb.active
+                    for row in sheet.iter_rows(values_only=True):
+                        if row and any(row):
+                            rows_data.append([str(cell) if cell is not None else "" for cell in row])
+                    is_parsed = True
+                except Exception:
+                    try:
+                        try:
+                            text_lines = content_bytes.decode('utf-8-sig').splitlines()
+                        except Exception:
+                            text_lines = content_bytes.decode('latin-1').splitlines()
+                        reader = csv.reader(text_lines)
+                        temp_rows = []
+                        for row in reader:
+                            if any(row):
+                                temp_rows.append(row)
+                        if len(temp_rows) >= 2:
+                            rows_data = temp_rows
+                            is_parsed = True
+                    except Exception:
+                        pass
 
-            if not is_parsed:
-                raise APIException(
-                    "Unable to read the file format. If you are uploading an older Excel (.xls) binary file, "
-                    "please save/convert it as Excel Workbook (.xlsx) or CSV (.csv) format and try again."
-                )
-        if not rows_data or len(rows_data) < 2:
-            raise APIException("The uploaded file is empty or missing data rows.")
-        
-        # Row limit check (Max 25,000 rows as per Figma)
-        data_rows = rows_data[1:]
-        if len(data_rows) > 25000:
-            raise APIException("Maximum limit of 25,000 leads exceeded per file.")
-        
-        # 4. Header Column Mapping
-        headers = [str(h).strip().lower() for h in rows_data[0]]
-        
-        name_idx = -1
-        mobile_idx = -1
-        email_idx = -1
-        campaign_idx = -1
-        source_idx = -1
-        for idx, h in enumerate(headers):
-            if any(k in h for k in ['name', 'full_name', 'first_name', 'student']):
-                if name_idx == -1: name_idx = idx
-            elif any(k in h for k in ['mobile', 'phone', 'contact', 'number']):
-                if mobile_idx == -1: mobile_idx = idx
-            elif 'email' in h:
-                if email_idx == -1: email_idx = idx
-            elif 'campaign' in h:
-                if campaign_idx == -1: campaign_idx = idx
-            elif 'source' in h:
-                if source_idx == -1: source_idx = idx
-       
-        # Fallback to column indices if headers not named explicitly
-        if mobile_idx == -1:
-            mobile_idx = 1 if len(headers) > 1 else 0
-        if name_idx == -1:
-            name_idx = 0
-       
+                if not is_parsed:
+                    raise APIException(
+                        "Unable to read the file format. If you are uploading an older Excel (.xls) binary file, "
+                        "please save/convert it as Excel Workbook (.xlsx) or CSV (.csv) format and try again."
+                    )
+            if not rows_data or len(rows_data) < 2:
+                raise APIException("The uploaded file is empty or missing data rows.")
+
+            # Row limit check (Max 25,000 rows as per Figma)
+            data_rows = rows_data[1:]
+            if len(data_rows) > 25000:
+                raise APIException("Maximum limit of 25,000 leads exceeded per file.")
+
+            headers = [str(h).strip().lower() for h in rows_data[0]]
+            name_idx = -1
+            mobile_idx = -1
+            email_idx = -1
+            campaign_idx = -1
+            source_idx = -1
+            for idx, h in enumerate(headers):
+                if any(k in h for k in ['name', 'full_name', 'first_name', 'student', 'contact name']):
+                    if name_idx == -1: name_idx = idx
+                elif any(k in h for k in ['mobile', 'phone', 'contact', 'number', 'primary contact']):
+                    if mobile_idx == -1: mobile_idx = idx
+                elif 'email' in h:
+                    if email_idx == -1: email_idx = idx
+                elif 'campaign' in h:
+                    if campaign_idx == -1: campaign_idx = idx
+                elif 'source' in h:
+                    if source_idx == -1: source_idx = idx
+
+            if mobile_idx == -1: mobile_idx = 1 if len(headers) > 1 else 0
+            if name_idx == -1: name_idx = 0
+
+        elif leads_data and isinstance(leads_data, list):
+            data_rows = leads_data
+            is_dict_list = True
+        else:
+            raise APIException("Please select an Excel/CSV file or provide valid leads data to upload.")
+
+        if not data_rows:
+            raise APIException("No lead data rows provided to upload.")
+
         # Default Foreign Keys
         default_stage = PipelineStage.objects.filter(id=1).first() or PipelineStage.objects.first()
         default_campaign = CampaignName.objects.first()
         default_source = LeadSource.objects.first()
         default_agent = User.objects.filter(is_active=True).first()
-        
-        # Creator Info & Organization
+
         creator_info = "Admin Excel Upload"
         creator_org = getattr(user, 'organization', None) if user and getattr(user, 'is_authenticated', False) else None
         if not creator_org:
@@ -665,42 +673,83 @@ def upload_lead_excel_admin(file_obj, user=None):
 
         if user and getattr(user, 'is_authenticated', False):
             creator_info = f"{getattr(user, 'username', 'User')} (Admin Excel)"
+
+        # Round Robin Telecaller Assignment Setup
+        telecaller_qs = User.objects.filter(is_active=True)
+        if creator_org:
+            telecaller_qs = telecaller_qs.filter(organization=creator_org)
+        telecallers = list(telecaller_qs.filter(user_roles__role__name__icontains="executive"))
+        if not telecallers:
+            telecallers = list(telecaller_qs.order_by("id"))
+
+        last_assigned_lead = Lead.objects.exclude(assigned_to=None).order_by('-id').first()
+        rr_index = 0
+        if last_assigned_lead and last_assigned_lead.assigned_to in telecallers:
+            rr_index = (telecallers.index(last_assigned_lead.assigned_to) + 1) % len(telecallers)
+
+        def get_next_telecaller():
+            nonlocal rr_index
+            if not telecallers:
+                return default_agent
+            assigned = telecallers[rr_index]
+            rr_index = (rr_index + 1) % len(telecallers)
+            return assigned
+
         success_count = 0
         duplicate_count = 0
         duplicate_mobiles = []
-        
+
         # 5. Loop Through Rows & Insert Leads into telecalling_lead Table
-        for row in data_rows:
-            full_name = str(row[name_idx]).strip() if name_idx < len(row) else "New Enquiry"
-            mobile_no = str(row[mobile_idx]).strip() if mobile_idx < len(row) else ""
-            
-            # Clean mobile number format
-            mobile_no = mobile_no.replace(".0", "").strip()
-            if not mobile_no:
+        for item in data_rows:
+            if is_dict_list and isinstance(item, dict):
+                full_name = (
+                    item.get("full_name") or item.get("name") or item.get("Contact Name") or
+                    item.get("first_name") or "New Enquiry"
+                )
+                mobile_no = (
+                    item.get("mobile_no") or item.get("mobile") or item.get("contact") or
+                    item.get("phone") or item.get("Primary Contact Number *") or ""
+                )
+                email = item.get("email") or item.get("email_address") or item.get("Email Address")
+                campaign_val = str(item.get("campaign") or item.get("campaign_name") or "").strip()
+                source_val = str(item.get("source") or item.get("lead_source") or "").strip()
+            else:
+                row = item
+                full_name = str(row[name_idx]).strip() if (isinstance(row, (list, tuple)) and name_idx < len(row)) else "New Enquiry"
+                mobile_no = str(row[mobile_idx]).strip() if (isinstance(row, (list, tuple)) and mobile_idx < len(row)) else ""
+                email = str(row[email_idx]).strip() if (isinstance(row, (list, tuple)) and email_idx != -1 and email_idx < len(row)) else None
+                campaign_val = str(row[campaign_idx]).strip() if (isinstance(row, (list, tuple)) and campaign_idx != -1 and campaign_idx < len(row)) else ""
+                source_val = str(row[source_idx]).strip() if (isinstance(row, (list, tuple)) and source_idx != -1 and source_idx < len(row)) else ""
+
+            raw_mobile = str(mobile_no).replace(".0", "").strip()
+            clean_digits = "".join(filter(str.isdigit, raw_mobile))
+            last_10 = clean_digits[-10:] if len(clean_digits) >= 10 else clean_digits
+
+            if not last_10:
                 continue
-            email = str(row[email_idx]).strip() if (email_idx != -1 and email_idx < len(row)) else None
-           
-            # Duplicate Mobile Check
-            if Lead.objects.filter(mobile_no=mobile_no).exists():
+
+            # Duplicate Mobile Check (Smart 10-digit matching)
+            if Lead.objects.filter(
+                Q(mobile_no=raw_mobile) |
+                Q(mobile_no__endswith=last_10) |
+                Q(mobile_no__icontains=last_10)
+            ).exists():
                 duplicate_count += 1
-                duplicate_mobiles.append(mobile_no)
+                duplicate_mobiles.append(raw_mobile)
                 continue
-            
-            # Dynamic Campaign & Source Resolution
-            campaign_val = str(row[campaign_idx]).strip() if (campaign_idx != -1 and campaign_idx < len(row)) else ""
+
             campaign_obj = CampaignName.objects.filter(name__icontains=campaign_val).first() if campaign_val else default_campaign
-            source_val = str(row[source_idx]).strip() if (source_idx != -1 and source_idx < len(row)) else ""
             source_obj = LeadSource.objects.filter(name__icontains=source_val).first() if source_val else default_source
-            
-            # Create Lead Row in Database
+            assigned_agent = get_next_telecaller() or default_agent
+
             Lead.objects.create(
-                full_name=full_name or "New Enquiry",
-                mobile_no=mobile_no,
-                email=email,
+                full_name=str(full_name).strip() or "New Enquiry",
+                mobile_no=raw_mobile,
+                email=str(email).strip() if email else None,
                 campaign=campaign_obj or default_campaign,
                 lead_source=source_obj or default_source,
                 pipeline_stage=default_stage,
-                assigned_to=default_agent,
+                assigned_to=assigned_agent,
                 organization=creator_org,
                 current_status="working",
                 priority_id=None,
@@ -711,8 +760,12 @@ def upload_lead_excel_admin(file_obj, user=None):
 
         if success_count == 0 and duplicate_count > 0:
             return {
-                "status": "failed",
-                "message": "Lead with this mobile number already exists."
+                "status": "success",
+                "message": f"0 new leads added. All {duplicate_count} lead(s) already exist in the database and were skipped.",
+                "total_rows": len(data_rows),
+                "success_count": 0,
+                "duplicate_count": duplicate_count,
+                "skipped_duplicates": duplicate_mobiles
             }
 
         return {
@@ -724,245 +777,125 @@ def upload_lead_excel_admin(file_obj, user=None):
             "skipped_duplicates": duplicate_mobiles[:10]
         }
     except Exception as e:
+        if isinstance(e, APIException):
+            raise
         raise APIException(str(e))
+
     
 
 
 # --------------------------------export leads to excel service------------------------------------------
 
-def export_all_leads_admin(user=None, request_host=None, **data):
-    """
-    Admin Leads Page -> Export to Excel (.xlsx) Service.
-    Supports dynamic columns array, Lime Green Header Styling (#84C225), and download URL output.
-    """
-    try:
-        data['page_size'] = "all"
-        result = fetch_all_leads_admin(user=user, **data)
-        leads = result.get("leads", [])
-
-        import openpyxl
-        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-        from openpyxl.utils import get_column_letter
-
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Leads_Export"
-
-        requested_cols = data.get("columns") or []
-        
-        column_map = {
-            "s_no": ("S.No", lambda idx, l: idx),
-            "id": ("Lead ID", lambda idx, l: l.get("id")),
-            "full_name": ("Full Name", lambda idx, l: l.get("full_name") or ""),
-            "name": ("Name", lambda idx, l: l.get("full_name") or ""),
-            "mobile_no": ("Mobile No", lambda idx, l: l.get("mobile_no") or ""),
-            "mobile": ("Mobile", lambda idx, l: l.get("mobile_no") or ""),
-            "email": ("Email", lambda idx, l: l.get("email") or ""),
-            "assigned_to": ("Assigned To", lambda idx, l: l.get("assigned_to") or "Unassigned"),
-            "stage": ("Stage", lambda idx, l: l.get("stage") or ""),
-            "tag": ("Priority Tag", lambda idx, l: l.get("tag") or ""),
-            "campaign": ("Campaign", lambda idx, l: l.get("campaign") or ""),
-            "source": ("Source", lambda idx, l: l.get("source") or ""),
-            "course_plan": ("Course Plan", lambda idx, l: l.get("course_plan") or ""),
-            "course": ("Course", lambda idx, l: l.get("course") or ""),
-            "pending_amount": ("Pending Amount", lambda idx, l: l.get("pending_amount") or 0),
-            "total_amount": ("Total Amount", lambda idx, l: l.get("amount") or 0),
-            "created_at": ("Created At", lambda idx, l: str(l.get("created")) if l.get("created") else "")
-        }
-
-        if requested_cols:
-            active_col_keys = [c for c in requested_cols if c in column_map]
-            if not active_col_keys:
-                active_col_keys = ["s_no", "name", "mobile", "assigned_to", "stage", "campaign", "source"]
-        else:
-            active_col_keys = ["s_no", "name", "mobile", "assigned_to", "stage", "campaign", "source"]
-
-        headers = [column_map[k][0] for k in active_col_keys]
-        ws.append(headers)
-
-        for idx, lead in enumerate(leads, start=1):
-            row_vals = [column_map[k][1](idx, lead) for k in active_col_keys]
-            ws.append(row_vals)
-
-        header_fill = PatternFill(start_color="84C225", end_color="84C225", fill_type="solid")
-        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-        data_font = Font(name="Calibri", size=10)
-        center_align = Alignment(horizontal="center", vertical="center")
-
-        thin_border = Border(
-            left=Side(style='thin', color='D9D9D9'),
-            right=Side(style='thin', color='D9D9D9'),
-            top=Side(style='thin', color='D9D9D9'),
-            bottom=Side(style='thin', color='D9D9D9')
-        )
-
-        ws.row_dimensions[1].height = 26
-        for col_num in range(1, len(headers) + 1):
-            cell = ws.cell(row=1, column=col_num)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = center_align
-            cell.border = thin_border
-
-        for row_num in range(2, ws.max_row + 1):
-            ws.row_dimensions[row_num].height = 22
-            for col_num in range(1, len(headers) + 1):
-                cell = ws.cell(row=row_num, column=col_num)
-                cell.font = data_font
-                cell.border = thin_border
-                cell.alignment = center_align
-
-        for col in ws.columns:
-            max_len = 0
-            col_letter = get_column_letter(col[0].column)
-            for cell in col:
-                val_str = str(cell.value or '')
-                if len(val_str) > max_len:
-                    max_len = len(val_str)
-            ws.column_dimensions[col_letter].width = max(max_len + 6, 16)
-
-        today_str = timezone.now().strftime("%Y%m%d")
-        file_name = f"Admin_Leads_{today_str}.xlsx"
-        export_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
-        os.makedirs(export_dir, exist_ok=True)
-        file_path = os.path.join(export_dir, file_name)
-
-        wb.save(file_path)
-
-        rel_url = f"/media/exports/{file_name}"
-        full_url = f"{request_host}{rel_url}" if request_host else rel_url
-
-        return {
-            "status": True,
-            "message": f"Successfully exported {len(leads)} leads!",
-            "total_exported": len(leads),
-            "file_name": file_name,
-            "download_url": full_url
-        }
-    except Exception as e:
-        raise APIException(str(e))
+# def export_all_leads_admin(user=None, request_host=None, **data):
     
-    
-    
-# ----------------------------get_filter_dropdowns_admin----------------------------
-
-# def get_filter_dropdowns_admin(user=None):
-#     """
-#     Admin Leads Page -> Filter Modal Dropdown Options API.
-#     Returns dynamic options for:
-#     1. Pipeline Stage
-#     2. Lead Source
-#     3. Campaign Name
-#     4. Course Plan
-#     5. Assigned User (Telecallers)
-#     """
 #     try:
-#         pipeline_stages_qs = PipelineStage.objects.all()
-#         pipeline_stages = [{"id": p.id, "name": p.name} for p in pipeline_stages_qs]
+#         data['page_size'] = "all"
+#         result = fetch_all_leads_admin(user=user, **data)
+#         leads = result.get("leads", [])
 
-#         lead_sources_qs = LeadSource.objects.all()
-#         lead_sources = [{"id": s.id, "name": s.name} for s in lead_sources_qs]
+#         import openpyxl
+#         from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+#         from openpyxl.utils import get_column_letter
 
-#         campaigns_qs = CampaignName.objects.all()
-#         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-#             campaigns_qs = campaigns_qs.filter(organization=user.organization)
-#         elif user and getattr(user, 'is_authenticated', False):
-#             campaigns_qs = campaigns_qs.none()
-#         campaigns = [{"id": c.id, "name": c.name} for c in campaigns_qs]
+#         wb = openpyxl.Workbook()
+#         ws = wb.active
+#         ws.title = "Leads_Export"
 
-#         course_plans_qs = CoursePlan.objects.all()
-#         course_plans = [{"id": cp.id, "name": getattr(cp, 'courseplan', getattr(cp, 'name', str(cp)))} for cp in course_plans_qs]
+#         requested_cols = data.get("columns") or []
+        
+#         column_map = {
+#             "s_no": ("S.No", lambda idx, l: idx),
+#             "id": ("Lead ID", lambda idx, l: l.get("id")),
+#             "full_name": ("Full Name", lambda idx, l: l.get("full_name") or ""),
+#             "name": ("Name", lambda idx, l: l.get("full_name") or ""),
+#             "mobile_no": ("Mobile No", lambda idx, l: l.get("mobile_no") or ""),
+#             "mobile": ("Mobile", lambda idx, l: l.get("mobile_no") or ""),
+#             "email": ("Email", lambda idx, l: l.get("email") or ""),
+#             "assigned_to": ("Assigned To", lambda idx, l: l.get("assigned_to") or "Unassigned"),
+#             "stage": ("Stage", lambda idx, l: l.get("stage") or ""),
+#             "tag": ("Priority Tag", lambda idx, l: l.get("tag") or ""),
+#             "campaign": ("Campaign", lambda idx, l: l.get("campaign") or ""),
+#             "source": ("Source", lambda idx, l: l.get("source") or ""),
+#             "course_plan": ("Course Plan", lambda idx, l: l.get("course_plan") or ""),
+#             "course": ("Course", lambda idx, l: l.get("course") or ""),
+#             "pending_amount": ("Pending Amount", lambda idx, l: l.get("pending_amount") or 0),
+#             "total_amount": ("Total Amount", lambda idx, l: l.get("amount") or 0),
+#             "created_at": ("Created At", lambda idx, l: str(l.get("created")) if l.get("created") else "")
+#         }
 
-#         users_qs = User.objects.filter(is_active=True).filter(
-#             Q(user_roles__role__name__iexact='telecaller') |
-#             Q(user_roles__role__code__iexact='TEL') |
-#             Q(user_type__iexact='telecaller')
-#         ).distinct().order_by("first_name")
-#         if user and getattr(user, 'is_authenticated', False) and getattr(user, 'organization', None):
-#             users_qs = users_qs.filter(organization=user.organization)
-#         elif user and getattr(user, 'is_authenticated', False):
-#             users_qs = users_qs.none()
-#         telecallers = []
-#         for u in users_qs:
-#             user_leads = Lead.objects.filter(assigned_to=u)
-#             # Exclude Won (Stage 3) and Lost (Stage 4) from total_assigned_leads
-#             active_user_leads = user_leads.exclude(
-#                 Q(pipeline_stage_id__in=[3, 4]) | 
-#                 Q(pipeline_stage__name__icontains="won") | 
-#                 Q(pipeline_stage__name__icontains="loss")
-#             )
-            
-#             total_assigned = active_user_leads.count()
-#             followup_count = active_user_leads.filter(Q(pipeline_stage_id=2) | Q(pipeline_stage__name__icontains="follow")).count()
-#             new_count = active_user_leads.filter(Q(pipeline_stage_id=1) | Q(pipeline_stage__name__icontains="new")).count()
-#             unreachable_count = active_user_leads.filter(
-#                 Q(pipeline_stage_id__in=[5, 7]) | 
-#                 Q(pipeline_stage__name__icontains="unreach") | 
-#                 Q(pipeline_stage__name__icontains="contact")
-#             ).count()
-            
-#             role_str = "Admin" if (getattr(u, 'is_superuser', False) or str(getattr(u, 'user_type', '')).lower() == 'admin') else "Telecaller"
-            
-#             telecallers.append({
-#                 "id": u.id,
-#                 "name": get_user_display_name(u),
-#                 "role": role_str,
-#                 "total_assigned_leads": total_assigned,
-#                 "followup_leads_count": followup_count,
-#                 "new_leads_count": new_count,
-#                 "unreachable_leads_count": unreachable_count,
-#                 "assigned_leads_count": total_assigned
-#             })
+#         if requested_cols:
+#             active_col_keys = [c for c in requested_cols if c in column_map]
+#             if not active_col_keys:
+#                 active_col_keys = ["s_no", "name", "mobile", "assigned_to", "stage", "campaign", "source"]
+#         else:
+#             active_col_keys = ["s_no", "name", "mobile", "assigned_to", "stage", "campaign", "source"]
 
-#         # 1. Lost Reasons
-#         loss_reasons_qs = LossReason.objects.filter(is_active=True)
-#         if user and getattr(user, 'is_authenticated', False):
-#             if getattr(user, 'organization_id', None):
-#                 loss_reasons_qs = loss_reasons_qs.filter(
-#                     Q(organization_id=user.organization_id) | Q(organization__isnull=True)
-#                 )
-#             else:
-#                 loss_reasons_qs = loss_reasons_qs.filter(organization__isnull=True)
-#         loss_reasons_qs = loss_reasons_qs.order_by("id")
+#         headers = [column_map[k][0] for k in active_col_keys]
+#         ws.append(headers)
 
-#         lost_reasons = [{"id": r.id, "name": getattr(r, 'display_value', None) or r.name} for r in loss_reasons_qs]
+#         for idx, lead in enumerate(leads, start=1):
+#             row_vals = [column_map[k][1](idx, lead) for k in active_col_keys]
+#             ws.append(row_vals)
 
-#         # 2. Courses (from CourseName)
-#         courses_qs = CourseName.objects.all().order_by("coursename")
-#         courses = [{"id": c.id, "name": getattr(c, 'coursename', getattr(c, 'name', str(c)))} for c in courses_qs]
+#         header_fill = PatternFill(start_color="84C225", end_color="84C225", fill_type="solid")
+#         header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+#         data_font = Font(name="Calibri", size=10)
+#         center_align = Alignment(horizontal="center", vertical="center")
 
-#         priorities_qs = Priority.objects.filter(is_active=True).order_by("id")
-#         if not priorities_qs.exists():
-#             priorities_qs = Priority.objects.all().order_by("id")
+#         thin_border = Border(
+#             left=Side(style='thin', color='D9D9D9'),
+#             right=Side(style='thin', color='D9D9D9'),
+#             top=Side(style='thin', color='D9D9D9'),
+#             bottom=Side(style='thin', color='D9D9D9')
+#         )
 
-#         priority_tags = [
-#             {"id": p.id, "name": getattr(p, 'display_value', None) or p.name}
-#             for p in priorities_qs
-#         ]
+#         ws.row_dimensions[1].height = 26
+#         for col_num in range(1, len(headers) + 1):
+#             cell = ws.cell(row=1, column=col_num)
+#             cell.fill = header_fill
+#             cell.font = header_font
+#             cell.alignment = center_align
+#             cell.border = thin_border
 
-#         pipelines = [
-#             {"id": "Education", "name": "Education"},
-#             {"id": "Product", "name": "Product"}
-#         ]
+#         for row_num in range(2, ws.max_row + 1):
+#             ws.row_dimensions[row_num].height = 22
+#             for col_num in range(1, len(headers) + 1):
+#                 cell = ws.cell(row=row_num, column=col_num)
+#                 cell.font = data_font
+#                 cell.border = thin_border
+#                 cell.alignment = center_align
+
+#         for col in ws.columns:
+#             max_len = 0
+#             col_letter = get_column_letter(col[0].column)
+#             for cell in col:
+#                 val_str = str(cell.value or '')
+#                 if len(val_str) > max_len:
+#                     max_len = len(val_str)
+#             ws.column_dimensions[col_letter].width = max(max_len + 6, 16)
+
+#         today_str = timezone.now().strftime("%Y%m%d")
+#         file_name = f"Admin_Leads_{today_str}.xlsx"
+#         export_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
+#         os.makedirs(export_dir, exist_ok=True)
+#         file_path = os.path.join(export_dir, file_name)
+
+#         wb.save(file_path)
+
+#         rel_url = f"/media/exports/{file_name}"
+#         full_url = f"{request_host}{rel_url}" if request_host else rel_url
 
 #         return {
-#             "lost_reasons": lost_reasons,
-#             "telecallers": telecallers,
-#             "courses": courses,
-#             "lead_sources": lead_sources,
-#             "pipelines": pipelines,
-#             "pipeline_stages": pipelines,  # 👈 Guarantees Education & Product appear in Pipeline* dropdown!
-#             "stages": pipeline_stages,     # 👈 Preserves actual stage options under 'stages'
-#             "campaigns": campaigns,
-#             "course_plans": course_plans,
-#             "priority_tags": priority_tags,
-#             "tags": priority_tags
+#             "status": True,
+#             "message": f"Successfully exported {len(leads)} leads!",
+#             "total_exported": len(leads),
+#             "file_name": file_name,
+#             "download_url": full_url
 #         }
 #     except Exception as e:
 #         raise APIException(str(e))
     
-    
-    
+
     
 # ------------------------------------- fetch_pipeline_leads_admin----------------------------------
 
@@ -1484,10 +1417,7 @@ def get_mark_as_lost_info_admin(lead_id):
 
 
 def mark_as_lost_admin(**data):
-    """
-    Submit Mark as Lost Modal -> Update Lead to LOST (Stage ID 4) & Record Loss Details.
-    Robustly handles both string names and integer IDs from frontend.
-    """
+   
     try:
         lead_id = data.get("lead_id") or data.get("id")
         if not lead_id:
@@ -1601,10 +1531,7 @@ def mark_as_lost_admin(**data):
 # ------------------------------edit lead admin-----------------------------
 
 def edit_lead_admin(**data):
-    """
-    Admin Leads Page -> Edit Lead Modal Save API.
-    Updates Lead Info and PaymentInfo records safely.
-    """
+    
     try:
         lead_id = data.get("lead_id") or data.get("id")
         if not lead_id:
@@ -1755,13 +1682,7 @@ def edit_lead_admin(**data):
 # ----------------------------- delete_lead_admin service -----------------------------
 
 def delete_lead_admin(user, lead_id):
-    """
-    Admin Lead Deletion Service:
-    1. Validates lead exists in telecalling_lead.
-    2. Executes lead.save_delete(user_id=user.id):
-       - Backs up full lead JSON data to telecalling_deleted_data_log with deleted_by & deleted_at.
-       - CASCADE deletes all connected rows across CallDetails, FollowUp, PaymentInfo, PaymentHistory, LossLeadDetail, AdminLossActionLog, AdminApprovedLossLead.
-    """
+  
     try:
         if not lead_id:
             raise APIException("Lead ID is required")
@@ -1792,14 +1713,7 @@ def delete_lead_admin(user, lead_id):
 # ----------------------------- reassign_lead_admin service -----------------------------
 
 def reassign_lead_admin(user, lead_id, new_telecaller_id, reason=None):
-    """
-    Admin Reassign Lead Service:
-    1. Validates lead and new_telecaller exist.
-    2. Collects previous telecaller's call details into JSON array.
-    3. Creates audit record in AdminLeadReassignHistory (adm_lead_reassign_history table).
-    4. Updates lead.assigned_to = new_telecaller.
-    5. If lead was in Loss stage, restores pipeline_stage to Follow-up (Stage 2) or New Lead (Stage 1).
-    """
+    
     try:
         if not lead_id:
             raise APIException("Lead ID is required")

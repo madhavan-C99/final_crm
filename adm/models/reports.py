@@ -1,5 +1,6 @@
 from django.db import models
 from telecalling.models.delete_base_model import SafeDeleteModel
+from .user import User
 
 
 class ReportCatalog(SafeDeleteModel):
@@ -20,3 +21,25 @@ class ReportCatalog(SafeDeleteModel):
     class Meta:
         db_table = 'adm_report_catalog'
         ordering = ['id']
+
+
+class UserRecentReport(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='recent_reports'
+    )
+    report = models.ForeignKey(
+        ReportCatalog,
+        on_delete=models.CASCADE,
+        related_name='user_views'
+    )
+    viewed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'adm_user_recent_report'
+        ordering = ['-viewed_at']
+        unique_together = ('user', 'report')
+
+    def __str__(self):
+        return f"{self.user} viewed {self.report.report_name}"
