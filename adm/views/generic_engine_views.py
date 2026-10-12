@@ -34,10 +34,8 @@ class FetchLeadsApi(APIView):
 class ExportDataApi(APIView):
     class InputSerializer(serializers.Serializer):
         entity = serializers.CharField(required=True)
-        report_key = serializers.CharField(required=False, allow_blank=True, default="")
-        export_format = serializers.ChoiceField(choices=['excel', 'xlsx', 'csv', 'pdf'], required=True)
-        selected_columns = serializers.ListField(child=serializers.CharField(), required=False, default=list)
-        columns = serializers.ListField(child=serializers.CharField(), required=False, default=list)
+        export_format = serializers.ChoiceField(choices=['xlsx', 'csv', 'pdf'], default='xlsx')
+        selected_columns = serializers.ListField(child=serializers.CharField(), required=True)
         filters = serializers.DictField(required=False, default=dict)
 
     def post(self, request):
@@ -46,18 +44,13 @@ class ExportDataApi(APIView):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
-        export_format = "excel" if data["export_format"] == "xlsx" else data["export_format"]
-        cols = data.get("selected_columns") or data.get("columns") or []
-        filters = dict(data.get("filters") or {})
-        if data.get("report_key"):
-            filters["report_key"] = data["report_key"]
 
         result = export_data_service(
             user=request.user,
             entity=data["entity"],
-            export_format=export_format,
-            selected_columns=cols,
-            filters=filters
+            export_format=data["export_format"],
+            selected_columns=data["selected_columns"],
+            filters=data["filters"]
         )
         return Response({
             "success": True,

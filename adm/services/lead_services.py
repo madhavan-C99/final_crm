@@ -6,6 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Q, Count
 from rest_framework.exceptions import APIException
+import math
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
@@ -343,7 +344,6 @@ def fetch_all_leads_admin(user=None, **data):
                 "enquiry_date": lead.enquiry_date or lead.created_at,
             })
 
-        import math
         total_pages = math.ceil(total / page_size) if (page_size and page_size > 0 and total > 0) else 1
 
         return {

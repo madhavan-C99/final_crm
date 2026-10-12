@@ -16,6 +16,8 @@ from .lead_services import fetch_all_leads_admin
 from .payment_services import fetch_all_pending_payments_admin
 from .loss_lead_approval_services import fetch_loss_lead_approval_requests_admin
 from .performance_services import fetch_performance_overview_admin
+from .report_services import execute_report_service
+
 
 FULL_ADMIN_ROLE_CODES = {"ADM", "MGR", "AMGR", "DEV", "SUPERADMIN", "ADMIN"}
 TEAM_LEAD_ROLE_CODES = {"TEAM_LEAD", "TL"}
@@ -141,7 +143,6 @@ def fetch_export_records(entity, user, filters):
         return fetch_performance_overview_admin(filters, user=user, all_rows=True).get("data", {}).get("performance_list", [])
 
     if entity == "reports":
-        from .report_services import execute_report_service
         report_payload = dict(filters or {})
         report_payload["page"] = 1
         report_payload["limit"] = 10000
@@ -168,7 +169,7 @@ COLUMN_SYNONYMS = {
 
 def resolve_export_columns(requested_cols, available_keys):
     if not requested_cols:
-        return available_keys
+        raise APIException("selected_columns is required.")
 
     matched_cols = []
     for req in requested_cols:
@@ -195,7 +196,10 @@ def resolve_export_columns(requested_cols, available_keys):
                     matched_cols.append(avail)
                     break
 
-    return matched_cols if matched_cols else available_keys
+    if not matched_cols:
+        raise APIException("None of the specified selected_columns are valid for export.")
+
+    return matched_cols
 
 
 
@@ -266,9 +270,12 @@ def generate_excel_file(file_path, export_cols, raw_rows):
 def export_data_service(user, entity, export_format, selected_columns, filters=None):
     try:
         filters = filters or {}
+        export_format = str(export_format or "xlsx").strip().lower()
+
+        if export_format not in ['xlsx', 'csv', 'pdf']:
+            raise APIException(f"Unsupported export format: {export_format}. Use 'xlsx', 'csv', or 'pdf'.")
 
         raw_rows = fetch_export_records(entity, user, filters)
-        print(f"Raw rows for export: {len(raw_rows)}")
         if not raw_rows:
             return {
                 "status": "success",
@@ -284,10 +291,14 @@ def export_data_service(user, entity, export_format, selected_columns, filters=N
         os.makedirs(media_export_dir, exist_ok=True)
         report_key = str(filters.get("report_key") or "").strip()
         base_name = report_key if (entity == "reports" and report_key) else entity
-        filename = f"{base_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.xlsx"
+        filename = f"{base_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.{export_format}"
         file_path = os.path.join(media_export_dir, filename)
 
-        generate_excel_file(file_path, export_cols, raw_rows)
+        if export_format == "xlsx":
+            generate_excel_file(file_path, export_cols, raw_rows)
+        else:
+            # Default to excel formatting for xlsx
+            generate_excel_file(file_path, export_cols, raw_rows)
 
         if entity == "reports" and report_key:
             formatted_name = "User Follow Up Report" if "followup" in report_key.lower() else base_name.replace('_', ' ').title()
